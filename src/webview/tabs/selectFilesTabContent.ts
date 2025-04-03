@@ -36,7 +36,7 @@ export function getSelectFilesTabHtml(): string {
       <div class="action-groups">
         <div class="search-container">
           <span class="codicon codicon-search search-icon"></span>
-          <input type="text" id="file-search" placeholder="Search files by name or glob pattern (e.g., *.ts, test?) ..." />
+          <input type="text" id="file-search" placeholder="Search by name, glob (*, ?), or regex (/pattern/i) ..." />
           <span class="codicon codicon-close" id="clear-search"></span>
         </div>
         <div class="action-group">

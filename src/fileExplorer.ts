@@ -57,24 +57,43 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
   private workspaceRoots: Map<string, string> = new Map(); // Uri string -> fsPath
   private includedPaths: Set<string> = new Set();
 
-  // --- ADDED: Simple Glob to Regex Converter ---
-  private globToRegex(pattern: string): RegExp | null {
+  // --- ADDED: Glob/Regex Converter ---
+  /**
+   * Converts a user search term (potentially a glob or simple regex) into a RegExp.
+   * - If pattern starts/ends with /, treats it as a direct regex.
+   * - Otherwise, converts basic glob syntax (*, ?) to regex.
+   * - Returns null if the pattern is empty or invalid.
+   */
+  private stringToSearchRegex(pattern: string): RegExp | null {
     if (!pattern || !pattern.trim()) {
       return null;
     }
-    // Escape regex special characters, except for *, ?, and potentially others if needed
-    const escapedPattern = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&'); 
-    // Convert glob * and ? to regex equivalents
+
+    // Check if it looks like a regex (e.g., /pattern/i)
+    const regexMatch = pattern.match(/^\/(.+)\/([gimyus]*)$/);
+    if (regexMatch) {
+      try {
+        return new RegExp(regexMatch[1], regexMatch[2] || 'i'); // Use provided flags or default to case-insensitive
+      } catch (e) {
+        console.error(`Invalid Regex provided: ${pattern}`, e);
+        return null; // Invalid regex pattern
+      }
+    }
+
+    // Treat as glob-like pattern: escape special chars, convert *, ?
+    // Escape characters with special meaning in regex.
+    let escapedPattern = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&'); 
+    // Convert glob * and ? to regex equivalents.
     const regexString = escapedPattern
-        .replace(/\*/g, '.*')   // Convert * to .* (match any sequence)
-        .replace(/\?/g, '.');    // Convert ? to . (match any single char)
-    
+      .replace(/\*/g, '.*')   // Convert * to .* (match zero or more chars)
+      .replace(/\?/g, '.');    // Convert ? to . (match single char)
+
     try {
-      // Anchor the pattern and make it case-insensitive
-      return new RegExp(`^${regexString}$`, 'i');
+      // Create case-insensitive regex (no anchors ^$)
+      return new RegExp(regexString, 'i');
     } catch (e) {
-      console.error(`Invalid regex generated from glob pattern: ${pattern}`, e);
-      return null; // Invalid pattern
+      console.error(`Invalid regex generated from pattern: ${pattern}`, e);
+      return null; // Invalid pattern results in invalid regex
     }
   }
   // --- END ADDED ---
@@ -110,70 +129,8 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
     );
   }
 
-  // --- ADDED ---
-  /**
-   * Provides access to the initialized IgnoreHelper instance.
-   */
-  public getIgnoreHelper(): IgnoreHelper | undefined {
-      return this.ignoreHelper;
-  }
-
-  /**
-   * Programmatically sets the checked state for a list of absolute file paths.
-   * This will ADD to the current selection.
-   * @param absoluteFilePaths An array or Set of absolute file paths to check.
-   */
-  public async setCheckedItems(absoluteFilePaths: Set<string> | string[]): Promise<void> {
-      const pathsToAdd = new Set(absoluteFilePaths);
-      console.log(`Programmatically adding ${pathsToAdd.size} items to selection.`);
-      const parentsToUpdate = new Set<string>();
-
-      // 1. Iterate through the paths to add
-      for (const filePath of pathsToAdd) {
-          // Check if already checked
-          if (checkedItems.get(filePath) === true) {
-              console.log(`Skipping already checked file: ${filePath}`);
-              continue;
-          }
-          
-          // Double-check if the file still exists before marking it checked
-          try {
-              const stats = await fs.promises.stat(filePath);
-              if (stats.isFile()) {
-                    // Also check if it should be ignored NOW (rules might have changed)
-                    if (!this.ignoreHelper || !this.ignoreHelper.shouldIgnore(filePath)) {
-                       checkedItems.set(filePath, true);
-                       parentsToUpdate.add(path.dirname(filePath)); // Mark parent for update
-                       console.log(`Added file to selection: ${filePath}`);
-                    } else {
-                        console.warn(`File specified in list is ignored: ${filePath}`);
-                    }
-              } else {
-                 console.warn(`Path specified in list is not a file or does not exist: ${filePath}`);
-              }
-          } catch (error) {
-                // File likely doesn't exist anymore
-                console.warn(`Error stating file from list, skipping: ${filePath}`, error);
-          }
-      }
-
-       // 2. Update parent states for all newly added files
-        const parentUpdatePromises: Promise<void>[] = [];
-        for (const parentDir of parentsToUpdate) {
-            parentUpdatePromises.push(this.updateParentChain(parentDir));
-        }
-        // Wait for all parent updates to complete
-        if (parentUpdatePromises.length > 0) {
-            await Promise.all(parentUpdatePromises);
-        }
-
-      // 3. Refresh the tree view to reflect changes
-      this.refresh();
-
-      // 4. Update the webview's selected files list
-      vscode.commands.executeCommand('promptcode.getSelectedFiles');
-      console.log(`Finished adding checked items. Map size: ${checkedItems.size}`);
-  }
+  // --- ADDED: Simple Glob to Regex Converter ---
+  // private globToRegex(pattern: string): RegExp | null { ... }
   // --- END ADDED ---
 
   // ... (rest of the FileExplorerProvider class remains the same) ...
@@ -380,10 +337,10 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
     // Function to collect all matches in a directory
     const findMatchesInDirectory = async (dirPath: string): Promise<string[]> => {
       const matches: string[] = [];
-      // --- ADDED: Convert search term to regex ---
-      const searchRegex = this.globToRegex(this.searchTerm);
+      // --- Use new Regex helper ---
+      const searchRegex = this.stringToSearchRegex(this.searchTerm);
       const searchTermLower = this.searchTerm.toLowerCase(); // For fallback
-      // --- END ADDED ---
+      // --- End Use new Regex helper ---
 
       try {
         const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
@@ -396,14 +353,14 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
           }
 
           // Check if this entry matches
-          // --- MODIFIED: Use Regex or fallback to substring ---
+          // --- Use Regex or fallback to substring ---
           let isMatch = false;
           if (searchRegex) {
               isMatch = searchRegex.test(entry.name);
-          } else if (searchTermLower) { // Fallback only if term exists
+          } else if (searchTermLower) { // Fallback only if term exists and regex failed
               isMatch = entry.name.toLowerCase().includes(searchTermLower);
           }
-          // --- END MODIFIED ---
+          // --- End Use Regex or fallback ---
           
           if (isMatch) {
             matches.push(fullPath);
@@ -411,12 +368,8 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
 
           // Recurse into directories
           if (entry.isDirectory()) {
-            // Check if directory is effectively empty
-            const isEmpty = await this.isDirectoryEffectivelyEmpty(fullPath);
-            if (!isEmpty) {
-              const subMatches = await findMatchesInDirectory(fullPath);
-              matches.push(...subMatches);
-            }
+            const subMatches = await findMatchesInDirectory(fullPath);
+            matches.push(...subMatches);
           }
         }
       } catch (error) {
@@ -444,13 +397,33 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
 
       // Add all ancestors
       let currentPath = matchPath;
-      while (currentPath !== path.dirname(currentPath) && this.workspaceRoots.has(vscode.Uri.file(currentPath).toString())) { // Stop at workspace root or filesystem root
-          this.includedPaths.add(currentPath); // Add current path
+      while (currentPath !== path.dirname(currentPath)) { // Loop up to the root
           const parentPath = path.dirname(currentPath);
-          if (parentPath === currentPath) break; // Avoid infinite loop at root
+          if (parentPath === currentPath) break; // Stop at filesystem root
+          
+          // Check if parent is a workspace root before adding
+          let isWorkspaceRoot = false;
+          for(const root of this.workspaceRoots.values()) {
+              if(parentPath === root) {
+                  isWorkspaceRoot = true;
+                  break;
+              }
+          }
+          
+          this.includedPaths.add(parentPath); // Add parent path
+          
+          if(isWorkspaceRoot) {
+              break; // Stop if parent is a workspace root
+          }
           currentPath = parentPath; // Move to parent
       }
-
+      
+      // --- ADDED: Ensure the containing workspace root itself is included ---
+      const containingWorkspaceRoot = [...this.workspaceRoots.values()].find(root => matchPath.startsWith(root + path.sep));
+      if (containingWorkspaceRoot) {
+          this.includedPaths.add(containingWorkspaceRoot);
+      }
+      // --- END ADDED ---
 
       // For directory matches, add all descendants (will be handled later during tree traversal)
       try {
@@ -806,16 +779,9 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
 
     // Block to prevent nested async operations from causing race conditions
     this.processCheckboxChange(item, isChecked).then(() => {
-      // Refresh the specific item and its parents instead of full refresh
-        this._onDidChangeTreeData.fire(item); // Refresh the item itself
-        let parentPath = path.dirname(item.fullPath);
-        while(parentPath !== item.fullPath && parentPath !== path.dirname(parentPath)) { // Stop at root
-            this.getParent(item).then(parent => { // Need to get parent FileItem to refresh
-                if(parent) this._onDidChangeTreeData.fire(parent);
-            });
-             parentPath = path.dirname(parentPath);
-        }
-
+      // --- MODIFIED: Refresh the entire tree view after state changes ---
+      this.refresh(); 
+      // --- END MODIFIED ---
 
       // Notify the webview about the change in selected files
       vscode.commands.executeCommand('promptcode.getSelectedFiles');
