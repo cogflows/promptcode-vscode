@@ -37,7 +37,6 @@
 }
 
 .search-container.active-filter {
-  box-shadow: 0 0 0 2px var(--accent-color);
   border-radius: var(--border-radius-md);
 }
 
@@ -58,7 +57,7 @@
 .search-container input:focus {
   outline: none;
   border-color: var(--accent-color);
-  box-shadow: var(--shadow-md);
+  box-shadow: 0 0 0 2px var(--accent-color);
 }
 
 /* Search icons */
