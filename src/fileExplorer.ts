@@ -57,47 +57,6 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
   private workspaceRoots: Map<string, string> = new Map(); // Uri string -> fsPath
   private includedPaths: Set<string> = new Set();
 
-  // --- ADDED: Glob/Regex Converter ---
-  /**
-   * Converts a user search term (potentially a glob or simple regex) into a RegExp.
-   * - If pattern starts/ends with /, treats it as a direct regex.
-   * - Otherwise, converts basic glob syntax (*, ?) to regex.
-   * - Returns null if the pattern is empty or invalid.
-   */
-  private stringToSearchRegex(pattern: string): RegExp | null {
-    if (!pattern || !pattern.trim()) {
-      return null;
-    }
-
-    // Check if it looks like a regex (e.g., /pattern/i)
-    const regexMatch = pattern.match(/^\/(.+)\/([gimyus]*)$/);
-    if (regexMatch) {
-      try {
-        return new RegExp(regexMatch[1], regexMatch[2] || 'i'); // Use provided flags or default to case-insensitive
-      } catch (e) {
-        console.error(`Invalid Regex provided: ${pattern}`, e);
-        return null; // Invalid regex pattern
-      }
-    }
-
-    // Treat as glob-like pattern: escape special chars, convert *, ?
-    // Escape characters with special meaning in regex.
-    let escapedPattern = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&'); 
-    // Convert glob * and ? to regex equivalents.
-    const regexString = escapedPattern
-      .replace(/\*/g, '.*')   // Convert * to .* (match zero or more chars)
-      .replace(/\?/g, '.');    // Convert ? to . (match single char)
-
-    try {
-      // Create case-insensitive regex (no anchors ^$)
-      return new RegExp(regexString, 'i');
-    } catch (e) {
-      console.error(`Invalid regex generated from pattern: ${pattern}`, e);
-      return null; // Invalid pattern results in invalid regex
-    }
-  }
-  // --- END ADDED ---
-
   constructor() {
     // ... (constructor initialization remains the same) ...
     this.initializeWorkspaceRoots();
@@ -128,10 +87,6 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
       vscode.workspace.onDidRenameFiles(() => this.refresh())
     );
   }
-
-  // --- ADDED: Simple Glob to Regex Converter ---
-  // private globToRegex(pattern: string): RegExp | null { ... }
-  // --- END ADDED ---
 
   // ... (rest of the FileExplorerProvider class remains the same) ...
   private initializeWorkspaceRoots(): void {
@@ -324,6 +279,32 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
     }
   }
 
+  // --- ADDED: Simple Glob to Regex Converter ---
+  /**
+   * Converts a simple glob pattern (*, ?) into a case-insensitive RegExp.
+   * Returns null if the pattern is empty or doesn't contain glob characters.
+   */
+  private globToRegex(pattern: string): RegExp | null {
+    if (!pattern || !pattern.trim() || (!pattern.includes('*') && !pattern.includes('?'))) {
+      return null; // Not a glob pattern or empty
+    }
+
+    // Escape characters with special meaning in regex.
+    let escapedPattern = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&'); 
+    // Convert glob * and ? to regex equivalents.
+    const regexString = escapedPattern
+      .replace(/\*/g, '.*')   // Convert * to .* (match zero or more chars)
+      .replace(/\?/g, '.');    // Convert ? to . (match single char)
+
+    try {
+      // Create case-insensitive regex (anchored to match the whole name)
+      return new RegExp(`^${regexString}$`, 'i');
+    } catch (e) {
+      console.error(`Invalid regex generated from glob pattern: ${pattern}`, e);
+      return null; // Invalid pattern results in invalid regex
+    }
+  }
+  // --- END ADDED ---
 
   // First stage of search: find all matches and build path inclusion set
   private async rebuildSearchPaths(): Promise<void> {
@@ -337,10 +318,9 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
     // Function to collect all matches in a directory
     const findMatchesInDirectory = async (dirPath: string): Promise<string[]> => {
       const matches: string[] = [];
-      // --- Use new Regex helper ---
-      const searchRegex = this.stringToSearchRegex(this.searchTerm);
-      const searchTermLower = this.searchTerm.toLowerCase(); // For fallback
-      // --- End Use new Regex helper ---
+      // Attempt to convert glob pattern to regex
+      const globRegex = this.globToRegex(this.searchTerm);
+      const searchTermLower = this.searchTerm.toLowerCase();
 
       try {
         const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
@@ -353,14 +333,12 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
           }
 
           // Check if this entry matches
-          // --- Use Regex or fallback to substring ---
           let isMatch = false;
-          if (searchRegex) {
-              isMatch = searchRegex.test(entry.name);
-          } else if (searchTermLower) { // Fallback only if term exists and regex failed
-              isMatch = entry.name.toLowerCase().includes(searchTermLower);
+          if (globRegex) {
+            isMatch = globRegex.test(entry.name); // Use glob regex if available
+          } else {
+            isMatch = entry.name.toLowerCase().includes(searchTermLower); // Fallback to substring search
           }
-          // --- End Use Regex or fallback ---
           
           if (isMatch) {
             matches.push(fullPath);
