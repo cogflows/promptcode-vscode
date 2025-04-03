@@ -1182,4 +1182,91 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
       console.error('Error expanding matching directories:', error);
     }
   }
+
+  // --- ADDED: Public method to check if a path should be ignored ---
+  public shouldIgnore(filePath: string): boolean {
+    return this.ignoreHelper ? this.ignoreHelper.shouldIgnore(filePath) : false;
+  }
+  // --- END ADDED ---
+
+  // --- RESTORED: Get the ignore helper for external use ---
+  public getIgnoreHelper(): IgnoreHelper | undefined {
+    return this.ignoreHelper;
+  }
+  // --- END RESTORED ---
+
+  // --- RESTORED: Method to set checked items from a list ---
+  public async setCheckedItems(filePaths: Set<string>): Promise<void> {
+    console.log(`Restored setCheckedItems: Received ${filePaths.size} paths.`);
+    if (!this.ignoreHelper) {
+        console.warn('Ignore helper not initialized, cannot filter based on ignore rules.');
+        // Optionally, initialize it here if feasible or throw an error
+    }
+
+    // Clear existing selections
+    checkedItems.clear();
+
+    // Set initial checked state for provided files, respecting ignore rules
+    let checkedCount = 0;
+    for (const filePath of filePaths) {
+        // Use the public shouldIgnore method we are also restoring/ensuring exists
+        if (this.ignoreHelper?.shouldIgnore(filePath)) {
+            console.log(`Ignoring file from list: ${filePath}`);
+            continue;
+        }
+        try {
+            // Verify the file exists and is a file before checking it
+            const stats = await fs.promises.stat(filePath);
+            if (stats.isFile()) {
+                checkedItems.set(filePath, true);
+                checkedCount++;
+            } else {
+                 console.warn(`Path from list is not a file, skipping: ${filePath}`);
+            }
+        } catch (error) {
+            // Handle errors like file not found, permission denied
+             if (error instanceof Error && (error as NodeJS.ErrnoException).code === 'ENOENT') {
+                 console.warn(`File from list not found, skipping: ${filePath}`);
+             } else if (error instanceof Error && (error as NodeJS.ErrnoException).code === 'EACCES') {
+                 console.warn(`Permission denied for file from list, skipping: ${filePath}`);
+             } else {
+                console.error(`Error stating file from list ${filePath}:`, error);
+            }
+        }
+    }
+    console.log(`Checked ${checkedCount} files after filtering and validation.`);
+
+    // Update parent states for all checked items
+    // Collect unique parent directories first
+    const parentDirsToUpdate = new Set<string>();
+    for (const [filePath, isChecked] of checkedItems.entries()) {
+        if (isChecked) {
+            const parentDir = path.dirname(filePath);
+            // Ensure we don't try to update the root/invalid paths
+            if (parentDir && parentDir !== filePath) {
+                 parentDirsToUpdate.add(parentDir);
+            }
+        }
+    }
+
+    console.log(`Updating parent states for ${parentDirsToUpdate.size} directories.`);
+    // Update parent chains
+    // Process updates sequentially to avoid potential race conditions
+    for (const dirPath of parentDirsToUpdate) {
+        try {
+            await this.updateParentChain(dirPath);
+        } catch(error) {
+             console.error(`Error updating parent chain for ${dirPath} during list processing:`, error);
+        }
+    }
+     console.log(`Finished updating parent states.`);
+
+
+    // Refresh the tree view to show new states
+    this.refresh();
+
+    // Notify the webview about the change
+    vscode.commands.executeCommand('promptcode.getSelectedFiles');
+  }
+  // --- END RESTORED ---
 }
