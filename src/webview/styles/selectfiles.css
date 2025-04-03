@@ -48,12 +48,8 @@
 /* Collapsed state styles */
 .configuration-section.collapsed,
 .directory-section.collapsed {
-  border-bottom: none;
-}
-
-.configuration-section.collapsed .section-header,
-.directory-section.collapsed .directory-header {
-  border-bottom: none;
+  /* Restore border only when collapsed */
+  border-bottom: 1px solid var(--vscode-panel-border);
 }
 
 .configuration-section .section-title {
@@ -173,7 +169,6 @@
   justify-content: space-between;
   padding: var(--spacing-md);
   cursor: pointer;
-  border-bottom: 1px solid var(--vscode-panel-border);
   transition: all var(--transition-speed) ease;
 }
 
