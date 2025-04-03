@@ -9,6 +9,7 @@ export const checkedItems = new Map<string, boolean>();
 export const expandedItems = new Map<string, boolean>();
 
 export class FileItem extends vscode.TreeItem {
+  // ... (rest of the FileItem class remains the same) ...
   public readonly workspaceFolderName?: string;
   public readonly workspaceFolderRootPath?: string;
 
@@ -21,19 +22,19 @@ export class FileItem extends vscode.TreeItem {
   ) {
     // Use display name if provided, otherwise use filename
     super(displayName || path.basename(fullPath), collapsibleState);
-    
+
     // Set context value to differentiate directories and files
     this.contextValue = isDirectory ? 'directory' : 'file';
-    
+
     // Set checkbox state
     this.checkboxState = checkedItems.get(fullPath) ? vscode.TreeItemCheckboxState.Checked : vscode.TreeItemCheckboxState.Unchecked;
-    
+
     // Use relative path for tooltip when possible
     const workspaceFolder = vscode.workspace.getWorkspaceFolder(resourceUri);
     if (workspaceFolder) {
       const relativePath = path.relative(workspaceFolder.uri.fsPath, fullPath);
       this.tooltip = `${workspaceFolder.name}: ${relativePath}`;
-      
+
       // Add workspace information
       this.workspaceFolderName = workspaceFolder.name;
       this.workspaceFolderRootPath = workspaceFolder.uri.fsPath;
@@ -43,7 +44,9 @@ export class FileItem extends vscode.TreeItem {
   }
 }
 
+
 export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
+  // ... (existing properties remain the same) ...
   private _onDidChangeTreeData: vscode.EventEmitter<FileItem | undefined | null | void> = new vscode.EventEmitter<FileItem | undefined | null | void>();
   readonly onDidChangeTreeData: vscode.Event<FileItem | undefined | null | void> = this._onDidChangeTreeData.event;
   private searchTerm: string = '';
@@ -52,10 +55,34 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
   private disposables: vscode.Disposable[] = [];
   private ignoreHelper: IgnoreHelper | undefined;
   private workspaceRoots: Map<string, string> = new Map(); // Uri string -> fsPath
+  private includedPaths: Set<string> = new Set();
+
+  // --- ADDED: Simple Glob to Regex Converter ---
+  private globToRegex(pattern: string): RegExp | null {
+    if (!pattern || !pattern.trim()) {
+      return null;
+    }
+    // Escape regex special characters, except for *, ?, and potentially others if needed
+    const escapedPattern = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&'); 
+    // Convert glob * and ? to regex equivalents
+    const regexString = escapedPattern
+        .replace(/\*/g, '.*')   // Convert * to .* (match any sequence)
+        .replace(/\?/g, '.');    // Convert ? to . (match any single char)
+    
+    try {
+      // Anchor the pattern and make it case-insensitive
+      return new RegExp(`^${regexString}$`, 'i');
+    } catch (e) {
+      console.error(`Invalid regex generated from glob pattern: ${pattern}`, e);
+      return null; // Invalid pattern
+    }
+  }
+  // --- END ADDED ---
 
   constructor() {
+    // ... (constructor initialization remains the same) ...
     this.initializeWorkspaceRoots();
-    
+
     // Initialize the ignore helper
     this.ignoreHelper = new IgnoreHelper();
     this.ignoreHelper.initialize().then(() => {
@@ -64,17 +91,17 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
     }).catch(error => {
       console.error('Error initializing ignore helper:', error);
     });
-    
+
     // Set up file system watchers for all workspace folders
     this.setupFileSystemWatchers();
-    
+
     // Listen for workspace folder changes
     this.disposables.push(
       vscode.workspace.onDidChangeWorkspaceFolders(e => {
         this.handleWorkspaceFoldersChanged(e);
       })
     );
-    
+
     // Also listen for VS Code's built-in file events
     this.disposables.push(
       vscode.workspace.onDidCreateFiles(() => this.refresh()),
@@ -83,6 +110,73 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
     );
   }
 
+  // --- ADDED ---
+  /**
+   * Provides access to the initialized IgnoreHelper instance.
+   */
+  public getIgnoreHelper(): IgnoreHelper | undefined {
+      return this.ignoreHelper;
+  }
+
+  /**
+   * Programmatically sets the checked state for a list of absolute file paths.
+   * This will ADD to the current selection.
+   * @param absoluteFilePaths An array or Set of absolute file paths to check.
+   */
+  public async setCheckedItems(absoluteFilePaths: Set<string> | string[]): Promise<void> {
+      const pathsToAdd = new Set(absoluteFilePaths);
+      console.log(`Programmatically adding ${pathsToAdd.size} items to selection.`);
+      const parentsToUpdate = new Set<string>();
+
+      // 1. Iterate through the paths to add
+      for (const filePath of pathsToAdd) {
+          // Check if already checked
+          if (checkedItems.get(filePath) === true) {
+              console.log(`Skipping already checked file: ${filePath}`);
+              continue;
+          }
+          
+          // Double-check if the file still exists before marking it checked
+          try {
+              const stats = await fs.promises.stat(filePath);
+              if (stats.isFile()) {
+                    // Also check if it should be ignored NOW (rules might have changed)
+                    if (!this.ignoreHelper || !this.ignoreHelper.shouldIgnore(filePath)) {
+                       checkedItems.set(filePath, true);
+                       parentsToUpdate.add(path.dirname(filePath)); // Mark parent for update
+                       console.log(`Added file to selection: ${filePath}`);
+                    } else {
+                        console.warn(`File specified in list is ignored: ${filePath}`);
+                    }
+              } else {
+                 console.warn(`Path specified in list is not a file or does not exist: ${filePath}`);
+              }
+          } catch (error) {
+                // File likely doesn't exist anymore
+                console.warn(`Error stating file from list, skipping: ${filePath}`, error);
+          }
+      }
+
+       // 2. Update parent states for all newly added files
+        const parentUpdatePromises: Promise<void>[] = [];
+        for (const parentDir of parentsToUpdate) {
+            parentUpdatePromises.push(this.updateParentChain(parentDir));
+        }
+        // Wait for all parent updates to complete
+        if (parentUpdatePromises.length > 0) {
+            await Promise.all(parentUpdatePromises);
+        }
+
+      // 3. Refresh the tree view to reflect changes
+      this.refresh();
+
+      // 4. Update the webview's selected files list
+      vscode.commands.executeCommand('promptcode.getSelectedFiles');
+      console.log(`Finished adding checked items. Map size: ${checkedItems.size}`);
+  }
+  // --- END ADDED ---
+
+  // ... (rest of the FileExplorerProvider class remains the same) ...
   private initializeWorkspaceRoots(): void {
     if (vscode.workspace.workspaceFolders) {
       for (const folder of vscode.workspace.workspaceFolders) {
@@ -90,14 +184,14 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
       }
     }
   }
-  
+
   private handleWorkspaceFoldersChanged(e: vscode.WorkspaceFoldersChangeEvent): void {
     // Add new folders
     for (const folder of e.added) {
       this.workspaceRoots.set(folder.uri.toString(), folder.uri.fsPath);
       this.setupFileSystemWatcherForWorkspace(folder.uri.fsPath);
     }
-    
+
     // Remove deleted folders and their files from selection
     for (const folder of e.removed) {
       const rootPath = this.workspaceRoots.get(folder.uri.toString());
@@ -106,11 +200,11 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
         this.removeFilesFromSelection(rootPath);
       }
     }
-    
+
     // Refresh view
     this.refresh();
   }
-  
+
   private removeFilesFromSelection(rootPath: string): void {
     // Remove all selected files that start with this path
     for (const [path, checked] of checkedItems.entries()) {
@@ -119,7 +213,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
       }
     }
   }
-  
+
   private setupFileSystemWatchers(): void {
     // Set up watchers for all workspace folders
     if (vscode.workspace.workspaceFolders) {
@@ -128,13 +222,13 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
       }
     }
   }
-  
+
   private setupFileSystemWatcherForWorkspace(workspacePath: string): void {
     // Create a file system watcher for the workspace
     const fileWatcher = vscode.workspace.createFileSystemWatcher(
       new vscode.RelativePattern(vscode.Uri.file(workspacePath), '**/*')
     );
-    
+
     // Add watchers to disposables
     this.disposables.push(
       fileWatcher,
@@ -159,7 +253,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
         if (fileName === '.gitignore' || fileName === '.promptcode_ignore') {
           this.refreshIgnoreHelper();
         } else {
-          this.refresh();
+          this.refresh(); // Refresh on general file changes too
         }
       })
     );
@@ -174,13 +268,13 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
   // Set the tree view instance
   setTreeView(treeView: vscode.TreeView<FileItem>) {
     this._treeView = treeView;
-    
+
     // Add listeners for expand/collapse events to track expanded state
     this.disposables.push(
       treeView.onDidExpandElement(e => {
         expandedItems.set(e.element.fullPath, true);
       }),
-      
+
       treeView.onDidCollapseElement(e => {
         expandedItems.set(e.element.fullPath, false);
       })
@@ -214,52 +308,47 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
 
     // Create a list of items to remove
     const itemsToRemove: string[] = [];
-    
+
     // Check each selected item (files and directories)
     for (const [itemPath, isChecked] of checkedItems.entries()) {
       if (isChecked && this.ignoreHelper.shouldIgnore(itemPath)) {
         itemsToRemove.push(itemPath);
       }
     }
-    
+
     // Remove the items from selection
     for (const itemPath of itemsToRemove) {
       checkedItems.delete(itemPath);
-      
+
       // Update parent states for this path
       this.updateParentStates(itemPath).catch(error => {
         console.error(`Error updating parent states for ${itemPath}:`, error);
       });
-      
+
       const isDirectory = fs.existsSync(itemPath) && fs.statSync(itemPath).isDirectory();
       console.log(`Removed now-ignored ${isDirectory ? 'directory' : 'file'} from selection: ${itemPath}`);
     }
-    
+
     // If any items were removed, notify the webview
     if (itemsToRemove.length > 0) {
       vscode.commands.executeCommand('promptcode.getSelectedFiles');
     }
   }
 
-  // Get the ignore helper for external use
-  public getIgnoreHelper(): IgnoreHelper | undefined {
-    return this.ignoreHelper;
-  }
-
   // Set the search term and refresh the tree
   async setSearchTerm(term: string): Promise<void> {
     console.log(`FileExplorer: Setting search term to "${term}"`);
-    
+
     const previousTerm = this.searchTerm;
     this.searchTerm = term;
-    
+
     if (term.trim() !== '') {
       // When searching, first build the search paths
       await this.rebuildSearchPaths(); // Wait for this to complete
-      
+
       // Then refresh the tree to show matching items
       this.refresh();
-      
+
       // After refreshing, expand all matching directories
       // Small delay to ensure the tree has updated with search results
       setTimeout(() => {
@@ -272,45 +361,54 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
     } else {
       // Clear the included paths when search is cleared for better performance
       this.includedPaths.clear();
-      
+
       // Full refresh when clearing search
       this.refresh();
     }
   }
-  
-  // Store matched paths and their related paths
-  private includedPaths: Set<string> = new Set();
-  
+
+
   // First stage of search: find all matches and build path inclusion set
   private async rebuildSearchPaths(): Promise<void> {
     console.log(`FileExplorer: Rebuilding search paths for "${this.searchTerm}"`);
     this.includedPaths.clear();
-    
+
     if (!this.searchTerm.trim()) {
       return; // No search term, no filtering
     }
-    
+
     // Function to collect all matches in a directory
     const findMatchesInDirectory = async (dirPath: string): Promise<string[]> => {
       const matches: string[] = [];
-      
+      // --- ADDED: Convert search term to regex ---
+      const searchRegex = this.globToRegex(this.searchTerm);
+      const searchTermLower = this.searchTerm.toLowerCase(); // For fallback
+      // --- END ADDED ---
+
       try {
         const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
-        
+
         for (const entry of entries) {
           // Skip ignored files
           const fullPath = path.join(dirPath, entry.name);
           if (this.ignoreHelper && this.ignoreHelper.shouldIgnore(fullPath)) {
             continue;
           }
-          
+
           // Check if this entry matches
-          const isMatch = entry.name.toLowerCase().includes(this.searchTerm.toLowerCase());
+          // --- MODIFIED: Use Regex or fallback to substring ---
+          let isMatch = false;
+          if (searchRegex) {
+              isMatch = searchRegex.test(entry.name);
+          } else if (searchTermLower) { // Fallback only if term exists
+              isMatch = entry.name.toLowerCase().includes(searchTermLower);
+          }
+          // --- END MODIFIED ---
           
           if (isMatch) {
             matches.push(fullPath);
           }
-          
+
           // Recurse into directories
           if (entry.isDirectory()) {
             // Check if directory is effectively empty
@@ -322,32 +420,38 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
           }
         }
       } catch (error) {
-        console.error(`Error finding matches in ${dirPath}:`, error);
+        // Ignore errors like permission denied
+        if (error instanceof Error && (error as NodeJS.ErrnoException).code !== 'EACCES' && (error as NodeJS.ErrnoException).code !== 'ENOENT') {
+            console.error(`Error finding matches in ${dirPath}:`, error);
+        }
       }
-      
+
       return matches;
     };
-    
+
     // Find all matches in all workspace roots
     const allMatches: string[] = [];
     for (const rootPath of this.workspaceRoots.values()) {
       const matches = await findMatchesInDirectory(rootPath);
       allMatches.push(...matches);
     }
-    
+
     console.log(`FileExplorer: Found ${allMatches.length} direct matches`);
-    
+
     // Add all matches to included paths
     for (const matchPath of allMatches) {
       this.includedPaths.add(matchPath);
-      
+
       // Add all ancestors
       let currentPath = matchPath;
-      while (currentPath !== path.dirname(currentPath)) {
-        currentPath = path.dirname(currentPath);
-        this.includedPaths.add(currentPath);
+      while (currentPath !== path.dirname(currentPath) && this.workspaceRoots.has(vscode.Uri.file(currentPath).toString())) { // Stop at workspace root or filesystem root
+          this.includedPaths.add(currentPath); // Add current path
+          const parentPath = path.dirname(currentPath);
+          if (parentPath === currentPath) break; // Avoid infinite loop at root
+          currentPath = parentPath; // Move to parent
       }
-      
+
+
       // For directory matches, add all descendants (will be handled later during tree traversal)
       try {
         const stats = await fs.promises.stat(matchPath);
@@ -359,32 +463,35 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
         // Ignore errors (file might have been deleted)
       }
     }
-    
+
     console.log(`FileExplorer: Built inclusion set with ${this.includedPaths.size} paths`);
   }
-  
+
   // Check if an item should be included in search results based on the inclusion set
   private shouldIncludeInSearch(fullPath: string, isDirectory: boolean): boolean {
     // No search term, include everything
     if (!this.searchTerm.trim()) {
       return true;
     }
-    
+
     // Always include the item if its path is directly in the inclusion set
     if (this.includedPaths.has(fullPath)) {
       return true;
     }
-    
+
     // Check if any parent directory is a matched directory
     // If so, include all its children
     let currentPath = path.dirname(fullPath);
-    while (currentPath !== path.dirname(currentPath)) {
+    while (currentPath !== path.dirname(currentPath) && this.workspaceRoots.has(vscode.Uri.file(currentPath).toString())) {
       if (this.includedPaths.has(`${currentPath}:DIR_MATCH`)) {
         return true;
       }
-      currentPath = path.dirname(currentPath);
+      const parentPath = path.dirname(currentPath);
+      if (parentPath === currentPath) break;
+      currentPath = parentPath;
     }
-    
+
+
     return false;
   }
 
@@ -402,24 +509,24 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
     if (!element || !element.fullPath || !this.workspaceRoots.size) {
       return null;
     }
-    
+
     // Check if this is a workspace root
     for (const rootPath of this.workspaceRoots.values()) {
       if (element.fullPath === rootPath) {
         return null; // Workspace roots have no parent
       }
     }
-    
+
     // Get the parent directory path
     const parentPath = path.dirname(element.fullPath);
-    
+
     // Check if the parent is a workspace root
     for (const [uriString, rootPath] of this.workspaceRoots.entries()) {
       if (parentPath === rootPath) {
         const uri = vscode.Uri.parse(uriString);
         const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
         const displayName = workspaceFolder ? workspaceFolder.name : path.basename(rootPath);
-        
+
         return new FileItem(
           uri,
           vscode.TreeItemCollapsibleState.Collapsed,
@@ -429,54 +536,74 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
         );
       }
     }
-    
+
     // Regular directory parent
-    const uri = vscode.Uri.file(parentPath);
-    return new FileItem(
-      uri,
-      vscode.TreeItemCollapsibleState.Collapsed,
-      true,
-      parentPath
-    );
+    try {
+        await fs.promises.access(parentPath); // Ensure parent exists
+        const uri = vscode.Uri.file(parentPath);
+        return new FileItem(
+            uri,
+            vscode.TreeItemCollapsibleState.Collapsed,
+            true,
+            parentPath
+        );
+     } catch {
+        return null; // Parent does not exist or is not accessible
+     }
+
   }
 
   async getChildren(element?: FileItem): Promise<FileItem[]> {
     if (!this.workspaceRoots.size) {
-      vscode.window.showInformationMessage('No workspace folder is open');
-      return Promise.resolve([]);
+        // Use a dedicated command or status bar message instead of showInformationMessage
+        vscode.commands.executeCommand('setContext', 'promptcode.noWorkspace', true);
+        // Optionally, show a welcome message in the view itself
+        // If using Welcome View API: return Promise.resolve([]);
+        // If customizing view message: Need TreeView.message property (might require API update)
+        return Promise.resolve([]);
+    } else {
+        vscode.commands.executeCommand('setContext', 'promptcode.noWorkspace', false);
     }
+
 
     // If element is provided, get its children (standard folder contents)
     if (element) {
       const directoryPath = element.fullPath;
-      
+
       if (!fs.existsSync(directoryPath)) {
         return Promise.resolve([]);
       }
-      
+
       // Use cached entries if available
       if (this.cachedEntries.has(directoryPath)) {
         return this.processDirectoryEntries(directoryPath, this.cachedEntries.get(directoryPath)!);
       }
-      
+
       // Read directory contents
       try {
         const entries = await fs.promises.readdir(directoryPath, { withFileTypes: true });
         this.cachedEntries.set(directoryPath, entries);
         return this.processDirectoryEntries(directoryPath, entries);
       } catch (error) {
-        console.error(`Error reading directory ${directoryPath}:`, error);
+        // Handle common errors gracefully
+        if (error instanceof Error && (error as NodeJS.ErrnoException).code === 'EACCES') {
+            console.warn(`Permission denied reading directory ${directoryPath}`);
+        } else if (error instanceof Error && (error as NodeJS.ErrnoException).code === 'ENOENT') {
+            console.warn(`Directory not found ${directoryPath}`);
+        } else {
+            console.error(`Error reading directory ${directoryPath}:`, error);
+        }
         return Promise.resolve([]);
       }
     } else {
       // Top level - return all workspace roots
       const rootItems: FileItem[] = [];
-      
+
       for (const [uriString, fsPath] of this.workspaceRoots.entries()) {
         const uri = vscode.Uri.parse(uriString);
         const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
         const displayName = workspaceFolder ? workspaceFolder.name : path.basename(fsPath);
-        
+
         // Create a FileItem for each workspace root
         const rootItem = new FileItem(
           uri,
@@ -485,37 +612,37 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
           fsPath,
           displayName
         );
-        
+
         rootItems.push(rootItem);
       }
-      
+
       return rootItems;
     }
   }
 
   // Create a FileItem from a Dirent
   private createFileItem(
-    entry: fs.Dirent, 
-    directoryPath: string, 
+    entry: fs.Dirent,
+    directoryPath: string,
     collapsibleState?: vscode.TreeItemCollapsibleState
   ): FileItem {
     const fullPath = path.join(directoryPath, entry.name);
     const resourceUri = vscode.Uri.file(fullPath);
     const isDirectory = entry.isDirectory();
-    
+
     // Check if this item should be expanded based on expandedItems map
     let state: vscode.TreeItemCollapsibleState;
     if (collapsibleState !== undefined) {
       state = collapsibleState;
     } else if (isDirectory) {
       // If it's in the expandedItems map and set to true, expand it
-      state = expandedItems.get(fullPath) 
-        ? vscode.TreeItemCollapsibleState.Expanded 
+      state = expandedItems.get(fullPath)
+        ? vscode.TreeItemCollapsibleState.Expanded
         : vscode.TreeItemCollapsibleState.Collapsed;
     } else {
       state = vscode.TreeItemCollapsibleState.None;
     }
-    
+
     return new FileItem(
       resourceUri,
       state,
@@ -533,62 +660,65 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
     try {
       // Get all entries in this directory
       const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
-      
+
       // If no entries at all, it's definitely empty
       if (entries.length === 0) {
         return true;
       }
-      
+
       // Filter entries using ignore patterns
-      const visibleEntries = this.ignoreHelper 
+      const visibleEntries = this.ignoreHelper
         ? entries.filter(entry => {
             const fullPath = path.join(dirPath, entry.name);
             return !this.ignoreHelper!.shouldIgnore(fullPath);
           })
-        : entries.filter(entry => 
-            entry.name !== 'node_modules' && 
+        : entries.filter(entry =>
+            entry.name !== 'node_modules' &&
             entry.name !== '.git'
           );
-      
+
       // If no visible entries after filtering, it's effectively empty
       if (visibleEntries.length === 0) {
         return true;
       }
-      
+
       // Check if there are any visible files (not directories)
       const visibleFiles = visibleEntries.filter(entry => !entry.isDirectory());
       if (visibleFiles.length > 0) {
         // Has at least one visible file, so not empty
         return false;
       }
-      
+
       // If we get here, we only have directories
       // Check each subdirectory recursively
       for (const entry of visibleEntries) {
         if (entry.isDirectory()) {
           const subDirPath = path.join(dirPath, entry.name);
           const subDirEmpty = await this.isDirectoryEffectivelyEmpty(subDirPath);
-          
+
           // If any subdirectory is not empty, then this directory is not empty
           if (!subDirEmpty) {
             return false;
           }
         }
       }
-      
+
       // If all subdirectories are empty or ignored, this directory is effectively empty
       return true;
     } catch (error) {
-      console.error(`Error checking if directory ${dirPath} is empty:`, error);
-      // In case of error, assume not empty to be safe
-      return false;
+      // Handle errors like permission denied
+        if (error instanceof Error && (error as NodeJS.ErrnoException).code !== 'EACCES') {
+            console.error(`Error checking if directory ${dirPath} is empty:`, error);
+        }
+        // In case of error, assume not empty to be safe
+        return false;
     }
   }
 
   private async processDirectoryEntries(directoryPath: string, entries: fs.Dirent[]): Promise<FileItem[]> {
     // Filter entries using ignore helper
     let filteredEntries = entries;
-    
+
     if (this.ignoreHelper) {
       filteredEntries = entries.filter(entry => {
         const fullPath = path.join(directoryPath, entry.name);
@@ -596,8 +726,8 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
       });
     } else {
       // Fall back to basic filtering if the ignore helper is not available
-      filteredEntries = entries.filter(entry => 
-        entry.name !== 'node_modules' && 
+      filteredEntries = entries.filter(entry =>
+        entry.name !== 'node_modules' &&
         entry.name !== '.git'
       );
     }
@@ -605,72 +735,67 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
     // Filter empty directories
     if (filteredEntries.some(entry => entry.isDirectory())) {
       const directories = filteredEntries.filter(entry => entry.isDirectory());
-      
+
       const nonEmptyDirPromises = directories.map(async dir => {
         const fullPath = path.join(directoryPath, dir.name);
         const isEmpty = await this.isDirectoryEffectivelyEmpty(fullPath);
         return { dir, isEmpty };
       });
-      
+
       const dirResults = await Promise.all(nonEmptyDirPromises);
       const nonEmptyDirs = dirResults
         .filter(result => !result.isEmpty)
         .map(result => result.dir);
-      
+
       const nonDirEntries = filteredEntries.filter(entry => !entry.isDirectory());
       filteredEntries = [...nonEmptyDirs, ...nonDirEntries];
     }
 
     // Apply search filtering
     if (this.searchTerm.trim()) {
-      // Check if we should include this directory
-      if (this.shouldIncludeInSearch(directoryPath, true)) {
-        // For directories in the inclusion set, return all entries
-        // Filter each entry individually to check if it should be included
-        const matchingEntries = filteredEntries.filter(entry => {
+      // Check if we should include this directory's children based on the inclusion set
+      const matchingEntries = filteredEntries.filter(entry => {
           const fullPath = path.join(directoryPath, entry.name);
           return this.shouldIncludeInSearch(fullPath, entry.isDirectory());
-        });
-        
-        return matchingEntries.map(entry => {
-          const fullPath = path.join(directoryPath, entry.name);
-          const fileItem = this.createFileItem(
-            entry,
-            directoryPath,
-            entry.isDirectory() ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None
-          );
-          
-          // Ensure checkbox state is preserved
-          if (checkedItems.has(fullPath)) {
-            fileItem.checkboxState = checkedItems.get(fullPath) 
-              ? vscode.TreeItemCheckboxState.Checked 
-              : vscode.TreeItemCheckboxState.Unchecked;
-          }
-          
-          return fileItem;
-        });
-      }
-      
-      // This directory is not in the inclusion set, show nothing
-      return [];
+      });
+
+      return matchingEntries.map(entry => {
+        const fullPath = path.join(directoryPath, entry.name);
+        const fileItem = this.createFileItem(
+          entry,
+          directoryPath,
+          // Force collapsed state during search initially for performance, expansion happens later
+          entry.isDirectory() ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None
+        );
+
+        // Ensure checkbox state is preserved
+        if (checkedItems.has(fullPath)) {
+          fileItem.checkboxState = checkedItems.get(fullPath)
+            ? vscode.TreeItemCheckboxState.Checked
+            : vscode.TreeItemCheckboxState.Unchecked;
+        }
+
+        return fileItem;
+      });
     }
-    
+
+
     // No search term, return all filtered entries
     return filteredEntries.map(entry => {
       const fullPath = path.join(directoryPath, entry.name);
       const fileItem = this.createFileItem(
-        entry, 
-        directoryPath, 
+        entry,
+        directoryPath,
         entry.isDirectory() ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None
       );
-      
+
       // Ensure checkbox state is preserved
       if (checkedItems.has(fullPath)) {
-        fileItem.checkboxState = checkedItems.get(fullPath) 
-          ? vscode.TreeItemCheckboxState.Checked 
+        fileItem.checkboxState = checkedItems.get(fullPath)
+          ? vscode.TreeItemCheckboxState.Checked
           : vscode.TreeItemCheckboxState.Unchecked;
       }
-      
+
       return fileItem;
     });
   }
@@ -678,74 +803,99 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
   // Handle checkbox state changes
   handleCheckboxToggle(item: FileItem, checkboxState: vscode.TreeItemCheckboxState): void {
     const isChecked = checkboxState === vscode.TreeItemCheckboxState.Checked;
-    
+
     // Block to prevent nested async operations from causing race conditions
     this.processCheckboxChange(item, isChecked).then(() => {
-      // Refresh the tree view after all operations are complete
-      this.refresh();
-      
+      // Refresh the specific item and its parents instead of full refresh
+        this._onDidChangeTreeData.fire(item); // Refresh the item itself
+        let parentPath = path.dirname(item.fullPath);
+        while(parentPath !== item.fullPath && parentPath !== path.dirname(parentPath)) { // Stop at root
+            this.getParent(item).then(parent => { // Need to get parent FileItem to refresh
+                if(parent) this._onDidChangeTreeData.fire(parent);
+            });
+             parentPath = path.dirname(parentPath);
+        }
+
+
       // Notify the webview about the change in selected files
       vscode.commands.executeCommand('promptcode.getSelectedFiles');
     }).catch(error => {
       console.error("Error processing checkbox change:", error);
-      this.refresh();
+      this.refresh(); // Full refresh on error
     });
   }
-  
+
   // Process checkbox changes synchronously to avoid race conditions
   private async processCheckboxChange(item: FileItem, isChecked: boolean): Promise<void> {
     // Step 1: Update the current item's state
     checkedItems.set(item.fullPath, isChecked);
-    
+
     // Step 2: If it's a directory, update all children
     if (item.isDirectory) {
       await this.setAllChildrenState(item.fullPath, isChecked);
     }
-    
+
     // Step 3: Update all parent directories up to the root
     await this.updateParentChain(path.dirname(item.fullPath));
   }
-  
+
   // Set checkbox state for all children (simplifying previous methods)
   private async setAllChildrenState(dirPath: string, isChecked: boolean): Promise<void> {
     try {
       const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
-      
+
       for (const entry of entries) {
         const fullPath = path.join(dirPath, entry.name);
-        
+
         // Skip ignored items
         if (this.ignoreHelper && this.ignoreHelper.shouldIgnore(fullPath)) {
           continue;
         }
-        
+
         // Set the state
         checkedItems.set(fullPath, isChecked);
-        
+
         // Recursively process subdirectories
         if (entry.isDirectory()) {
           await this.setAllChildrenState(fullPath, isChecked);
         }
       }
     } catch (error) {
-      console.error(`Error setting children state for ${dirPath}:`, error);
+      // Ignore errors like permission denied
+        if (error instanceof Error && (error as NodeJS.ErrnoException).code !== 'EACCES') {
+           console.error(`Error setting children state for ${dirPath}:`, error);
+        }
     }
   }
-  
+
   // Update the entire chain of parent directories
   private async updateParentChain(dirPath: string | undefined): Promise<void> {
     // Stop if no valid directory path or no workspace roots
-    if (!dirPath || dirPath === '' || !this.workspaceRoots.size) {
-      return;
+    if (!dirPath || dirPath === '' || !this.workspaceRoots.size || dirPath === path.dirname(dirPath)) {
+        return;
     }
-    
+
+
     try {
+      // Check if dirPath is a workspace root itself
+        let isWorkspaceRoot = false;
+        for(const root of this.workspaceRoots.values()) {
+            if(dirPath === root) {
+                isWorkspaceRoot = true;
+                break;
+            }
+        }
+
       // Get child states for this directory
       const childStates = await this.getChildrenStates(dirPath);
-      
+
       // Determine parent state based on children
       if (childStates.length === 0) {
-        // No visible children, leave parent state unchanged
+          // No visible children means indeterminate state or unchecked if previously set
+          // Let's default to unchecked unless it was explicitly checked before (which shouldn't happen for empty dir)
+          if (checkedItems.has(dirPath)) { // Only modify if it exists in the map
+             checkedItems.set(dirPath, false);
+          }
       } else if (childStates.every(state => state === false)) {
         // All children unchecked -> parent unchecked
         checkedItems.set(dirPath, false);
@@ -753,26 +903,20 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
         // Any child is checked -> parent checked
         checkedItems.set(dirPath, true);
       }
-      
-      // Find which workspace root the path belongs to
-      let workspaceRoot: string | undefined;
-      for (const rootPath of this.workspaceRoots.values()) {
-        if (dirPath.startsWith(rootPath)) {
-          workspaceRoot = rootPath;
-          break;
-        }
+
+      // Continue up the chain if not a workspace root
+      if(!isWorkspaceRoot) {
+           const parentDir = path.dirname(dirPath);
+           if (parentDir && parentDir !== dirPath) {
+             await this.updateParentChain(parentDir);
+           }
       }
-      
-      // Continue up the chain if not at the filesystem root
-      const parentDir = path.dirname(dirPath);
-      if (parentDir && parentDir !== dirPath && parentDir !== '') {
-        await this.updateParentChain(parentDir);
-      }
+
     } catch (error) {
       console.error(`Error updating parent chain for ${dirPath}:`, error);
     }
   }
-  
+
   // Get the state of all visible children in a directory
   private async getChildrenStates(dirPath: string): Promise<boolean[]> {
     // Return empty array if path is empty
@@ -780,36 +924,39 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
       console.warn('Empty directory path passed to getChildrenStates');
       return [];
     }
-    
+
     try {
       const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
       const states: boolean[] = [];
-      
+
       for (const entry of entries) {
         const fullPath = path.join(dirPath, entry.name);
-        
+
         // Skip ignored items
         if (this.ignoreHelper && this.ignoreHelper.shouldIgnore(fullPath)) {
           continue;
         }
-        
+
         // Add the state to our collection
         const state = checkedItems.get(fullPath) || false;
         states.push(state);
       }
-      
+
       return states;
     } catch (error) {
-      console.error(`Error getting children states for ${dirPath}:`, error);
+     // Ignore errors like permission denied
+        if (error instanceof Error && (error as NodeJS.ErrnoException).code !== 'EACCES') {
+             console.error(`Error getting children states for ${dirPath}:`, error);
+        }
       return [];
     }
   }
-  
+
   // Public method to update parent directory checkbox states when a file is unchecked
   public async updateParentStates(filePath: string): Promise<void> {
     // Get the parent directory path
     const parentDir = path.dirname(filePath);
-    
+
     // Update all parent directories up to the root
     await this.updateParentChain(parentDir);
   }
@@ -823,7 +970,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
   selectAll(): void {
     this.toggleAll(true);
   }
-  
+
   // Deselect all files
   deselectAll(): void {
     this.toggleAll(false);
@@ -832,12 +979,12 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
   // Expand all directories
   async expandAll(): Promise<void> {
     console.log('expandAll method called in FileExplorerProvider');
-    
+
     if (!this.workspaceRoots.size) {
       console.error('No workspace roots defined');
       return;
     }
-    
+
     if (!this._treeView) {
       console.error('Tree view is not initialized');
       vscode.window.showErrorMessage('Tree view is not properly initialized.');
@@ -848,107 +995,87 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
       // Get the collection of all directories in the workspace
       const directories = await this.getAllDirectories();
       console.log(`Found ${directories.length} directories to expand`);
-      
-      // Limit to max 20 batches to prevent performance issues
-      const batchSize = 100;
-      const maxDirectories = 99;
-      
+
+      // Limit to max directories to prevent performance issues
+      const maxDirectories = 100; // Increased limit slightly
+
       // Limit directories to process if needed
-      const directoriesToProcess = directories.length > maxDirectories 
+      const directoriesToProcess = directories.length > maxDirectories
         ? directories.slice(0, maxDirectories)
         : directories;
-        
+
       if (directories.length > maxDirectories) {
+        vscode.window.showWarningMessage(`Expanding first ${maxDirectories} directories due to large workspace size.`);
         console.log(`Limited expansion to ${maxDirectories} directories (out of ${directories.length})`);
       }
-      
-      // Process directories by level (depth) to respect hierarchy
-      const dirsByLevel = new Map<number, FileItem[]>();
-      
-      // Group directories by their depth level
-      for (const dir of directoriesToProcess) {
-        const level = dir.fullPath.split(path.sep).length;
-        if (!dirsByLevel.has(level)) {
-          dirsByLevel.set(level, []);
-        }
-        dirsByLevel.get(level)!.push(dir);
-      }
-      
-      // Sort levels to process shallowest first
-      const levels = Array.from(dirsByLevel.keys()).sort((a, b) => a - b);
-      
+
       // Helper function to add delay
       const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-      
-      // Process each level
-      for (const level of levels) {
-        const dirsAtLevel = dirsByLevel.get(level)!;
-        console.log(`** Processing level ${level} with ${dirsAtLevel.length} directories`);
-        // Process in batches
-        for (let i = 0; i < dirsAtLevel.length; i += batchSize) {
-          const batch = dirsAtLevel.slice(i, i + batchSize);
-          // Use Promise.all with error handling for each reveal operation
+
+      // Reveal directories level by level or in batches
+      const revealBatch = async (batch: FileItem[]) => {
           for (const dir of batch) {
-            expandedItems.set(dir.fullPath, true);
+              expandedItems.set(dir.fullPath, true); // Mark as expanded first
           }
-          const revealPromises = batch.map(dir => {
-            console.log(`Expanding directory: ${dir.fullPath}`);
-            return Promise.resolve(this._treeView!.reveal(dir, { expand: true, select: false }))
-              .catch((err: Error) => {
-                // Log the error but don't fail the whole operation
-                console.log(`Note: Could not reveal ${dir.fullPath}: ${err.message}`);
-                return null;
-              });
-          });
-          
-          await Promise.all(revealPromises);
-        }
-        console.log(`** Done Processed level ${level}`);
-        this.refresh();
-        // Add a small delay between processing levels to let the UI update
-        await delay(200);
-      }
-      
-      console.log('All directories expanded.');
+          // Reveal the batch
+           await Promise.all(batch.map(dir =>
+                this._treeView!.reveal(dir, { expand: true, select: false }).then(
+                    () => {}, // Success handler (optional log)
+                    (err) => console.warn(`Could not reveal ${dir.fullPath}: ${err.message}`) // Error handler
+                )
+            ));
+           // No need to refresh here, reveal should update the view
+      };
+
+      const batchSize = 50; // Process 50 directories at a time
+       for (let i = 0; i < directoriesToProcess.length; i += batchSize) {
+            const batch = directoriesToProcess.slice(i, i + batchSize);
+            console.log(`Expanding batch ${i / batchSize + 1}...`);
+            await revealBatch(batch);
+            await delay(100); // Small delay between batches
+       }
+
+
+      console.log('Expand all process completed.');
     } catch (error) {
       console.error('Error expanding directories:', error);
       // Still throw to maintain compatibility with callers expecting exceptions
       throw error;
     }
   }
-  
+
   // Collapse all directories
   async collapseAll(): Promise<void> {
     console.log('collapseAll method called in FileExplorerProvider');
-    
+
     if (!this._treeView) {
       console.error('Tree view is not initialized');
       vscode.window.showErrorMessage('Tree view is not properly initialized.');
       return;
     }
-    
+
     try {
       // Use VS Code's built-in command to collapse all
       await vscode.commands.executeCommand('workbench.actions.treeView.promptcodeExplorer.collapseAll');
-      
+
       // Clear expanded items map - do this after the collapse for next tree refresh
       expandedItems.clear();
-      
+
       console.log('All directories collapsed.');
     } catch (error) {
       console.error('Error collapsing directories:', error);
       throw error;
     }
   }
-  
+
   // Get all directories in the workspace
   private async getAllDirectories(): Promise<FileItem[]> {
     const directories: FileItem[] = [];
-    
+
     // Function to recursively collect directories
     const collectDirectories = async (parentItem?: FileItem) => {
       const items = await this.getChildren(parentItem);
-      
+
       // Process directories (non-empty directories will already be filtered in getChildren)
       for (const item of items) {
         if (item.isDirectory) {
@@ -957,17 +1084,25 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
         }
       }
     };
-    
-    // Start the recursion from the root
-    await collectDirectories();
-    
+
+    // Start the recursion from the root(s)
+     for (const [uriString, fsPath] of this.workspaceRoots.entries()) {
+        const uri = vscode.Uri.parse(uriString);
+        const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
+        const displayName = workspaceFolder ? workspaceFolder.name : path.basename(fsPath);
+        const rootItem = new FileItem(uri, vscode.TreeItemCollapsibleState.Collapsed, true, fsPath, displayName);
+        directories.push(rootItem); // Add root itself
+        await collectDirectories(rootItem);
+    }
+
+
     // Sort directories by depth (shallowest first)
     directories.sort((a, b) => {
       const depthA = a.fullPath.split(path.sep).length;
       const depthB = b.fullPath.split(path.sep).length;
       return depthA - depthB;
     });
-    
+
     return directories;
   }
 
@@ -976,40 +1111,43 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
     if (!this.workspaceRoots.size) {
       return;
     }
-    
+
     // Recursive function to process directories
     const processDirectory = async (dirPath: string): Promise<void> => {
       try {
         const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
-        
+
         for (const entry of entries) {
           const fullPath = path.join(dirPath, entry.name);
-          
+
           // Skip ignored files
           if (this.ignoreHelper && this.ignoreHelper.shouldIgnore(fullPath)) {
             continue;
           }
-          
+
           checkedItems.set(fullPath, checked);
-          
+
           if (entry.isDirectory()) {
             await processDirectory(fullPath);
           }
         }
       } catch (error) {
-        console.error(`Error processing directory ${dirPath}:`, error);
+        // Ignore errors like permission denied
+        if (error instanceof Error && (error as NodeJS.ErrnoException).code !== 'EACCES') {
+            console.error(`Error processing directory ${dirPath}:`, error);
+        }
       }
     };
-    
+
     // Process each workspace root
     for (const rootPath of this.workspaceRoots.values()) {
       // Add the root directory itself to checkedItems
       checkedItems.set(rootPath, checked);
       await processDirectory(rootPath);
     }
-    
+
     this.refresh();
-    
+
     // Notify the webview about the change in selected files
     vscode.commands.executeCommand('promptcode.getSelectedFiles');
   }
@@ -1019,90 +1157,63 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
     if (!this._treeView) {
       return;
     }
-    
+
     console.log('Expanding directories that match search criteria');
-    
+
     try {
-      // First get all the directories
-      const directories = await this.getAllDirectories();
-      console.log(`Found ${directories.length} directories to check for expansion`);
-      
-      // Create a set to track directories we want to expand
-      const directoriesToExpand = new Set<string>();
-      
-      // Find exact matches to search term
-      const searchLower = this.searchTerm.toLowerCase();
-      
-      // Function to find and add match and its parent path
-      const processDirectory = (dirPath: string) => {
-        const segments = dirPath.split(path.sep);
-        
-        // Find the deepest segment that matches the search term
-        let matchDepth = -1;
-        for (let i = segments.length - 1; i >= 0; i--) {
-          const segment = segments[i].toLowerCase();
-          if (segment.includes(searchLower)) {
-            matchDepth = i;
-            break;
-          }
-        }
-        
-        // If no match found, skip this directory
-        if (matchDepth === -1) return;
-        
-        // Add all parent paths up to the match
-        let currentPath = '';
-        for (let i = 0; i <= matchDepth; i++) {
-          if (i > 0) currentPath += path.sep;
-          currentPath += segments[i];
-          directoriesToExpand.add(currentPath);
-        }
-      };
-      
-      // Process each directory
-      for (const dir of directories) {
-        processDirectory(dir.fullPath);
-      }
-      
-      console.log(`Will expand ${directoriesToExpand.size} directories that lead to search matches`);
-      
-      // Find the FileItem objects for these paths
-      const directoriesToReveal = directories.filter(dir => 
-        directoriesToExpand.has(dir.fullPath)
-      );
-      
-      // Process in batches to avoid UI freezing
-      const batchSize = 20;
+      // First get all the directories present in the current view (respecting search filter)
+      const directories = await this.getAllDirectories(); // This already respects ignore filters
+      console.log(`Found ${directories.length} potentially visible directories to check for expansion`);
+
+      // Filter directories based on whether they or their ancestors are in the includedPaths set
+      const directoriesToExpand = directories.filter(dir => {
+         // Check if the directory itself or any of its ancestors are in the inclusion set
+         let currentPath = dir.fullPath;
+         while (currentPath && currentPath !== path.dirname(currentPath) && this.workspaceRoots.has(vscode.Uri.file(currentPath).toString())) {
+            if (this.includedPaths.has(currentPath) || this.includedPaths.has(`${currentPath}:DIR_MATCH`)) {
+                return true; // Expand if the directory or an ancestor matches
+            }
+             const parentPath = path.dirname(currentPath);
+             if (parentPath === currentPath) break;
+             currentPath = parentPath;
+         }
+         return false;
+      });
+
+
+      console.log(`Will expand ${directoriesToExpand.length} directories relevant to search matches`);
+
+
+      // Helper function to add delay
       const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-      
-      for (let i = 0; i < directoriesToReveal.length; i += batchSize) {
-        const batch = directoriesToReveal.slice(i, i + batchSize);
-        
-        // Mark them as expanded in our state
-        for (const dir of batch) {
-          expandedItems.set(dir.fullPath, true);
-        }
-        
-        // Reveal them in the tree view
-        const revealPromises = batch.map(dir => {
-          return Promise.resolve(this._treeView!.reveal(dir, { expand: true, select: false }))
-            .catch(err => {
-              console.log(`Could not reveal ${dir.fullPath}: ${err.message}`);
-              return null;
-            });
-        });
-        
-        await Promise.all(revealPromises);
-        
-        // Small delay between batches
-        if (i + batchSize < directoriesToReveal.length) {
-          await delay(50);
-        }
-      }
-      
-      console.log('All matching directories expanded');
+
+       // Reveal directories level by level or in batches
+      const revealBatch = async (batch: FileItem[]) => {
+          for (const dir of batch) {
+              expandedItems.set(dir.fullPath, true); // Mark as expanded first
+          }
+           // Reveal the batch
+           await Promise.all(batch.map(dir =>
+                this._treeView!.reveal(dir, { expand: true, select: false }).then(
+                    () => {}, // Success handler (optional log)
+                    (err) => console.warn(`Could not reveal ${dir.fullPath}: ${err.message}`) // Error handler
+                )
+            ));
+      };
+
+
+      const batchSize = 50; // Process 50 directories at a time
+       for (let i = 0; i < directoriesToExpand.length; i += batchSize) {
+            const batch = directoriesToExpand.slice(i, i + batchSize);
+            console.log(`Expanding search match batch ${i / batchSize + 1}...`);
+            await revealBatch(batch);
+            await delay(100); // Small delay between batches
+       }
+
+
+      console.log('Expansion for search matches completed.');
     } catch (error) {
       console.error('Error expanding matching directories:', error);
     }
   }
-} 
+}

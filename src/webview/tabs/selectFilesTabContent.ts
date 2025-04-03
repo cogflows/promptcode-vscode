@@ -36,7 +36,7 @@ export function getSelectFilesTabHtml(): string {
       <div class="action-groups">
         <div class="search-container">
           <span class="codicon codicon-search search-icon"></span>
-          <input type="text" id="file-search" placeholder="Search files by name, path, or pattern (*.py, *.js)..." />
+          <input type="text" id="file-search" placeholder="Search files by name or glob pattern (e.g., *.ts, test?) ..." />
           <span class="codicon codicon-close" id="clear-search"></span>
         </div>
         <div class="action-group">
@@ -56,7 +56,14 @@ export function getSelectFilesTabHtml(): string {
             <span class="codicon codicon-clear-all"></span>
             Clear All
           </button>
+          <button id="load-file-list-btn" class="button" title="List of file paths or glob patterns (e.g., src/**/*.ts, /Users/me/file.txt), one per line.">
+            <span class="codicon codicon-cloud-upload"></span>
+            Add Files List
+          </button>
         </div>
+      </div>
+      <div id="file-list-results" class="file-list-results" style="display: none; margin-top: var(--spacing-md);">
+        <!-- Results will be displayed here -->
       </div>
     </section>
 

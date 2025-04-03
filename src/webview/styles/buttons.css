@@ -222,4 +222,6 @@ button .codicon {
 .action-group .button:hover {
   background: var(--accent-hover);
   opacity: 0.9;
-} 
+}
+
+/* REMOVED Unused .help-icon styles */ 

@@ -231,6 +231,36 @@ export class PromptCodeWebViewProvider {
                             this._panel.webview.postMessage(message);
                         }
                         return;
+                    case 'loadFileRequest':
+                        console.log('LoadFileRequest command received in webview provider');
+                        vscode.commands.executeCommand('promptcode.loadAndProcessFileList');
+                        return;
+                    case 'getHelpContentRequest':
+                        console.log('GetHelpContentRequest command received in webview provider');
+                        // Ensure we have a full Promise to chain .catch reliably
+                        Promise.resolve(vscode.commands.executeCommand<string>('promptcode.getHelpContent'))
+                            .then(content => {
+                                if (this._panel && this._panel.webview) {
+                                    this._panel.webview.postMessage({
+                                        command: 'updateHelpContent',
+                                        content: content || 'Error loading help content.' // Provide fallback
+                                    });
+                                }
+                            })
+                            .catch((error: unknown) => { // Explicitly type error
+                                console.error('Error executing getHelpContent command:', error);
+                                let errorMessage = 'Error loading help content.';
+                                if (error instanceof Error) {
+                                    errorMessage = `Error loading help content: ${error.message}`;
+                                }
+                                if (this._panel && this._panel.webview) {
+                                    this._panel.webview.postMessage({
+                                        command: 'updateHelpContent',
+                                        content: errorMessage
+                                    });
+                                }
+                            });
+                        return;
                 }
             },
             undefined,
@@ -547,5 +577,24 @@ export class PromptCodeWebViewProvider {
             </body>
             </html>
         `;
+    }
+
+    /**
+     * Sends the list of unmatched patterns from the file list processing
+     * back to the webview.
+     * @param unmatchedPatterns Array of patterns that did not match any files.
+     * @param matchedCount The number of files that were successfully matched and selected.
+     */
+    public sendUnmatchedPatterns(unmatchedPatterns: string[], matchedCount: number): void {
+        if (this._panel && this._panel.webview) {
+            console.log(`Sending unmatched patterns to webview: ${unmatchedPatterns.length} unmatched, ${matchedCount} matched.`);
+            this._panel.webview.postMessage({
+                command: 'updateUnmatchedPatterns', // Ensure the webview listens for this command
+                unmatchedPatterns: unmatchedPatterns,
+                matchedCount: matchedCount
+            });
+        } else {
+            console.warn('Webview panel not available to send unmatched patterns.');
+        }
     }
 }

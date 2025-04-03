@@ -24,6 +24,19 @@ if (typeof window !== 'undefined') {
 
             try {
                 // ----------------------------------------------------------
+                // Helper Functions
+                // ----------------------------------------------------------
+                function escapeHtml(unsafe) {
+                    if (!unsafe) return '';
+                    return unsafe
+                         .replace(/&/g, "&amp;")
+                         .replace(/</g, "&lt;")
+                         .replace(/>/g, "&gt;")
+                         .replace(/"/g, "&quot;")
+                         .replace(/'/g, "&#039;");
+                }
+
+                // ----------------------------------------------------------
                 // Grab elements related to the "Select Files" tab
                 // ----------------------------------------------------------
                 const searchInput = document.getElementById('file-search');
@@ -63,6 +76,11 @@ if (typeof window !== 'undefined') {
                 // Folder vs. file view mode
                 const folderViewBtn = document.getElementById('folder-view-btn');
                 const fileViewBtn = document.getElementById('file-view-btn');
+
+                // --- ADDED: File List Elements ---
+                const loadFileListBtn = document.getElementById('load-file-list-btn');
+                const fileListResultsDiv = document.getElementById('file-list-results');
+                // --- END ADDED ---
 
                 // Track expanded directories and view mode
                 let expandedDirectories = new Set();
@@ -485,6 +503,23 @@ if (typeof window !== 'undefined') {
                     setViewMode('file');
                 });
 
+                // --- ADDED: File List Button Listener ---
+                if (loadFileListBtn) {
+                    loadFileListBtn.addEventListener('click', () => {
+                        console.log('Load File List button clicked');
+                        // Clear previous results
+                        if (fileListResultsDiv) {
+                            fileListResultsDiv.innerHTML = '';
+                            fileListResultsDiv.style.display = 'none';
+                        }
+                        // Request file list loading from extension
+                        vscode.postMessage({ command: 'loadFileRequest' });
+                    });
+                } else {
+                    console.warn('Load File List button not found.');
+                }
+                // --- END ADDED ---
+
                 // ----------------------------------------------------------
                 // Message handling
                 // ----------------------------------------------------------
@@ -521,6 +556,33 @@ if (typeof window !== 'undefined') {
                                     if (ignorePatterns && message.ignorePatterns) {
                                         ignorePatterns.value = message.ignorePatterns;
                                     }
+                                }
+                                return true;
+                            case 'updateUnmatchedPatterns':
+                                console.log('Received updateUnmatchedPatterns:', message);
+                                if (fileListResultsDiv) {
+                                    let resultsHtml = '<p class="results-summary">';
+                                    if (message.matchedCount !== undefined) {
+                                        resultsHtml += `Added <strong>${message.matchedCount}</strong> file(s) to selection. `;
+                                    }
+                                    if (message.unmatchedPatterns && message.unmatchedPatterns.length > 0) {
+                                        resultsHtml += `Could not match ${message.unmatchedPatterns.length} pattern(s):</p>`;
+                                        resultsHtml += '<ul class="unmatched-list">';
+                                        message.unmatchedPatterns.forEach(pattern => {
+                                            resultsHtml += `<li><span class="codicon codicon-warning"></span> ${escapeHtml(pattern)}</li>`;
+                                        });
+                                        resultsHtml += '</ul>';
+                                    } else {
+                                        if (message.matchedCount !== undefined) {
+                                            resultsHtml += 'All patterns matched.</p>';
+                                        } else {
+                                            resultsHtml = '<p class="results-summary">No new files matched or added.</p>';
+                                        }
+                                    }
+                                    fileListResultsDiv.innerHTML = resultsHtml;
+                                    fileListResultsDiv.style.display = 'block';
+                                } else {
+                                    console.warn('File list results div not found.');
                                 }
                                 return true;
                             default:
