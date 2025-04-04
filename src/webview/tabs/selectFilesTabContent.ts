@@ -86,7 +86,7 @@ src/utils/helper.js
 
         <div class="modal-option">
           <button id="choose-file-list-btn" class="button">
-            <span class="codicon codicon-folder-opened"></span> Choose File...
+            <span class="codicon codicon-folder-opened"></span> Load List from File...
           </button>
         </div>
 

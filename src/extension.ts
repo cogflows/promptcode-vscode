@@ -973,6 +973,15 @@ export function activate(context: vscode.ExtensionContext) {
             });
 
             if (fileUris && fileUris.length > 0) {
+                // Get current selection
+                const currentSelection = new Set<string>();
+                for (const [path, isChecked] of checkedItems.entries()) {
+                    if (isChecked) {
+                        currentSelection.add(path);
+                    }
+                }
+                const initialSelectedCount = currentSelection.size;
+
                 const fileUri = fileUris[0];
                 const fileContent = await fs.promises.readFile(fileUri.fsPath, 'utf8');
 
@@ -983,26 +992,52 @@ export function activate(context: vscode.ExtensionContext) {
 
                 const currentIgnoreHelper = fileExplorerProvider.getIgnoreHelper();
                 if (!currentIgnoreHelper) {
-                    throw new Error('Ignore helper not initialized.');
+                    // Don't throw, allow proceeding without ignore filtering if helper isn't ready
+                    console.warn('Ignore helper not initialized during list processing.');
+                    // throw new Error('Ignore helper not initialized.');
                 }
 
                 const processor = new FileListProcessor(currentWorkspaceRoot, currentIgnoreHelper);
                 const { matchedFiles, unmatchedPatterns } = await processor.processList(fileContent);
 
-                // Update the file explorer's checked items
-                await fileExplorerProvider.setCheckedItems(matchedFiles);
+                // Combine current selection with newly matched files
+                const combinedSelection = new Set<string>([...currentSelection, ...matchedFiles]);
 
-                // Send unmatched patterns back to the webview
+                // Update the file explorer's checked items using the combined set
+                await fileExplorerProvider.setCheckedItems(combinedSelection);
+
+                // Get the final count AFTER setCheckedItems has run
+                const finalSelectedCount = Array.from(checkedItems.values()).filter(Boolean).length;
+                const addedCount = finalSelectedCount - initialSelectedCount;
+
+                // Send unmatched patterns back to the webview regardless
                 if (promptCodeProvider._panel) {
-                    promptCodeProvider.sendUnmatchedPatterns(unmatchedPatterns, matchedFiles.size);
+                    // Send the count of *actually* newly matched/added files
+                    promptCodeProvider.sendUnmatchedPatterns(unmatchedPatterns, Math.max(0, addedCount)); 
                 }
 
-                vscode.window.showInformationMessage(`Processed list: ${matchedFiles.size} files selected. ${unmatchedPatterns.length} patterns didn't match.`);
-                telemetryService.sendTelemetryEvent('file_list_processed', undefined, {
-                     matchedCount: matchedFiles.size,
-                     unmatchedCount: unmatchedPatterns.length
-                 });
+                // Notify user based on the outcome
+                let notificationMessage = '';
+                if (addedCount > 0) {
+                    notificationMessage = `Processed file list: Added ${addedCount} file(s). Total selected: ${finalSelectedCount}. ${unmatchedPatterns.length} pattern(s) didn't match.`;
+                } else if (matchedFiles.size > 0 && addedCount <= 0) {
+                    notificationMessage = `Processed file list: Selection updated. Total selected: ${finalSelectedCount}. ${unmatchedPatterns.length} pattern(s) didn't match.`;
+                } else {
+                    notificationMessage = `Processed file list: No new matching files found. Total selected: ${finalSelectedCount}. ${unmatchedPatterns.length} pattern(s) didn't match.`;
+                }
+                vscode.window.showInformationMessage(notificationMessage);
 
+                // Send combined telemetry
+                telemetryService.sendTelemetryEvent('list_processed_combined',
+                    { source: 'file' }, // Properties
+                    { // Metrics
+                        initialCount: initialSelectedCount,
+                        matchedFromList: matchedFiles.size,
+                        finalCount: finalSelectedCount,
+                        addedCount: addedCount,
+                        unmatchedCount: unmatchedPatterns.length
+                    }
+                );
             }
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
@@ -1031,6 +1066,15 @@ export function activate(context: vscode.ExtensionContext) {
     // --- ADDED: Command to process pasted file list --- 
     const processPastedFileListCommand = vscode.commands.registerCommand('promptcode.processPastedFileList', async (content: string) => {
         try {
+            // Get current selection
+            const currentSelection = new Set<string>();
+            for (const [path, isChecked] of checkedItems.entries()) {
+                if (isChecked) {
+                    currentSelection.add(path);
+                }
+            }
+            const initialSelectedCount = currentSelection.size;
+
             const currentWorkspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
             if (!currentWorkspaceRoot) {
                 throw new Error('No active workspace folder found.');
@@ -1038,25 +1082,55 @@ export function activate(context: vscode.ExtensionContext) {
 
             const currentIgnoreHelper = fileExplorerProvider.getIgnoreHelper();
             if (!currentIgnoreHelper) {
-                throw new Error('Ignore helper not initialized.');
+                // Don't throw, allow proceeding without ignore filtering if helper isn't ready
+                console.warn('Ignore helper not initialized during list processing.');
+                // throw new Error('Ignore helper not initialized.'); 
             }
 
             const processor = new FileListProcessor(currentWorkspaceRoot, currentIgnoreHelper);
             const { matchedFiles, unmatchedPatterns } = await processor.processList(content);
 
-            // Update the file explorer's checked items
-            await fileExplorerProvider.setCheckedItems(matchedFiles);
+            // Combine current selection with newly matched files
+            const combinedSelection = new Set<string>([...currentSelection, ...matchedFiles]);
 
-            // Send unmatched patterns back to the webview
+            // Update the file explorer's checked items using the combined set
+            // setCheckedItems will handle ignore rules and validation internally
+            await fileExplorerProvider.setCheckedItems(combinedSelection);
+
+            // Get the final count AFTER setCheckedItems has run (it might filter some)
+            const finalSelectedCount = Array.from(checkedItems.values()).filter(Boolean).length;
+            const addedCount = finalSelectedCount - initialSelectedCount;
+
+            // Send unmatched patterns back to the webview regardless
             if (promptCodeProvider._panel) {
-                promptCodeProvider.sendUnmatchedPatterns(unmatchedPatterns, matchedFiles.size);
+                // Send the count of *actually* newly matched/added files
+                promptCodeProvider.sendUnmatchedPatterns(unmatchedPatterns, Math.max(0, addedCount)); 
             }
 
-            vscode.window.showInformationMessage(`Processed pasted list: ${matchedFiles.size} files selected. ${unmatchedPatterns.length} patterns didn't match.`);
-            telemetryService.sendTelemetryEvent('pasted_list_processed', undefined, {
-                matchedCount: matchedFiles.size,
-                unmatchedCount: unmatchedPatterns.length
-            });
+            // Notify user based on the outcome
+            let notificationMessage = '';
+            if (addedCount > 0) {
+                notificationMessage = `Processed pasted list: Added ${addedCount} file(s). Total selected: ${finalSelectedCount}. ${unmatchedPatterns.length} pattern(s) didn't match.`;
+            } else if (matchedFiles.size > 0 && addedCount <= 0) {
+                // Matched some files, but filtering/duplicates meant no *net* increase
+                notificationMessage = `Processed pasted list: Selection updated. Total selected: ${finalSelectedCount}. ${unmatchedPatterns.length} pattern(s) didn't match.`;
+            } else { 
+                // No new files matched from the list
+                notificationMessage = `Processed pasted list: No new matching files found. Total selected: ${finalSelectedCount}. ${unmatchedPatterns.length} pattern(s) didn't match.`;
+            }
+            vscode.window.showInformationMessage(notificationMessage);
+
+            // Send combined telemetry
+            telemetryService.sendTelemetryEvent('list_processed_combined', 
+                { source: 'paste' }, // Properties (strings)
+                { // Metrics (numbers)
+                    initialCount: initialSelectedCount,
+                    matchedFromList: matchedFiles.size,
+                    finalCount: finalSelectedCount,
+                    addedCount: addedCount,
+                    unmatchedCount: unmatchedPatterns.length
+                }
+            );
 
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
