@@ -11,7 +11,7 @@
 If you discover a security vulnerability in PromptCode, please follow these steps:
 
 1. **Do not** open a public issue
-2. Email your findings to hello@cogflows.com
+2. Email your findings to hello@cogflows.dev
 3. Include:
    - Description of the vulnerability
    - Steps to reproduce

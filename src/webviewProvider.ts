@@ -465,7 +465,7 @@ export class PromptCodeWebViewProvider {
                 <div class="app-container">
                     <header class="header">
                         <div class="header-title">
-                            <h1>PromptCode <span class="company">by <a href="https://cogflows.com" target="_blank" rel="noopener noreferrer" class="company-link">cogflows</a></span></h1>
+                            <h1>PromptCode <span class="company">by <a href="https://cogflows.dev" target="_blank" rel="noopener noreferrer" class="company-link">cogflows</a></span></h1>
                         </div>
                         <p class="subtitle">Generate AI prompts from your codebase with precision</p>
                     </header>
