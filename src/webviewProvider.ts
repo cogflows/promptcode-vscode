@@ -261,6 +261,10 @@ export class PromptCodeWebViewProvider {
                                 }
                             });
                         return;
+                    case 'processPastedFileList':
+                        console.log('ProcessPastedFileList command received in webview provider');
+                        vscode.commands.executeCommand('promptcode.processPastedFileList', message.content);
+                        return;
                 }
             },
             undefined,

@@ -67,6 +67,36 @@ export function getSelectFilesTabHtml(): string {
       </div>
     </section>
 
+    <!-- ADDED: Modal for Adding File List -->
+    <div id="add-list-modal-overlay" class="modal-overlay" style="display: none;">
+      <div id="add-list-modal" class="modal-content">
+        <h2>Add Files from List</h2>
+        <p>Paste a list of file paths (one per line) or choose a file containing the list.</p>
+        
+        <div class="modal-option">
+          <label for="paste-file-list-area">Paste List:</label>
+          <textarea id="paste-file-list-area" rows="6" placeholder="e.g.,
+src/app.ts
+src/utils/helper.js
+**/test/*.test.ts"></textarea>
+          <button id="add-pasted-list-btn" class="button">Add Pasted Files</button>
+        </div>
+
+        <div class="modal-divider">OR</div>
+
+        <div class="modal-option">
+          <button id="choose-file-list-btn" class="button">
+            <span class="codicon codicon-folder-opened"></span> Choose File...
+          </button>
+        </div>
+
+        <div class="modal-actions">
+          <button id="cancel-add-list-modal-btn" class="button secondary">Cancel</button>
+        </div>
+      </div>
+    </div>
+    <!-- END ADDED -->
+
     <!-- Selected Files Container -->
     <section class="selected-files-container">
       <div class="section-title">Selected Files</div>

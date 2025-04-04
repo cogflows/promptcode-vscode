@@ -82,6 +82,14 @@ if (typeof window !== 'undefined') {
                 const fileListResultsDiv = document.getElementById('file-list-results');
                 // --- END ADDED ---
 
+                // --- ADDED: Modal Elements ---
+                const modalOverlay = document.getElementById('add-list-modal-overlay');
+                const pasteTextArea = document.getElementById('paste-file-list-area');
+                const addPastedListBtn = document.getElementById('add-pasted-list-btn');
+                const chooseFileListBtn = document.getElementById('choose-file-list-btn');
+                const cancelModalBtn = document.getElementById('cancel-add-list-modal-btn');
+                // --- END ADDED ---
+
                 // Track expanded directories and view mode
                 let expandedDirectories = new Set();
                 let viewMode = 'folder';  // Default to folder view
@@ -503,20 +511,74 @@ if (typeof window !== 'undefined') {
                     setViewMode('file');
                 });
 
-                // --- ADDED: File List Button Listener ---
-                if (loadFileListBtn) {
+                // --- UPDATED: File List Button Listener to show modal ---
+                if (loadFileListBtn && modalOverlay) {
                     loadFileListBtn.addEventListener('click', () => {
-                        console.log('Load File List button clicked');
-                        // Clear previous results
+                        console.log('Load File List button clicked, showing modal.');
+                        // Clear previous results display
                         if (fileListResultsDiv) {
                             fileListResultsDiv.innerHTML = '';
                             fileListResultsDiv.style.display = 'none';
                         }
-                        // Request file list loading from extension
-                        vscode.postMessage({ command: 'loadFileRequest' });
+                        // Show the modal
+                        modalOverlay.style.display = 'flex';
+                        if (pasteTextArea) pasteTextArea.value = ''; // Clear textarea
+                        if (pasteTextArea) pasteTextArea.focus();
                     });
                 } else {
-                    console.warn('Load File List button not found.');
+                    console.warn('Load File List button or modal overlay not found.');
+                }
+                // --- END UPDATED ---
+
+                // --- ADDED: Modal Button Listeners ---
+                if (modalOverlay && pasteTextArea && addPastedListBtn && chooseFileListBtn && cancelModalBtn) {
+                    // Function to hide the modal
+                    const hideModal = () => {
+                        modalOverlay.style.display = 'none';
+                        if (fileListResultsDiv) { // Ensure results div exists
+                            fileListResultsDiv.innerHTML = '';
+                            fileListResultsDiv.style.display = 'none';
+                        }
+                    };
+
+                    // Add Pasted List Button
+                    addPastedListBtn.addEventListener('click', () => {
+                        const pastedContent = pasteTextArea.value.trim();
+                        if (pastedContent) {
+                            console.log('Processing pasted file list.');
+                            vscode.postMessage({
+                                command: 'processPastedFileList', // New command for pasted content
+                                content: pastedContent
+                            });
+                            hideModal();
+                        } else {
+                            console.log('Paste area is empty.');
+                            // Optionally show a small error/warning in the modal
+                        }
+                    });
+
+                    // Choose File Button (inside modal)
+                    chooseFileListBtn.addEventListener('click', () => {
+                        console.log('Choose File button clicked inside modal.');
+                        // Send the original command to trigger file dialog
+                        vscode.postMessage({ command: 'loadFileRequest' });
+                        hideModal(); // Hide modal after triggering file selection
+                    });
+
+                    // Cancel Button
+                    cancelModalBtn.addEventListener('click', () => {
+                        console.log('Modal cancelled.');
+                        hideModal();
+                    });
+
+                    // Optional: Close modal if clicking outside the content area
+                    modalOverlay.addEventListener('click', (event) => {
+                        if (event.target === modalOverlay) {
+                            hideModal();
+                        }
+                    });
+                } else {
+                    console.warn('One or more modal elements not found. Cannot attach listeners.');
                 }
                 // --- END ADDED ---
 

@@ -420,4 +420,96 @@
   width: 16px;
   height: 16px;
   color: var(--vscode-descriptionForeground);
+}
+
+/* Added Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.6); /* Semi-transparent background */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000; /* Ensure it's on top */
+}
+
+.modal-content {
+  background: var(--vscode-editor-background);
+  padding: var(--spacing-lg);
+  border-radius: var(--border-radius-lg);
+  border: 1px solid var(--vscode-panel-border);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+  width: 90%;
+  max-width: 500px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.modal-content h2 {
+  margin-top: 0;
+  margin-bottom: var(--spacing-sm);
+  font-size: 1.2em;
+  font-weight: 600;
+}
+
+.modal-content p {
+  margin-top: 0;
+  margin-bottom: var(--spacing-md);
+  color: var(--vscode-descriptionForeground);
+}
+
+.modal-option {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.modal-option label {
+  font-weight: 500;
+  margin-bottom: var(--spacing-xs);
+}
+
+.modal-option textarea {
+  font-family: var(--vscode-editor-font-family);
+  font-size: var(--vscode-editor-font-size);
+  padding: var(--spacing-sm);
+  border-radius: var(--border-radius-md);
+  border: 1px solid var(--vscode-input-border);
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  resize: vertical; /* Allow vertical resize */
+  min-height: 80px;
+}
+
+.modal-option textarea::placeholder {
+  color: var(--vscode-input-placeholderForeground);
+}
+
+.modal-divider {
+  text-align: center;
+  font-weight: 500;
+  color: var(--vscode-descriptionForeground);
+  margin: var(--spacing-sm) 0;
+}
+
+.modal-actions {
+  margin-top: var(--spacing-md);
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+}
+
+/* Style the secondary cancel button */
+.button.secondary {
+    background: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+    border: 1px solid var(--vscode-button-secondaryHoverBackground); /* Use hover bg for border? Or a specific var? */
+}
+
+.button.secondary:hover {
+    background: var(--vscode-button-secondaryHoverBackground);
 } 

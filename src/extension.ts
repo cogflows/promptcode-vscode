@@ -1028,6 +1028,43 @@ export function activate(context: vscode.ExtensionContext) {
     });
     // --- END ADDED ---
 
+    // --- ADDED: Command to process pasted file list --- 
+    const processPastedFileListCommand = vscode.commands.registerCommand('promptcode.processPastedFileList', async (content: string) => {
+        try {
+            const currentWorkspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+            if (!currentWorkspaceRoot) {
+                throw new Error('No active workspace folder found.');
+            }
+
+            const currentIgnoreHelper = fileExplorerProvider.getIgnoreHelper();
+            if (!currentIgnoreHelper) {
+                throw new Error('Ignore helper not initialized.');
+            }
+
+            const processor = new FileListProcessor(currentWorkspaceRoot, currentIgnoreHelper);
+            const { matchedFiles, unmatchedPatterns } = await processor.processList(content);
+
+            // Update the file explorer's checked items
+            await fileExplorerProvider.setCheckedItems(matchedFiles);
+
+            // Send unmatched patterns back to the webview
+            if (promptCodeProvider._panel) {
+                promptCodeProvider.sendUnmatchedPatterns(unmatchedPatterns, matchedFiles.size);
+            }
+
+            vscode.window.showInformationMessage(`Processed pasted list: ${matchedFiles.size} files selected. ${unmatchedPatterns.length} patterns didn't match.`);
+            telemetryService.sendTelemetryEvent('pasted_list_processed', undefined, {
+                matchedCount: matchedFiles.size,
+                unmatchedCount: unmatchedPatterns.length
+            });
+
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            vscode.window.showErrorMessage(`Error processing pasted list: ${message}`);
+            telemetryService.sendTelemetryException(error instanceof Error ? error : new Error(String(error)));
+        }
+    });
+    // --- END ADDED ---
 
 	// Register all commands
 	const commandHandlers = {
@@ -1053,6 +1090,7 @@ export function activate(context: vscode.ExtensionContext) {
         // --- ADDED ---
         'promptcode.loadAndProcessFileList': loadAndProcessFileListCommand,
         'promptcode.getHelpContent': getHelpContentCommand,
+        'promptcode.processPastedFileList': processPastedFileListCommand, // Register the new handler
         // --- END ADDED ---
 	};
 
@@ -1088,7 +1126,8 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand('promptcode.checkTelemetryStatus', commandHandlers['promptcode.checkTelemetryStatus']),
         // --- ADDED ---
         loadAndProcessFileListCommand,
-        getHelpContentCommand
+        getHelpContentCommand,
+        processPastedFileListCommand // Add the new command to subscriptions
         // --- END ADDED ---
 	);
 }
