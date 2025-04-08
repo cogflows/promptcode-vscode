@@ -309,12 +309,13 @@ export async function generatePrompt(
         for (const file of selectedFiles) {
             try {
                 const fileContent = file.content ?? await readFileContent(file.absolutePath);
-                finalPromptText += `File: ${file.path} (${file.tokenCount} tokens)\n`; 
+                const relativePath = path.relative(file.workspaceFolderRootPath, file.absolutePath);
+                finalPromptText += `File: ${relativePath} (${file.tokenCount} tokens)\n`; 
                 finalPromptText += '```\n';
                 finalPromptText += fileContent;
                 finalPromptText += '\n```\n\n';
             } catch (error) {
-                log(`Error adding file content for ${file.path}:`, error);
+                log(`Error adding file content for ${file.absolutePath}:`, error);
                 finalPromptText += `File: ${file.path}\n<!-- Error reading file content: ${(error as Error).message} -->\n\n`;
             }
         }
