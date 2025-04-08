@@ -656,15 +656,13 @@
           }
         });
 
-        // Select the first visible item for keyboard navigation
-        const visibleItems = Array.from(promptList.querySelectorAll('.prompt-item')).filter(
+        // Remove auto-selection of first item - just get visible items for keyboard navigation
+        Array.from(promptList.querySelectorAll('.prompt-item')).filter(
           (item) => item.style.display !== 'none'
         );
-
-        if (visibleItems.length > 0) {
-          allItems.forEach((item) => item.classList.remove('selected'));
-          visibleItems[0].classList.add('selected');
-        }
+        
+        // Remove any existing selections
+        allItems.forEach((item) => item.classList.remove('selected'));
       }
 
       // Show/hide + arrow key handling:
