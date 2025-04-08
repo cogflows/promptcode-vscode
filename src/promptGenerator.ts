@@ -3,6 +3,35 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { checkedItems } from './fileExplorer';
 import { countTokensWithCache } from './tokenCounter';
+import { fetchResourceContent } from './promptcodeDataFetcher';
+
+// Define interfaces for clarity
+interface SelectedFile {
+    path: string;
+    absolutePath: string;
+    workspaceFolderName: string;
+    workspaceFolderRootPath: string;
+    tokenCount: number;
+    content?: string; // Content will be added later if needed
+}
+
+interface IncludeOptions {
+    files: boolean;
+    instructions: boolean;
+    // Add other options if they exist
+}
+
+// HTML Entity Decoding Helper (Simplified)
+function decodeHtmlEntities(text: string): string {
+    if (!text) return '';
+    // Basic decoding for entities used in fetch-instruction
+    return text
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#039;/g, "'")
+        .replace(/&amp;/g, '&');
+}
 
 // Generate a directory tree representation for the prompt
 export async function generateDirectoryTree(workspaceFolders: vscode.WorkspaceFolder[]): Promise<string> {
@@ -132,65 +161,106 @@ async function readFileContent(filePath: string): Promise<string> {
 }
 
 // Main function to generate the prompt text
-export async function generatePrompt(): Promise<string> {
-  const workspaceFolders = vscode.workspace.workspaceFolders;
-  if (!workspaceFolders || workspaceFolders.length === 0) {
-    return 'No workspace folders available.';
-  }
-  
-  let promptText = '';
-  
-  // Start with the file map section
-  promptText += '<file_map>\n';
-  promptText += await generateDirectoryTree([...workspaceFolders]);
-  promptText += '</file_map>\n\n';
-  
-  // Add the file contents section
-  promptText += '<file_contents>\n';
-  
-  // Get all selected file paths
-  const selectedFilePaths = Array.from(checkedItems.entries())
-    .filter(([_, isChecked]) => isChecked)
-    .map(([filePath, _]) => filePath);
-  
-  // Process each selected file
-  for (const filePath of selectedFilePaths) {
-    try {
-      const stats = await fs.promises.stat(filePath);
-      
-      // Skip directories
-      if (stats.isDirectory()) {
-        continue;
-      }
-      
-      // Get the workspace folder containing this file
-      const uri = vscode.Uri.file(filePath);
-      const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
-      
-      if (workspaceFolder) {
-        // Get relative path from workspace root
-        const relativePath = path.relative(workspaceFolder.uri.fsPath, filePath);
-        const tokenCount = await countTokensWithCache(filePath);
-        
-        promptText += `File: ${relativePath} (${tokenCount} tokens)\n`;
-        promptText += '```\n';
-        promptText += await readFileContent(filePath);
-        promptText += '\n```\n\n';
-      } else {
-        // Fallback for files not in a workspace
-        promptText += `File: ${filePath}\n`;
-        promptText += '```\n';
-        promptText += await readFileContent(filePath);
-        promptText += '\n```\n\n';
-      }
-    } catch (error) {
-      console.error(`Error processing file ${filePath}:`, error);
+export async function generatePrompt(
+    selectedFiles: SelectedFile[],
+    instructions: string,
+    includeOptions: IncludeOptions
+): Promise<string> {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders || workspaceFolders.length === 0) {
+        return 'No workspace folders available.';
     }
-  }
-  
-  promptText += '</file_contents>';
-  
-  return promptText;
+
+    let promptText = '';
+
+    // Process Instructions (Fetch remote content)
+    let processedInstructions = instructions;
+    if (includeOptions.instructions && instructions) {
+        const fetchRegex = /<fetch-instruction name="([^"]+)" url="([^"]+)" \/>/g;
+        const fetchPromises: Promise<{ placeholder: string; content: string; name: string }>[] = [];
+
+        let match;
+        while ((match = fetchRegex.exec(instructions)) !== null) {
+            const placeholder = match[0];
+            const name = decodeHtmlEntities(match[1]);
+            const url = decodeHtmlEntities(match[2]);
+
+            console.log(`[Generate Prompt] Found fetch instruction for "${name}" at ${url}`);
+
+            fetchPromises.push(
+                fetchResourceContent(url)
+                    .then(content => ({
+                        placeholder,
+                        content,
+                        name
+                    }))
+                    .catch(error => {
+                        console.error(`Error fetching content for "${name}" from ${url}:`, error);
+                        return {
+                            placeholder,
+                            content: `<!-- Error fetching content for ${name}: ${(error as Error).message} -->`,
+                            name
+                        };
+                    })
+            );
+        }
+
+        if (fetchPromises.length > 0) {
+            try {
+                const results = await Promise.all(fetchPromises);
+                results.forEach(result => {
+                    console.log(`[Generate Prompt] Replacing placeholder for "${result.name}"`);
+                    processedInstructions = processedInstructions.replace(result.placeholder, result.content);
+                });
+            } catch (error) {
+                console.error('[Generate Prompt] Error processing fetch instructions:', error);
+                processedInstructions += '\n<!-- Error: Failed to process one or more fetch-instructions -->';
+            }
+        }
+    } else {
+        processedInstructions = '';
+    }
+
+    // Generate File Map (If included)
+    if (includeOptions.files) {
+        promptText += '<file_map>\n';
+        const selectedPaths = selectedFiles.map(f => f.absolutePath);
+        promptText += await generateDirectoryTree([...workspaceFolders]);
+        promptText += '</file_map>\n\n';
+    }
+    
+    // Add Instructions (If included)
+    if (includeOptions.instructions && processedInstructions) {
+        promptText += '<instructions>\n';
+        promptText += processedInstructions;
+        promptText += '\n</instructions>\n\n';
+    }
+
+    // Add File Contents (If included)
+    if (includeOptions.files) {
+        promptText += '<file_contents>\n';
+        for (const file of selectedFiles) {
+            try {
+                const fileContent = file.content ?? await readFileContent(file.absolutePath);
+
+                promptText += `File: ${file.path} (${file.tokenCount} tokens)\n`;
+                promptText += '```\n';
+                promptText += fileContent;
+                promptText += '\n```\n\n';
+            } catch (error) {
+                console.error(`Error processing file ${file.absolutePath}:`, error);
+                promptText += `File: ${file.path}\n<!-- Error processing file: ${(error as Error).message} -->\n\n`;
+            }
+        }
+        promptText += '</file_contents>';
+    }
+
+    // Add final newline if needed
+    if (!promptText.endsWith('\n')) {
+        promptText += '\n';
+    }
+
+    return promptText;
 }
 
 export async function copyToClipboard(text: string): Promise<void> {

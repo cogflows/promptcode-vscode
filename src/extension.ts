@@ -4,7 +4,7 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import { FileExplorerProvider, checkedItems, FileItem } from './fileExplorer';
-import { copyToClipboard } from './promptGenerator'; // Assuming this is still used elsewhere
+import { generatePrompt as generatePromptFromGenerator, copyToClipboard } from './promptGenerator';
 import { PromptCodeWebViewProvider } from './webviewProvider';
 import { countTokensInFile, countTokensWithCache, clearTokenCache, initializeTokenCounter } from './tokenCounter';
 import { countTokens } from 'gpt-tokenizer/encoding/o200k_base';
@@ -179,7 +179,7 @@ export function activate(context: vscode.ExtensionContext) {
 					throw new Error('Invalid includeOptions found. Please visit the Generate Prompt tab first to set your preferences.');
 				}
 
-				const promptText = await generatePrompt(selectedFiles, instructions, savedOptions);
+				const promptText = await generatePromptFromGenerator(selectedFiles, instructions, savedOptions);
 				const executionTime = Date.now() - startTime;
 
 				// Create a new document to show the prompt
@@ -241,7 +241,7 @@ export function activate(context: vscode.ExtensionContext) {
 			context.workspaceState.update('promptcode.includeOptions', includeOptions);
 
 			// Generate preview with options
-			const promptText = await generatePrompt(selectedFiles, instructions, includeOptions);
+			const promptText = await generatePromptFromGenerator(selectedFiles, instructions, includeOptions);
 
 			// Send preview back to webview
 			if (promptCodeProvider._panel) {
@@ -293,7 +293,7 @@ export function activate(context: vscode.ExtensionContext) {
 					throw new Error('Invalid includeOptions found. Please visit the Generate Prompt tab first to set your preferences.');
 				}
 
-				const promptText = await generatePrompt(selectedFiles, instructions, savedOptions);
+				const promptText = await generatePromptFromGenerator(selectedFiles, instructions, savedOptions);
 				const executionTime = Date.now() - startTime;
 
 				// Copy to clipboard directly

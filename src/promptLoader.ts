@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import { fetchPromptcodeDataIndex, DataIndexEntry } from './promptcodeDataFetcher';
 
 export interface Prompt {
     name: string;
@@ -215,8 +216,32 @@ export async function loadConfiguredPrompts(
         }
     }
     
-    // Sort prompts alphabetically by name
-    prompts.sort((a, b) => a.name.localeCompare(b.name));
+    // Fetch prompts from promptcode-data repository
+    try {
+        console.log('Fetching promptcode-data index...');
+        const dataRepoEntries: DataIndexEntry[] = await fetchPromptcodeDataIndex();
+        console.log(`Fetched ${dataRepoEntries.length} entries from promptcode-data.`);
+        const dataRepoPrompts: Prompt[] = dataRepoEntries.map(entry => ({
+            name: entry.name,
+            description: entry.description || '',
+            content: '', // Content will be fetched on demand
+            category: entry.category.join('/'), // Use path-like category
+            filePath: entry.url // Store the URL to fetch content later
+        }));
+        prompts.push(...dataRepoPrompts);
+    } catch (error) {
+        console.error('Error fetching or processing promptcode-data index:', error);
+        vscode.window.showErrorMessage(`Failed to fetch prompts from promptcode-data: ${(error as Error).message}`);
+    }
+
+    // Sort prompts alphabetically by name AND category
+    prompts.sort((a, b) => {
+        const categoryCompare = (a.category ?? '').localeCompare(b.category ?? '');
+        if (categoryCompare !== 0) {
+            return categoryCompare;
+        }
+        return a.name.localeCompare(b.name);
+    });
     
     return prompts;
 } 

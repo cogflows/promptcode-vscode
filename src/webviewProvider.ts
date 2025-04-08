@@ -2,7 +2,7 @@
 
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { loadPrompts, loadAllPrompts, loadUserPrompts, loadConfiguredPrompts, Prompt } from './promptLoader';
+import { loadPrompts, loadConfiguredPrompts, Prompt } from './promptLoader';
 import { getSelectFilesTabHtml } from './webview/tabs/selectFilesTabContent';
 import { getInstructionsTabHtml } from './webview/tabs/instructionsTabContent';
 import { getPromptTabHtml } from './webview/tabs/promptTabContent';
@@ -37,7 +37,7 @@ export class PromptCodeWebViewProvider {
             return;
         }
 
-        const prompts = await loadAllPrompts(this._extensionContext);
+        const prompts = await loadConfiguredPrompts(this._extensionContext, true, []);
 
         this._panel = vscode.window.createWebviewPanel(
             PromptCodeWebViewProvider.viewType,
@@ -289,19 +289,14 @@ export class PromptCodeWebViewProvider {
         }
 
         try {
-            // If no specific configuration was provided, load all prompts
-            let allPrompts: Prompt[];
-            if (promptFolderPaths.length === 0 && includeBuiltInTemplates) {
-                allPrompts = await loadAllPrompts(this._extensionContext);
-            } else {
-                // Use the configured prompts with the specified settings
-                // Note: This will be inefficient for frequent "@" presses, could be optimized later
-                allPrompts = await loadConfiguredPrompts(
-                    this._extensionContext,
-                    includeBuiltInTemplates,
-                    promptFolderPaths
-                );
-            }
+            // Always use loadConfiguredPrompts to include data repo prompts
+            console.log(`Loading configured prompts with includeBuiltIn: ${includeBuiltInTemplates}, folders: ${promptFolderPaths.join(', ')}`);
+            const allPrompts = await loadConfiguredPrompts(
+                this._extensionContext,
+                includeBuiltInTemplates,
+                promptFolderPaths
+            );
+            console.log(`Loaded ${allPrompts.length} prompts in total.`);
             
             this._panel.webview.postMessage({
                 command: 'updatePrompts',
@@ -309,6 +304,7 @@ export class PromptCodeWebViewProvider {
             });
         } catch (error) {
             console.error('Error sending prompts to webview:', error);
+            vscode.window.showErrorMessage(`Failed to load prompts: ${(error as Error).message}`);
         }
     }
 
@@ -336,60 +332,53 @@ export class PromptCodeWebViewProvider {
             const builtInPrompts = await loadPrompts(this._extensionContext);
             const builtInPrompt = builtInPrompts.find(p => p.name === promptName);
             
-            // Then check user prompts
-            const userPrompts = await loadUserPrompts();
-            const userPrompt = userPrompts.find(p => p.name === promptName);
+            // Then check user prompts (load specifically, don't rely on cached allPrompts)
+            const userConfig = vscode.workspace.getConfiguration('promptcode');
+            const userFolders = userConfig.get<string[]>('promptFolders', []);
+            const userPrompts = await loadConfiguredPrompts(this._extensionContext, false, userFolders);
+            const userPrompt = userPrompts.find(p => p.name === promptName && !p.filePath?.startsWith('http')); // Ensure it's not a data repo prompt
             
-            // Prioritize user prompt if it exists
-            if (userPrompt) {
-                // If the prompt has a stored file path, use it
-                if (userPrompt.filePath) {
+            // Prioritize user prompt if it exists and isn't a data repo URL
+            if (userPrompt && userPrompt.filePath && !userPrompt.filePath.startsWith('http')) {
+                try {
                     const fileUri = vscode.Uri.file(userPrompt.filePath);
                     const doc = await vscode.workspace.openTextDocument(fileUri);
                     await vscode.window.showTextDocument(doc);
                     return;
+                } catch (err) { // Handle error opening user file path
+                    console.error(`Failed to open user prompt file at path ${userPrompt.filePath}:`, err);
+                    vscode.window.showErrorMessage(`Could not open user prompt file: ${userPrompt.name}`);
+                    // Don't fall through, as the specific user file couldn't be opened.
+                    return; 
+                }
+            } else if (builtInPrompt && builtInPrompt.filePath) { // Ensure built-in has a filePath
+                try {
+                    const fileUri = vscode.Uri.parse(builtInPrompt.filePath); // Use parse for potential non-file URIs
+                    if (fileUri.scheme === 'file') {
+                        // Built-in prompt from the extension bundle
+                        const doc = await vscode.workspace.openTextDocument(fileUri);
+                        await vscode.window.showTextDocument(doc, { preview: false }); // Open non-preview
+                        vscode.window.showInformationMessage(
+                            `Viewing built-in prompt. To customize, copy it to your workspace's prompt folder.`
+                        );
+                    } else {
+                        // Handle other schemes if necessary, e.g., showing content in a temporary file
+                        throw new Error(`Unsupported URI scheme for built-in prompt: ${fileUri.scheme}`);
+                    }
+                    return;
+                } catch (err) {
+                    console.error(`Failed to open built-in prompt ${builtInPrompt.name}:`, err);
+                     vscode.window.showErrorMessage(`Could not open built-in prompt: ${builtInPrompt.name}`);
+                     return;
                 }
 
-                // Otherwise, look in .promptcode/prompts directory
-                const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-                if (!workspaceFolder) {
-                    throw new Error('No workspace folder found');
-                }
-                
-                const promptsDir = path.join(workspaceFolder.uri.fsPath, '.promptcode', 'prompts');
-                let promptFilePath;
-
-                // Check if promptName already has a file extension
-                if (promptName.includes('.')) {
-                    promptFilePath = path.join(promptsDir, promptName);
-                } else {
-                    promptFilePath = path.join(promptsDir, `${promptName}.md`);
-                }
-                
-                // Check if file exists
-                if (fs.existsSync(promptFilePath)) {
-                    const fileUri = vscode.Uri.file(promptFilePath);
-                    const doc = await vscode.workspace.openTextDocument(fileUri);
-                    await vscode.window.showTextDocument(doc);
-                } else {
-                    vscode.window.showErrorMessage(`Could not find prompt file: ${promptName}`);
-                }
-            } else if (builtInPrompt) {
-                // For built-in prompts, we could either create a temp file or show a read-only view
-                // Here we'll use a temporary file approach
-                const tempFile = path.join(os.tmpdir(), `${promptName}.md`);
-                fs.writeFileSync(tempFile, builtInPrompt.content);
-                
-                const fileUri = vscode.Uri.file(tempFile);
-                const doc = await vscode.workspace.openTextDocument(fileUri);
-                await vscode.window.showTextDocument(doc);
-                
-                // Show a message that this is a built-in prompt (read-only)
-                vscode.window.showInformationMessage(
-                    `This is a built-in prompt. Changes won't be saved. To customize it, create a file with the same name in .promptcode/prompts/`
-                );
             } else {
-                vscode.window.showErrorMessage(`Prompt "${promptName}" not found`);
+                 // Check if it's a promptcode-data entry (which shouldn't be opened directly)
+                if (filePath && filePath.startsWith('http')) {
+                    vscode.window.showInformationMessage(`Cannot open remote prompt "${promptName}" directly. Select it with @ in Instructions to embed.`);
+                } else {
+                    vscode.window.showErrorMessage(`Prompt "${promptName}" not found or cannot be opened.`);
+                }
             }
         } catch (error) {
             console.error('Error opening prompt file:', error);

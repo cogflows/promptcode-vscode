@@ -14,6 +14,8 @@
     // For now, we read window.samplePrompts directly:
 
     let availablePrompts = window.samplePrompts || [];
+    // --- REMOVED: Global store for fetched content ---
+    // window.fetchedPromptContents = {}; 
 
     // ------------------------------------------------
     // 0) Setup the configuration section
@@ -295,34 +297,76 @@
       const tempDiv = document.createElement('div');
       tempDiv.innerHTML = htmlContent;
       
-      // Convert BR elements to newlines for proper text processing
+      // Find all template tags and convert them FIRST
+      const templateTags = tempDiv.querySelectorAll('.template-tag');
+      templateTags.forEach(tag => {
+        const promptName = tag.getAttribute('data-prompt-name');
+        const filePath = tag.getAttribute('data-file-path'); // Get file path
+        
+        if (promptName) {
+          // --- Added Logging Start ---
+          console.log(`[Save Process] Found tag: ${tag.outerHTML}`);
+          // --- Added Logging End ---
+
+          // --- MODIFICATION START: Check if remote based on filePath ---
+          const isRemote = filePath && filePath.startsWith('http');
+
+          if (isRemote && filePath) {
+            // Replace with fetch placeholder
+            const fetchPlaceholder = `<fetch-instruction name="${escapeHtml(promptName)}" url="${escapeHtml(filePath)}" />`;
+            tag.replaceWith(document.createTextNode(fetchPlaceholder));
+            console.log(`[Save Process] Replaced tag with fetch placeholder for ${promptName}`);
+          } else {
+            // Local/Built-in: Get content from availablePrompts
+            let promptContent = '';
+            const prompt = availablePrompts.find(p => p.name === promptName);
+            if (prompt) {
+              promptContent = prompt.content;
+            }
+
+            console.log(`[Save Process] Final promptContent length for local ${promptName}: ${promptContent?.length ?? 0}`);
+            
+            if (promptContent) {
+                 const embeddedText = `<embedded-instruction name="${escapeHtml(promptName)}">\n${promptContent}\n</embedded-instruction>`;
+                 const embeddedInstruction = document.createTextNode(embeddedText);
+                 tag.replaceWith(embeddedInstruction);
+            } else {
+              console.warn(`Content not found or empty for local prompt tag: ${promptName}. Replacing with text.`);
+              tag.replaceWith(document.createTextNode(tag.textContent || `[@${promptName}-error]`)); 
+            }
+          }
+           // --- MODIFICATION END ---
+
+        } else {
+          // --- NEW Fallback for tags without promptName (shouldn't happen but safety) ---
+          console.warn('[Save Process] Found a template tag without data-prompt-name:', tag.outerHTML);
+          tag.replaceWith(document.createTextNode(tag.textContent || '[@error-tag]'));
+        }
+      });
+
+      // Now, convert BR elements to newlines
       const brs = tempDiv.querySelectorAll('br');
       brs.forEach(br => {
         br.replaceWith(document.createTextNode('\n'));
       });
       
-      // Find all template tags and convert them to embedded instruction format
-      const templateTags = tempDiv.querySelectorAll('.template-tag');
-      templateTags.forEach(tag => {
-        const promptName = tag.getAttribute('data-prompt-name');
-        if (promptName) {
-          const prompt = availablePrompts.find(p => p.name === promptName);
-          if (prompt) {
-            // Create embedded instruction text preserving exact whitespace
-            const embeddedText = `<embedded-instruction name="${promptName}">\n${prompt.content}\n</embedded-instruction>`;
-            const embeddedInstruction = document.createTextNode(embeddedText);
-            tag.replaceWith(embeddedInstruction);
-          }
-        }
-      });
-      
-      // Get the content with templates processed - don't replace with placeholders anymore
-      // since we're handling it with HTML entities at the input level
+      // Get the final text content with embedded instructions and newlines
       let processedContent = tempDiv.textContent;
       
       return processedContent;
     }
     
+    // --- ADDED: Helper to escape HTML for attributes ---
+    function escapeHtml(unsafe) {
+      if (!unsafe) return '';
+      return unsafe
+           .replace(/&/g, "&amp;")
+           .replace(/</g, "&lt;")
+           .replace(/>/g, "&gt;")
+           .replace(/"/g, "&quot;")
+           .replace(/'/g, "&#039;");
+    }
+
     /**
      * Process content from extension to display template tags
      */
@@ -331,31 +375,59 @@
       // since we're now using HTML entities
       
       // Find all embedded instructions using regex
-      const regex = /<embedded-instruction name="([^"]+)">([\s\S]*?)<\/embedded-instruction>/g;
-      let match;
+      const embeddedRegex = /<embedded-instruction name="([^"]+)">([\s\S]*?)<\/embedded-instruction>/g;
+      // --- NEW: Regex for fetch instructions ---
+      const fetchRegex = /<fetch-instruction name="([^"]+)" url="([^"]+)" \/>/g;
+      
       let lastIndex = 0;
       let result = '';
-      
-      while ((match = regex.exec(textContent)) !== null) {
-        // Get the text before the match, preserving exact whitespace
-        const beforeText = textContent.substring(lastIndex, match.index);
-        // Convert newlines to <br> tags
-        result += beforeText.replace(/\n/g, '<br>');
-        
-        // Add the template tag
-        const promptName = match[1];
-        
-        // Try to find the prompt in the available prompts to get its file path
-        let filePathAttr = '';
-        const prompt = availablePrompts.find(p => p.name === promptName);
-        if (prompt && prompt.filePath) {
-          filePathAttr = ` data-file-path="${prompt.filePath}"`;
-        }
-        
-        result += `<span class="template-tag" data-prompt-name="${promptName}"${filePathAttr} contenteditable="false">@${promptName}</span>`;
-        
-        lastIndex = regex.lastIndex;
+      let combinedMatches = [];
+
+      // Find all matches for both types
+      let match;
+      while ((match = embeddedRegex.exec(textContent)) !== null) {
+          combinedMatches.push({ type: 'embedded', index: match.index, length: match[0].length, name: match[1], content: match[2] });
       }
+      while ((match = fetchRegex.exec(textContent)) !== null) {
+          combinedMatches.push({ type: 'fetch', index: match.index, length: match.length, name: match[1], url: match[2] });
+      }
+
+      // Sort matches by index
+      combinedMatches.sort((a, b) => a.index - b.index);
+
+      // Process matches in order
+      combinedMatches.forEach(matchInfo => {
+          // Get text before the current match
+          const beforeText = textContent.substring(lastIndex, matchInfo.index);
+          result += beforeText.replace(/\n/g, '<br>');
+
+          // --- MODIFICATION START: Handle both types ---
+          const promptName = matchInfo.name;
+          let filePathAttr = '';
+          let tagClasses = 'template-tag';
+
+          // Try to find the original prompt entry if available (might not always be up-to-date)
+          const prompt = availablePrompts.find(p => p.name === promptName);
+
+          if (matchInfo.type === 'fetch') {
+              filePathAttr = ` data-file-path="${escapeHtml(matchInfo.url)}"`;
+              tagClasses += ' remote-placeholder'; // Add specific class for visual styling
+              console.log(`[Display Process] Creating remote placeholder tag for ${promptName}`);
+          } else if (matchInfo.type === 'embedded') {
+              // Try to get the file path from the original prompt data if found
+              if (prompt && prompt.filePath) {
+                 filePathAttr = ` data-file-path="${escapeHtml(prompt.filePath)}"`;
+              }
+              console.log(`[Display Process] Creating embedded tag for ${promptName}`);
+              // We no longer store embedded content in the global map
+          }
+
+          // Construct the span tag
+          result += `<span class="${tagClasses}" data-prompt-name="${escapeHtml(promptName)}"${filePathAttr} contenteditable="false">@${promptName}</span>`;
+          // --- MODIFICATION END ---
+
+          lastIndex = matchInfo.index + matchInfo.length;
+      });
       
       // Add any remaining text
       const remainingText = textContent.substring(lastIndex);
@@ -708,72 +780,75 @@
       });
 
       /**
-       * Insert prompt template tag at the current cursor position
+       * Insert prompt template tag at the current cursor position, or request remote content
        */
       function insertPrompt(promptName) {
         const selectedPrompt = availablePrompts.find((p) => p.name === promptName);
         if (!selectedPrompt || !currentRange) return;
 
-        // Create the template tag element
+        // --- Get the current selection and range --- 
+        const selection = window.getSelection();
+        const range = currentRange.cloneRange();
+
+        // --- Determine the replacement range --- 
+        // Move range start to before the "@" character
+        range.setStart(range.startContainer, currentPosition - 1);
+
+        // Expand range end to cover any filter text after "@"
+        if (range.startContainer.nodeType === Node.TEXT_NODE) {
+          let endOffset = range.startContainer.nodeValue.length;
+          // Find the end of the filter word (e.g., space or end of text)
+          for (let i = currentPosition; i < range.startContainer.nodeValue.length; i++) {
+            if (/\s/.test(range.startContainer.nodeValue[i])) {
+              endOffset = i;
+              break;
+            }
+          }
+          range.setEnd(range.startContainer, endOffset);
+        }
+
+        // --- SIMPLIFIED: Always insert the standard tag --- 
         const templateTag = document.createElement('span');
-        templateTag.className = 'template-tag';
+        templateTag.className = 'template-tag'; // Base class
         templateTag.setAttribute('data-prompt-name', promptName);
-        // Store the file path if available
         if (selectedPrompt.filePath) {
           templateTag.setAttribute('data-file-path', selectedPrompt.filePath);
+          // Add remote class here if needed for immediate styling
+          if (selectedPrompt.filePath.startsWith('http')) {
+            templateTag.classList.add('remote-placeholder');
+          }
         }
         templateTag.setAttribute('contenteditable', 'false');
         templateTag.textContent = `@${promptName}`;
-        
-        // Add click handler to the template tag
+
+        // Add click handler
         templateTag.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          
-          vscode.postMessage({
-            command: 'openPromptFile',
-            promptName: promptName,
-            filePath: selectedPrompt.filePath
-          });
+            e.preventDefault();
+            e.stopPropagation();
+            vscode.postMessage({
+              command: 'openPromptFile',
+              promptName: promptName,
+              filePath: selectedPrompt.filePath
+            });
         });
-        
-        // Set up selection to replace the "@" and any text after it
-        const selection = window.getSelection();
-        const range = currentRange.cloneRange();
-        
-        // Move range start to before the "@" character
-        range.setStart(range.startContainer, currentPosition - 1);
-        
-        // If there's text following the "@" for filtering, include it in the replacement
-        if (range.startContainer.nodeType === Node.TEXT_NODE && 
-            currentPosition < range.startContainer.nodeValue.length) {
-          const searchEnd = range.startContainer.nodeValue.indexOf(' ', currentPosition);
-          const endPos = searchEnd === -1 ? range.startContainer.nodeValue.length : searchEnd;
-          range.setEnd(range.startContainer, endPos);
-        }
-        
-        // Delete the current "@" and any filter text
+
+        // Replace the "@filter" text with the template tag
         range.deleteContents();
-        
-        // Insert the template tag without adding any extra whitespace
         range.insertNode(templateTag);
-        
+
         // Move cursor after the template tag
         range.setStartAfter(templateTag);
-        range.collapse(true);
+        range.setEndAfter(templateTag);
+        range.collapse(false); // Collapse to end
         selection.removeAllRanges();
         selection.addRange(range);
-        
-        // Hide the prompt picker
+        // --- END SIMPLIFIED INSERTION ---
+
+        // --- Common cleanup --- 
         promptPicker.style.display = 'none';
         currentPosition = null;
         currentRange = null;
-        
-        // Focus the editor
-        contentEditableDiv.focus();
-        
-        // Save the updated content
-        saveInstructionContent();
+        saveInstructionContent(); // Save after insertion
       }
     }
 
