@@ -3,7 +3,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { checkedItems } from './fileExplorer';
 import { countTokensWithCache } from './tokenCounter';
+import { countTokens } from 'gpt-tokenizer/encoding/o200k_base';
 import { fetchResourceContent } from './promptcodeDataFetcher';
+
+// --- LOGGING HELPER ---
+function log(message: string, data?: any) {
+    console.log(`[PromptGenerator] ${message}`, data !== undefined ? data : '');
+}
+// ----------------------
 
 // Define interfaces for clarity
 interface SelectedFile {
@@ -21,10 +28,9 @@ interface IncludeOptions {
     // Add other options if they exist
 }
 
-// HTML Entity Decoding Helper (Simplified)
+// Helper function to decode HTML entities (might be needed for identifiers)
 function decodeHtmlEntities(text: string): string {
-    if (!text) return '';
-    // Basic decoding for entities used in fetch-instruction
+    // Decode common entities that might appear in names/urls
     return text
         .replace(/&lt;/g, '<')
         .replace(/&gt;/g, '>')
@@ -33,236 +39,314 @@ function decodeHtmlEntities(text: string): string {
         .replace(/&amp;/g, '&');
 }
 
-// Generate a directory tree representation for the prompt
-export async function generateDirectoryTree(workspaceFolders: vscode.WorkspaceFolder[]): Promise<string> {
-  let result = '';
-  
-  for (const folder of workspaceFolders) {
-    const rootPath = folder.uri.fsPath;
-    const rootName = folder.name;
-    
-    result += `# Workspace: ${rootName}\n`;
-    
-    // Build the tree recursively for this workspace
-    const buildTree = async (dirPath: string, prefix: string = ''): Promise<void> => {
-      try {
-        // Get all entries in this directory
-        const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
-        
-        // Sort entries (directories first, then files)
-        const sortedEntries = entries.sort((a, b) => {
-          if (a.isDirectory() && !b.isDirectory()) return -1;
-          if (!a.isDirectory() && b.isDirectory()) return 1;
-          return a.name.localeCompare(b.name);
-        });
-        
-        // Process each entry
-        for (let i = 0; i < sortedEntries.length; i++) {
-          const entry = sortedEntries[i];
-          const entryPath = path.join(dirPath, entry.name);
-          
-          // Skip node_modules, .git, and other common directories/files that should be ignored
-          if (entry.name === 'node_modules' || entry.name === '.git') {
-            continue;
-          }
-          
-          // Check if this entry is the last one at this level
-          const isLast = i === sortedEntries.length - 1;
-          
-          // Determine the branch character
-          const branchChar = isLast ? '└──' : '├──';
-          
-          // Determine the prefix for the next level
-          const nextPrefix = prefix + (isLast ? '    ' : '│   ');
-          
-          // Get the relative path from workspace root for display
-          const relativePath = path.relative(rootPath, entryPath);
-          
-          if (entry.isDirectory()) {
-            // Check if this directory has any selected files before including it
-            const hasSelected = await hasSelectedFiles(entryPath);
-            if (!hasSelected) continue;
-            
-            // Add directory entry
-            result += `${prefix}${branchChar} ${entry.name}/\n`;
-            
-            // Recursively process subdirectory
-            await buildTree(entryPath, nextPrefix);
-          } else {
-            // Check if this file is selected
-            if (!checkedItems.get(entryPath)) continue;
-            
-            // Add file entry
-            result += `${prefix}${branchChar} ${entry.name} (${relativePath})\n`;
-          }
-        }
-      } catch (error) {
-        console.error(`Error building tree for ${dirPath}:`, error);
-      }
-    };
-    
-    // Helper function to check if a directory has any selected files
-    const hasSelectedFiles = async (dirPath: string): Promise<boolean> => {
-      try {
-        // Check if this directory itself is selected
-        if (checkedItems.get(dirPath)) {
-          return true;
-        }
-        
-        // Check all entries in this directory
-        const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
-        
-        // Check each entry
-        for (const entry of entries) {
-          const entryPath = path.join(dirPath, entry.name);
-          
-          // Skip common ignored directories
-          if (entry.isDirectory() && (entry.name === 'node_modules' || entry.name === '.git')) {
-            continue;
-          }
-          
-          if (entry.isDirectory()) {
-            // Recursively check subdirectories
-            const hasSelected = await hasSelectedFiles(entryPath);
-            if (hasSelected) return true;
-          } else {
-            // Check if this file is selected
-            if (checkedItems.get(entryPath)) {
-              return true;
-            }
-          }
-        }
-      } catch (error) {
-        console.error(`Error checking selected files in ${dirPath}:`, error);
-      }
-      
-      return false;
-    };
-    
-    // Start building the tree from the workspace root
-    await buildTree(rootPath);
-    
-    // Add a separator between workspaces
-    result += '\n';
-  }
-  
-  return result;
-}
-
-// Utility function to read file content with error handling
+// Helper function to read local file content (assuming it exists)
 async function readFileContent(filePath: string): Promise<string> {
-  try {
-    const content = await fs.promises.readFile(filePath, 'utf8');
-    return content;
-  } catch (error) {
-    console.error(`Error reading file ${filePath}:`, error);
-    return `Error reading file: ${error}`;
-  }
+    try {
+        const fileUri = vscode.Uri.file(filePath);
+        const fileContent = await vscode.workspace.fs.readFile(fileUri);
+        return Buffer.from(fileContent).toString('utf8');
+    } catch (error) {
+        log(`Error reading file content for ${filePath}`, error);
+        throw new Error(`Could not read file: ${filePath}`);
+    }
 }
 
-// Main function to generate the prompt text
+// Placeholder for simple token estimation if countTokensWithCache is not suitable
+// function estimateTokens(text: string): number {
+//     // Simple estimation: words / 0.75 or characters / 4
+//     return Math.ceil((text.match(/\\S+/g) || []).length / 0.75);
+// }
+
+// New interface for processed resources
+interface ProcessedResource {
+    name: string; // The name from the tag's 'name' attribute
+    content: string;
+    tokenCount: number;
+    type: 'inline' | 'referenced';
+    originalTag: string; // The full original XML tag
+}
+
+/**
+ * Processes instructions, finds <fetch-instruction> and <embedded-instruction> tags,
+ * fetches content, counts tokens, and prepares resources for inclusion.
+ */
+async function processInstructionsAndResources(
+    instructions: string,
+    workspaceFolderRootPath: string // Still needed? Maybe not if paths aren't resolved here.
+): Promise<{ processedInstructions: string; referencedResources: ProcessedResource[] }> {
+    log('Starting instruction processing...');
+
+    // Regex to find <fetch-instruction> and <embedded-instruction> tags
+    // Using named capture groups: name, url, content
+    const fetchRegex = /<fetch-instruction\s+name="(?<name>[^"]+)"\s+url="(?<url>[^"]+)"\s*\/>/gs;
+    const embeddedRegex = /<embedded-instruction\s+name="(?<name>[^"]+)">\s*(?<content>[\s\S]*?)\s*<\/embedded-instruction>/gs;
+
+    const promises: Promise<ProcessedResource | null>[] = [];
+    const foundTags = new Map<string, string>(); // Store original tag string by unique name identifier
+
+    // --- Process Fetch Instructions ---
+    let fetchMatch;
+    while ((fetchMatch = fetchRegex.exec(instructions)) !== null) {
+        const originalTag = fetchMatch[0];
+        const name = decodeHtmlEntities(fetchMatch.groups?.name || '');
+        const url = decodeHtmlEntities(fetchMatch.groups?.url || '');
+
+        if (!name || !url) {
+            log('Skipping invalid fetch tag (missing name or url)', { originalTag });
+            continue;
+        }
+        
+        // Only process the first occurrence for fetching, but store the tag for later replacement
+        if (!foundTags.has(name)) { 
+             foundTags.set(name, originalTag); // Store the first tag found for this name
+             log(`Found fetch instruction tag for: ${name}`, { url });
+             promises.push((async (): Promise<ProcessedResource | null> => {
+                try {
+                    const content = await fetchResourceContent(url);
+                    log(`Fetched content for ${name} (URL)`, { length: content.length });
+                    const tokenCount = countTokens(content);
+                    log(`Token count for ${name} (URL): ${tokenCount}`);
+                    return {
+                        name,
+                        content,
+                        tokenCount,
+                        type: tokenCount < 1000 ? 'inline' : 'referenced',
+                        originalTag // Store the specific tag instance we used for fetching
+                    };
+                } catch (error) {
+                    log(`Error fetching content for "${name}" from ${url}`, error);
+                    return {
+                        name,
+                        content: `<!-- Error fetching resource ${name}: ${(error as Error).message} -->`,
+                        tokenCount: 0,
+                        type: 'inline',
+                        originalTag
+                    };
+                }
+            })());
+        } else {
+             log(`Skipping duplicate fetch instruction tag processing for: ${name}`);
+        }
+    }
+
+    // --- Process Embedded Instructions ---
+    let embeddedMatch;
+    while ((embeddedMatch = embeddedRegex.exec(instructions)) !== null) {
+        const originalTag = embeddedMatch[0];
+        const name = decodeHtmlEntities(embeddedMatch.groups?.name || '');
+        const content = embeddedMatch.groups?.content || ''; // Content is directly in the tag
+
+        if (!name) {
+            log('Skipping invalid embedded tag (missing name)', { originalTag });
+            continue;
+        }
+
+        // Only process the first occurrence, but store the tag for later replacement
+        if (!foundTags.has(name)) { 
+            foundTags.set(name, originalTag); // Store the first tag found for this name
+            log(`Found embedded instruction tag for: ${name}`, { contentLength: content.length });
+            promises.push((async (): Promise<ProcessedResource | null> => {
+                try {
+                    // Content is already available
+                    const tokenCount = countTokens(content);
+                    log(`Token count for ${name} (Embedded): ${tokenCount}`);
+                    return {
+                        name,
+                        content,
+                        tokenCount,
+                        type: tokenCount < 1000 ? 'inline' : 'referenced',
+                        originalTag
+                    };
+                } catch (error) {
+                    // Should be rare for embedded content unless token counter fails
+                    log(`Error processing embedded content for "${name}"`, error);
+                    return {
+                        name,
+                        content: `<!-- Error processing resource ${name}: ${(error as Error).message} -->`,
+                        tokenCount: 0,
+                        type: 'inline',
+                        originalTag
+                    };
+                }
+            })());
+        } else {
+             log(`Skipping duplicate embedded instruction tag processing for: ${name}`);
+        }
+    }
+
+    log(`Awaiting ${promises.length} resource processing promises...`);
+    const results = await Promise.all(promises);
+    const validResults = results.filter(r => r !== null) as ProcessedResource[];
+    log(`Processed ${validResults.length} unique resources.`);
+
+    let processedInstructions = instructions;
+    const referencedResources: ProcessedResource[] = [];
+
+    // --- Replace Tags ---
+    // Iterate through the *unique processed results* and replace *all* occurrences
+    // of the corresponding original tag structure in the instruction string.
+    for (const result of validResults) {
+        log(`Processing replacement for: ${result.name} (Type: ${result.type})`);
+        const tagToReplace = result.originalTag; // The specific tag structure (fetch or embedded) we processed
+        
+        // Need a robust way to replace all occurrences of the specific tag structure.
+        // Simple string replace might be okay if tags are unique enough, but regex is safer.
+        // Create a regex to match the specific original tag literally.
+        const escapedTagRegex = new RegExp(tagToReplace.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+
+        if (result.type === 'inline') {
+            const inlineContent = `<inline_resource source="${result.name}">\n${result.content}\n</inline_resource>`;
+            processedInstructions = processedInstructions.replace(escapedTagRegex, inlineContent);
+            log(`Replaced tag for ${result.name} with inline content.`);
+        } else {
+            const resourceTag = `<resource label="${result.name}">`;
+            processedInstructions = processedInstructions.replace(escapedTagRegex, resourceTag);
+            referencedResources.push(result); // Add to list for the final <resources> block
+            log(`Replaced tag for ${result.name} with resource placeholder.`);
+        }
+    }
+
+    // Sort referenced resources by token count (ascending)
+    referencedResources.sort((a, b) => a.tokenCount - b.tokenCount);
+    log(`Sorted ${referencedResources.length} referenced resources.`);
+
+    log('Finished instruction processing.');
+    return { processedInstructions, referencedResources };
+}
+
+
+/**
+ * Generates the final prompt string based on selected files, instructions, and options.
+ */
 export async function generatePrompt(
     selectedFiles: SelectedFile[],
     instructions: string,
     includeOptions: IncludeOptions
 ): Promise<string> {
+    log('--- Starting generatePrompt ---');
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (!workspaceFolders || workspaceFolders.length === 0) {
+        log('No workspace folders found. Aborting prompt generation.');
         return 'No workspace folders available.';
     }
+    const workspaceRoot = workspaceFolders[0].uri.fsPath;
+    log('Workspace root:', { workspaceRoot });
 
-    let promptText = '';
+    let finalPromptText = '';
+    let processedInstructions = '';
+    let resourcesBlock = '';
 
-    // Process Instructions (Fetch remote content)
-    let processedInstructions = instructions;
+    // 1. Process Instructions and Resources
     if (includeOptions.instructions && instructions) {
-        const fetchRegex = /<fetch-instruction name="([^"]+)" url="([^"]+)" \/>/g;
-        const fetchPromises: Promise<{ placeholder: string; content: string; name: string }>[] = [];
+        log('Processing instructions and resources...');
+        try {
+            const { 
+                processedInstructions: modifiedInstructions, 
+                referencedResources 
+            } = await processInstructionsAndResources(instructions, workspaceRoot);
+            
+            processedInstructions = modifiedInstructions;
+            log('Instructions processed successfully.');
 
-        let match;
-        while ((match = fetchRegex.exec(instructions)) !== null) {
-            const placeholder = match[0];
-            const name = decodeHtmlEntities(match[1]);
-            const url = decodeHtmlEntities(match[2]);
-
-            console.log(`[Generate Prompt] Found fetch instruction for "${name}" at ${url}`);
-
-            fetchPromises.push(
-                fetchResourceContent(url)
-                    .then(content => ({
-                        placeholder,
-                        content,
-                        name
-                    }))
-                    .catch(error => {
-                        console.error(`Error fetching content for "${name}" from ${url}:`, error);
-                        return {
-                            placeholder,
-                            content: `<!-- Error fetching content for ${name}: ${(error as Error).message} -->`,
-                            name
-                        };
-                    })
-            );
-        }
-
-        if (fetchPromises.length > 0) {
-            try {
-                const results = await Promise.all(fetchPromises);
-                results.forEach(result => {
-                    console.log(`[Generate Prompt] Replacing placeholder for "${result.name}"`);
-                    processedInstructions = processedInstructions.replace(result.placeholder, result.content);
-                });
-            } catch (error) {
-                console.error('[Generate Prompt] Error processing fetch instructions:', error);
-                processedInstructions += '\n<!-- Error: Failed to process one or more fetch-instructions -->';
+            // Build the resources block if needed
+            if (referencedResources.length > 0) {
+                log(`Building resources block for ${referencedResources.length} resources.`);
+                resourcesBlock += '<resources>\n';
+                for (const resource of referencedResources) {
+                    resourcesBlock += `  <resource label="${resource.name}">\n`;
+                    // Indent content for readability
+                    resourcesBlock += resource.content.split('\n').map(line => `    ${line}`).join('\n');
+                    resourcesBlock += '\n  </resource>\n';
+                }
+                resourcesBlock += '</resources>\n';
+                log('Finished building resources block.');
+            } else {
+                 log('No referenced resources to build block for.');
             }
+
+        } catch (error) {
+            log('Error processing instructions and resources:', error);
+            processedInstructions = instructions + '\n<!-- Error: Failed to process instructions and resources -->';
         }
     } else {
-        processedInstructions = '';
+        log('Instructions not included or empty.');
+        processedInstructions = instructions; // Keep original if not processed
     }
 
-    // Generate File Map (If included)
-    if (includeOptions.files) {
-        promptText += '<file_map>\n';
-        const selectedPaths = selectedFiles.map(f => f.absolutePath);
-        promptText += await generateDirectoryTree([...workspaceFolders]);
-        promptText += '</file_map>\n\n';
-    }
-    
-    // Add Instructions (If included)
+    // 2. Add Instructions (Processed)
     if (includeOptions.instructions && processedInstructions) {
-        promptText += '<instructions>\n';
-        promptText += processedInstructions;
-        promptText += '\n</instructions>\n\n';
+        log('Adding processed instructions to prompt.');
+        finalPromptText += '<instructions>\n';
+        finalPromptText += processedInstructions;
+        finalPromptText += '\n</instructions>\n\n';
     }
 
-    // Add File Contents (If included)
+    // 3. Generate File Map (If included)
     if (includeOptions.files) {
-        promptText += '<file_contents>\n';
+        log('Generating file map...');
+        if (typeof generateDirectoryTree === 'function') { 
+            try {
+                 finalPromptText += '<file_map>\n';
+                 finalPromptText += await generateDirectoryTree([...workspaceFolders]); 
+                 finalPromptText += '</file_map>\n\n';
+                 log('File map generated.');
+            } catch (error) {
+                 log('Error generating file map:', error);
+                 finalPromptText += '<file_map>\n<!-- Error generating file map -->\n</file_map>\n\n';
+            }
+        } else {
+             log('generateDirectoryTree function not found. Skipping file map.');
+             finalPromptText += '<file_map>\n<!-- File map generation unavailable -->\n</file_map>\n\n';
+        }
+    } else {
+         log('File map not included.');
+    }
+
+    // 4. Add File Contents (If included)
+    if (includeOptions.files) {
+        log(`Adding content for ${selectedFiles.length} selected files...`);
+        finalPromptText += '<file_contents>\n';
         for (const file of selectedFiles) {
             try {
                 const fileContent = file.content ?? await readFileContent(file.absolutePath);
-
-                promptText += `File: ${file.path} (${file.tokenCount} tokens)\n`;
-                promptText += '```\n';
-                promptText += fileContent;
-                promptText += '\n```\n\n';
+                finalPromptText += `File: ${file.path} (${file.tokenCount} tokens)\n`; 
+                finalPromptText += '```\n';
+                finalPromptText += fileContent;
+                finalPromptText += '\n```\n\n';
             } catch (error) {
-                console.error(`Error processing file ${file.absolutePath}:`, error);
-                promptText += `File: ${file.path}\n<!-- Error processing file: ${(error as Error).message} -->\n\n`;
+                log(`Error adding file content for ${file.path}:`, error);
+                finalPromptText += `File: ${file.path}\n<!-- Error reading file content: ${(error as Error).message} -->\n\n`;
             }
         }
-        promptText += '</file_contents>';
+        finalPromptText += '</file_contents>\n\n'; 
+        log('Finished adding file contents.');
+    } else {
+        log('File contents not included.');
     }
 
-    // Add final newline if needed
-    if (!promptText.endsWith('\n')) {
-        promptText += '\n';
+    // 5. Add Resources Block (If generated)
+    if (resourcesBlock) {
+        log('Adding resources block to prompt.');
+        finalPromptText += resourcesBlock;
     }
 
-    return promptText;
+    // Ensure final newline
+    if (finalPromptText && !finalPromptText.endsWith('\n')) {
+        finalPromptText += '\n';
+    }
+    
+    log('--- Finished generatePrompt ---');
+    return finalPromptText;
+}
+
+// Assume generateDirectoryTree exists and is imported/defined elsewhere
+// Example placeholder if not:
+async function generateDirectoryTree(workspaceFolders: vscode.WorkspaceFolder[]): Promise<string> {
+    log("(Placeholder) generateDirectoryTree called.");
+    return workspaceFolders.map(wf => `Workspace: ${wf.name}\n  (...tree...)\n`).join('');
 }
 
 export async function copyToClipboard(text: string): Promise<void> {
   await vscode.env.clipboard.writeText(text);
+  log('Prompt copied to clipboard.');
 } 
