@@ -225,7 +225,7 @@ export async function loadConfiguredPrompts(
             name: entry.name,
             description: entry.description || '',
             content: '', // Content will be fetched on demand
-            category: entry.category.join('/'), // Use path-like category
+            category: Array.isArray(entry.category) ? entry.category.join('/') : entry.category, // Handle both array and string formats
             filePath: entry.url // Store the URL to fetch content later
         }));
         prompts.push(...dataRepoPrompts);

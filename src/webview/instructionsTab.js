@@ -598,12 +598,15 @@
 
         // Then add the categories
         Object.keys(categorizedPrompts).sort().forEach(category => {
+          // Create a safe category ID for DOM attributes (lowercase, no spaces)
+          const categoryId = category.toLowerCase().replace(/\s+/g, '_');
+          
           promptListHtml += `
-            <div class="prompt-category" data-category="${category}">
+            <div class="prompt-category" data-category="${categoryId}" data-original-category="${category}">
               <span class="prompt-category-icon"></span>
               <div class="prompt-category-name">${category}</div>
             </div>
-            <div class="prompt-category-items" data-category="${category}">
+            <div class="prompt-category-items" data-category="${categoryId}">
               ${categorizedPrompts[category].map(prompt => `
                 <div class="prompt-item" data-prompt-name="${prompt.name}">
                   <div>
@@ -621,11 +624,11 @@
         // Add click handlers for categories
         document.querySelectorAll('.prompt-category').forEach(categoryEl => {
           categoryEl.addEventListener('click', () => {
-            const category = categoryEl.getAttribute('data-category');
+            const categoryId = categoryEl.getAttribute('data-category');
             categoryEl.classList.toggle('open');
             
             // Find and toggle display of category items
-            const categoryItems = document.querySelector(`.prompt-category-items[data-category="${category}"]`);
+            const categoryItems = document.querySelector(`.prompt-category-items[data-category="${categoryId}"]`);
             if (categoryItems) {
               if (categoryEl.classList.contains('open')) {
                 categoryItems.style.display = 'block';
@@ -659,9 +662,25 @@
         allItems.forEach((item) => {
           const promptName = item.dataset.promptName.toLowerCase();
           const promptDesc = item.querySelector('.prompt-description')?.textContent.toLowerCase() || '';
+          
+          // Find category for this item (if any)
+          let promptCategory = '';
+          const categoryItems = item.closest('.prompt-category-items');
+          if (categoryItems) {
+            const categoryId = categoryItems.getAttribute('data-category');
+            const categoryEl = document.querySelector(`.prompt-category[data-category="${categoryId}"]`);
+            promptCategory = categoryEl?.getAttribute('data-original-category')?.toLowerCase() || '';
+          }
+          
+          // Split category path segments for better matching (e.g., "docs/agent frameworks" -> ["docs", "agent frameworks"])
+          const categorySegments = promptCategory.split('/').map(segment => segment.trim());
+          
+          // Check if search matches name, description OR any category segment
           const isVisible = !searchLower || 
             promptName.includes(searchLower) || 
-            promptDesc.includes(searchLower);
+            promptDesc.includes(searchLower) ||
+            promptCategory.includes(searchLower) ||
+            categorySegments.some(segment => segment.includes(searchLower));
 
           item.style.display = isVisible ? 'flex' : 'none';
           
@@ -670,8 +689,8 @@
             // Find parent category if it exists
             const categoryItems = item.closest('.prompt-category-items');
             if (categoryItems) {
-              const categoryName = categoryItems.getAttribute('data-category');
-              visibleCategories.add(categoryName);
+              const categoryId = categoryItems.getAttribute('data-category');
+              visibleCategories.add(categoryId);
             }
           }
         });
@@ -679,15 +698,15 @@
         // Now show/hide categories based on whether they have visible items
         const categories = promptList.querySelectorAll('.prompt-category');
         categories.forEach((category) => {
-          const categoryName = category.getAttribute('data-category');
-          const hasVisibleChildren = visibleCategories.has(categoryName);
+          const categoryId = category.getAttribute('data-category');
+          const hasVisibleChildren = visibleCategories.has(categoryId);
           
           category.style.display = hasVisibleChildren ? 'flex' : 'none';
           
           // Open categories with visible children when searching
           if (searchLower && hasVisibleChildren) {
             category.classList.add('open');
-            const categoryItems = document.querySelector(`.prompt-category-items[data-category="${categoryName}"]`);
+            const categoryItems = document.querySelector(`.prompt-category-items[data-category="${categoryId}"]`);
             if (categoryItems) {
               categoryItems.style.display = 'block';
             }
@@ -718,11 +737,19 @@
         if (node.nodeType === Node.TEXT_NODE && offset > 0 && node.nodeValue[offset - 1] === '@') {
           currentPosition = offset;
           currentRange = range.cloneRange();
-          vscode.postMessage({ 
-            command: 'requestPrompts',
-            includeBuiltInTemplates: includeBuiltInTemplates?.classList.contains('checked') ?? true,
-            promptFolders: promptFolders?.value ?? ''
-          });
+          
+          // Only request prompts if we don't already have some available
+          // This avoids repeated fetches which can slow down the experience
+          if (!availablePrompts || availablePrompts.length === 0) {
+            console.log('[Prompt Picker] No prompts available, requesting from extension');
+            vscode.postMessage({ 
+              command: 'requestPrompts',
+              includeBuiltInTemplates: includeBuiltInTemplates?.classList.contains('checked') ?? true,
+              promptFolders: promptFolders?.value ?? ''
+            });
+          } else {
+            console.log('[Prompt Picker] Using existing prompts list:', availablePrompts.length);
+          }
 
           // Position the picker near the caret
           const rect = range.getBoundingClientRect();

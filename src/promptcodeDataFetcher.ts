@@ -2,7 +2,7 @@ import * as https from 'https';
 
 export interface DataIndexEntry {
   name: string;
-  category: string[];
+  category: string[] | string; // Support both array format ["a", "b", "c"] and string format "a/b/c"
   url: string;
   description?: string;
   tags?: string[];

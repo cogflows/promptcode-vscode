@@ -477,6 +477,16 @@
           if (tabId === 'instructions') {
               console.log('[Tab Switch Debug] Loading instructions due to tab switch');
               vscode.postMessage({ command: 'loadInstructions' });
+              
+              // Pre-fetch prompts when switching to instructions tab
+              console.log('[Tab Switch Debug] Pre-fetching prompts for @ completion');
+              const includeBuiltIn = document.querySelector('#include-built-in-templates')?.classList.contains('checked') ?? true;
+              const folders = document.querySelector('#prompt-folders')?.value ?? '';
+              vscode.postMessage({ 
+                command: 'requestPrompts',
+                includeBuiltInTemplates: includeBuiltIn,
+                promptFolders: folders
+              });
           } else if (tabId === 'prompt') {
               console.log('[Tab Switch Debug] Activating prompt tab');
               // Let the generatePromptTab know we just switched to tab #3
