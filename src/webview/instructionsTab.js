@@ -399,7 +399,7 @@
           combinedMatches.push({ type: 'embedded', index: match.index, length: match[0].length, name: match[1], content: match[2] });
       }
       while ((match = fetchRegex.exec(textContent)) !== null) {
-          combinedMatches.push({ type: 'fetch', index: match.index, length: match.length, name: match[1], url: match[2] });
+          combinedMatches.push({ type: 'fetch', index: match.index, length: match[0].length, name: match[1], url: match[2] });
       }
 
       // Sort matches by index
