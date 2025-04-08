@@ -457,6 +457,7 @@
   tabs.forEach((tab) => {
       tab.addEventListener('click', () => {
           const tabId = tab.getAttribute('data-tab');
+          console.log('[Tab Switch Debug] Tab changed:', { fromTab: document.querySelector('.tab-trigger.active')?.getAttribute('data-tab'), toTab: tabId });
 
           // Deactivate others
           tabs.forEach(t => t.classList.remove('active'));
@@ -474,13 +475,16 @@
 
           // Special actions for each tab
           if (tabId === 'instructions') {
+              console.log('[Tab Switch Debug] Loading instructions due to tab switch');
               vscode.postMessage({ command: 'loadInstructions' });
           } else if (tabId === 'prompt') {
+              console.log('[Tab Switch Debug] Activating prompt tab');
               // Let the generatePromptTab know we just switched to tab #3
               if (window.generatePromptTab && typeof window.generatePromptTab.onTabActivated === 'function') {
                 window.generatePromptTab.onTabActivated();
               }
           } else if (tabId === 'merge') {
+              console.log('[Tab Switch Debug] Activating merge tab');
               // Let the extension know we switched to the merge tab
               vscode.postMessage({ command: 'mergeTabActivated' });
           }

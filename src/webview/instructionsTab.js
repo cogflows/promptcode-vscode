@@ -281,6 +281,11 @@
           
         const processedContent = processContentForSaving(htmlContent);
         
+        console.log('[Tab Switch Debug] Saving content', {
+          htmlBeforeProcessing: contentEditableDiv.innerHTML,
+          processedContent: processedContent
+        });
+
         vscode.postMessage({
           command: 'saveInstructions',
           instructions: processedContent
@@ -353,6 +358,11 @@
       // Get the final text content with embedded instructions and newlines
       let processedContent = tempDiv.textContent;
       
+      console.log('[Tab Switch Debug] Template tags processed for saving', {
+        beforeCount: templateTags.length,
+        afterHTML: tempDiv.innerHTML
+      });
+
       return processedContent;
     }
     
@@ -433,6 +443,12 @@
       const remainingText = textContent.substring(lastIndex);
       result += remainingText.replace(/\n/g, '<br>');
       
+      console.log('[Tab Switch Debug] Processing for display', {
+        inputLength: textContent.length,
+        matchCount: combinedMatches.length,
+        outputHTML: result 
+      });
+      
       return result;
     }
 
@@ -449,7 +465,23 @@
           if (contentEditableDiv) {
             // Check if we have content in the hidden textarea first
             const hiddenTextarea = document.getElementById('raw-instruction-content');
-            if (hiddenTextarea && hiddenTextarea.value) {
+            
+            console.log('[Tab Switch Debug] Receiving instructions update', {
+              rawInstructions: message.instructions ? message.instructions.length : 0,
+              hiddenTextareaValue: hiddenTextarea?.value ? hiddenTextarea.value.length : 0
+            });
+            
+            console.log('[Tab Switch Debug] hiddenTextarea inspection', {
+              exists: !!hiddenTextarea,
+              value: hiddenTextarea?.value,
+              valueType: typeof hiddenTextarea?.value,
+              contentEditableBefore: contentEditableDiv.innerHTML
+            });
+            
+            // Modified condition: only use hidden textarea if it contains template tags or HTML structure
+            // This prevents the case where only "@" is stored, corrupting template tags
+            if (hiddenTextarea && hiddenTextarea.value && 
+                (hiddenTextarea.value.includes('template-tag') || hiddenTextarea.value.includes('<'))) {
               // Use innerHTML instead of textContent to preserve formatting and template tags
               contentEditableDiv.innerHTML = hiddenTextarea.value;
             } else if (message.instructions) {
@@ -459,6 +491,12 @@
             } else {
               contentEditableDiv.innerHTML = '';
             }
+            
+            console.log('[Tab Switch Debug] Final content set', {
+              fromHiddenTextarea: !!(hiddenTextarea && hiddenTextarea.value && 
+                  (hiddenTextarea.value.includes('template-tag') || hiddenTextarea.value.includes('<'))),
+              finalHTML: contentEditableDiv.innerHTML.substring(0, 100) // First 100 chars
+            });
             
             // Add click handlers to template tags
             setupTemplateTagClickHandlers();
