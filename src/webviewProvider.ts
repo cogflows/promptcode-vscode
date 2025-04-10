@@ -9,6 +9,7 @@ import { getPromptTabHtml } from './webview/tabs/promptTabContent';
 import { getMergeTabHtml } from './webview/tabs/mergeTabContent';
 import * as fs from 'fs';
 import * as os from 'os';
+import * as https from 'https';
 
 export class PromptCodeWebViewProvider {
     public static readonly viewType = 'promptcode.webview';
@@ -316,7 +317,7 @@ export class PromptCodeWebViewProvider {
     private async openPromptFile(promptName: string, filePath?: string) {
         try {
             // If a file path is provided, try to open it directly
-            if (filePath) {
+            if (filePath && !filePath.startsWith('http')) {
                 try {
                     const fileUri = vscode.Uri.file(filePath);
                     const doc = await vscode.workspace.openTextDocument(fileUri);
@@ -324,8 +325,46 @@ export class PromptCodeWebViewProvider {
                     return;
                 } catch (error) {
                     console.error(`Failed to open file at path ${filePath}, falling back to name-based lookup`);
-                    // Fall through to traditional lookup
+                    // Fall through to traditional lookup only if it wasn't an HTTP path initially
                 }
+            } else if (filePath && filePath.startsWith('http')) {
+                // Handle HTTP paths: Fetch, save to temp, and open
+                console.log(`Fetching remote prompt '${promptName}' from ${filePath}`);
+                try {
+                    const content = await new Promise<string>((resolve, reject) => {
+                        https.get(filePath!, (res) => { // Use the guaranteed non-null filePath
+                            let data = '';
+                            res.on('data', (chunk) => { data += chunk; });
+                            res.on('end', () => {
+                                if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+                                    resolve(data);
+                                } else {
+                                    reject(new Error(`Failed to fetch: Status Code ${res.statusCode}`));
+                                }
+                            });
+                        }).on('error', (err) => {
+                            reject(err);
+                        });
+                    });
+
+                    // Sanitize promptName for use in filename
+                    const safePromptName = promptName.replace(/[^a-z0-9_-]/gi, '_').substring(0, 50);
+                    const tempFileName = `promptcode-remote-${safePromptName}-${Date.now()}.txt`;
+                    const tempFilePath = path.join(os.tmpdir(), tempFileName);
+                    const tempFileUri = vscode.Uri.file(tempFilePath);
+
+                    await fs.promises.writeFile(tempFilePath, content, 'utf8');
+                    console.log(`Saved remote prompt content to temporary file: ${tempFilePath}`);
+
+                    const doc = await vscode.workspace.openTextDocument(tempFileUri);
+                    await vscode.window.showTextDocument(doc, { preview: false }); // Open non-preview
+                    vscode.window.showInformationMessage(`Opened remote prompt '${promptName}' content in a temporary file.`);
+
+                } catch (fetchErr) {
+                    console.error(`Failed to fetch or open remote prompt '${promptName}' from ${filePath}:`, fetchErr);
+                    vscode.window.showErrorMessage(`Could not open remote prompt '${promptName}'. Failed to fetch content: ${fetchErr instanceof Error ? fetchErr.message : String(fetchErr)}`);
+                }
+                return; // Stop processing after handling HTTP
             }
 
             // First check built-in prompts (may be read-only)
@@ -373,12 +412,17 @@ export class PromptCodeWebViewProvider {
                 }
 
             } else {
-                 // Check if it's a promptcode-data entry (which shouldn't be opened directly)
-                if (filePath && filePath.startsWith('http')) {
-                    vscode.window.showInformationMessage(`Cannot open remote prompt "${promptName}" directly. Select it with @ in Instructions to embed.`);
-                } else {
-                    vscode.window.showErrorMessage(`Prompt "${promptName}" not found or cannot be opened.`);
-                }
+                 // This case is now primarily for when a prompt is looked up by name
+                 // and the found filePath is an HTTP URL (which we decided not to open directly above)
+                 // or if the prompt simply isn't found after all checks.
+                 const foundPrompt = userPrompt || builtInPrompt; // Check if we found *any* prompt with this name
+                 if (foundPrompt && foundPrompt.filePath && foundPrompt.filePath.startsWith('http')) {
+                     // This message is relevant if lookup-by-name finds an HTTP prompt
+                     vscode.window.showInformationMessage(`Cannot open remote prompt "${promptName}" directly by name lookup. Select it with @ in Instructions to embed or click its entry in the prompt list to view its content.`);
+                 } else {
+                     // Generic not found message
+                     vscode.window.showErrorMessage(`Prompt "${promptName}" not found or cannot be opened.`);
+                 }
             }
         } catch (error) {
             console.error('Error opening prompt file:', error);
