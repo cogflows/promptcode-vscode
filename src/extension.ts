@@ -17,6 +17,12 @@ import { TelemetryService } from './telemetry';
 import { FileListProcessor } from './fileListProcessor';
 
 let lastGeneratedPrompt: string | null = null; // Variable to store the last generated prompt
+
+// Export a getter for the last generated prompt
+export function getLastGeneratedPrompt(): string | null {
+	return lastGeneratedPrompt;
+}
+
 let lastGeneratedTokenCount: number | null = null;
 let webviewProvider: PromptCodeWebViewProvider | null = null;
 let lastSaveUri: vscode.Uri | undefined = undefined; // Store the last used save URI
@@ -256,6 +262,9 @@ export function activate(context: vscode.ExtensionContext) {
 
 			// Generate preview with options
 			const promptText = await generatePromptFromGenerator(selectedFiles, instructions, includeOptions);
+
+			// Cache the generated prompt
+			lastGeneratedPrompt = promptText;
 
 			// Send preview back to webview
 			if (promptCodeProvider._panel) {

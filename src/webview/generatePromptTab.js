@@ -1,5 +1,7 @@
 import { SAVE_PROMPT_TO_FILE } from '../constants'; // Import the constant
 
+let latestPreview = ''; // <-- holds the rendered prompt text
+
 (function () {
   /**
    * This namespace (or module pattern) holds all the logic for the "Generate Prompt" tab.
@@ -14,15 +16,15 @@ import { SAVE_PROMPT_TO_FILE } from '../constants'; // Import the constant
     const actionsContainer = openButton.parentElement; // Assuming buttons share the same parent
 
     // --- Save to file feature ---
-    const saveBtn = document.createElement('button');
-    saveBtn.id = 'saveToFileBtn';
-    saveBtn.className = 'btn btn-primary'; // matches the existing style util
-    saveBtn.textContent = 'Save to file';
-    if (actionsContainer && openButton) {
-        actionsContainer.insertBefore(saveBtn, openButton.nextSibling); // Insert after openButton
-    } else if (actionsContainer) {
-        actionsContainer.appendChild(saveBtn); // Fallback if openButton isn't found
-    }
+    // const saveBtn = document.createElement('button');
+    // saveBtn.id = 'saveToFileBtn';
+    // saveBtn.className = 'btn btn-primary'; // matches the existing style util
+    // saveBtn.textContent = 'Save to file';
+    // if (actionsContainer && openButton) {
+    //     actionsContainer.insertBefore(saveBtn, openButton.nextSibling); // Insert after openButton
+    // } else if (actionsContainer) {
+    //     actionsContainer.appendChild(saveBtn); // Fallback if openButton isn't found
+    // }
     // --- End Save to file feature ---
 
     // Track the time when generating mode starts and pending data
@@ -51,25 +53,40 @@ import { SAVE_PROMPT_TO_FILE } from '../constants'; // Import the constant
     }
 
     // --- Save to file feature ---
-    if (saveBtn) {
-      saveBtn.addEventListener('click', () => {
-        // We need to get the prompt text. Let's assume it's held by the extension
-        // and we need to request it, or find where it's stored in the DOM if it is.
-        // For now, let's request it as part of the save command.
-        // If there's a text area, use that:
-        const promptTextArea = document.getElementById('promptTextArea'); // Get the text area
-        const promptText = promptTextArea ? promptTextArea.value : ''; // Get its value
+    // if (saveBtn) {
+    //   saveBtn.addEventListener('click', () => {
+    //     // We need to get the prompt text. Let's assume it's held by the extension
+    //     // and we need to request it, or find where it's stored in the DOM if it is.
+    //     // For now, let's request it as part of the save command.
+    //     // If there's a text area, use that:
+    //     const promptTextArea = document.getElementById('promptTextArea'); // Get the text area
+    //     const promptText = promptTextArea ? promptTextArea.value : ''; // Get its value
 
-        // Let's post a message and let the extension handle getting the text and saving.
-        console.log('SaveToFile command triggered from GeneratePromptTab');
-        // We'll add the promptText retrieval later if needed, assuming the host has it
-        vscode.postMessage({
-          command: SAVE_PROMPT_TO_FILE, // Use the constant
-          promptText: promptText // Include the text from the text area
+    //     // Let's post a message and let the extension handle getting the text and saving.
+    //     console.log('SaveToFile command triggered from GeneratePromptTab');
+    //     // We'll add the promptText retrieval later if needed, assuming the host has it
+    //     vscode.postMessage({
+    //       command: SAVE_PROMPT_TO_FILE, // Use the constant
+    //       promptText: promptText // Include the text from the text area
+    //     });
+    //   });
+    // }
+    // --- End Save to file feature ---
+    const saveButton = document.getElementById('save-prompt-btn');
+    if (saveButton) {
+      saveButton.addEventListener('click', () => {
+        // Add check for latestPreview
+        if (!latestPreview) {
+          console.warn('Save clicked before preview available');
+          // Optionally show a user-facing message here
+          return; 
+        }
+        vscode.postMessage({ 
+          command: SAVE_PROMPT_TO_FILE,
+          promptText: latestPreview // NEW - send the captured preview
         });
       });
     }
-    // --- End Save to file feature ---
 
     // Toggling checkboxes
     [includeFilesCheckbox, includeInstructionsCheckbox].forEach((checkbox) => {
@@ -172,7 +189,7 @@ import { SAVE_PROMPT_TO_FILE } from '../constants'; // Import the constant
       if (tokenCountDisplay) tokenCountDisplay.classList.add('hidden');
       if (copyButton) copyButton.disabled = true;
       if (openButton) openButton.disabled = true;
-      if (saveBtn) saveBtn.disabled = true; // Disable save button too
+      if (saveButton) saveButton.disabled = true;
     }
 
     /**
@@ -219,7 +236,7 @@ import { SAVE_PROMPT_TO_FILE } from '../constants'; // Import the constant
       if (tokenCountDisplay) tokenCountDisplay.classList.remove('hidden');
       if (copyButton) copyButton.disabled = false;
       if (openButton) openButton.disabled = false;
-      if (saveBtn) saveBtn.disabled = false; // Re-enable save button
+      if (saveButton) saveButton.disabled = false;
 
       if (typeof pendingPreparedData.tokenCount === 'number' && tokenCountElement) {
         tokenCountElement.textContent = formatTokenCount(pendingPreparedData.tokenCount);
@@ -248,6 +265,7 @@ import { SAVE_PROMPT_TO_FILE } from '../constants'; // Import the constant
           // for tab #3
           // Show the final mode (and optionally copy if there's an action)
           const { preview, tokenCount, action } = message;
+          latestPreview = preview; // NEW - store the latest preview
 
           // Store the latest preview text perhaps? How is it accessed by Open/Copy?
           // Let's assume for now the host holds the latest generated text.

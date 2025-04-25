@@ -49,6 +49,9 @@ export function getPromptTabHtml(): string {
             <span class="codicon codicon-go-to-file"></span>
             Open in Editor
           </button>
+          <button class="button primary" id="save-prompt-btn" title="Save to file">
+            <span class="codicon codicon-save"></span>Save to file
+          </button>
         </div>
       </div>
     </div>

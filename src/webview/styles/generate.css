@@ -64,7 +64,7 @@
 }
 
 /* --- Save to file feature --- */
-#saveToFileBtn {
-  margin-left: 8px; /* keeps buttons visually grouped */
-}
+/* #saveToFileBtn { */
+/*   margin-left: 8px; /* keeps buttons visually grouped */
+/* } */
 /* --- End Save to file feature --- */ 
