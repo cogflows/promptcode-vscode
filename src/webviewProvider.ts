@@ -14,14 +14,13 @@ import * as https from 'https';
 // --- Save to file feature ---
 import { SAVE_PROMPT_TO_FILE } from './constants';
 import { savePromptToFile, getLastGeneratedPrompt, fileExplorerProvider, checkedItems } from './extension';
-import { loadPresets, savePresets } from './presetManager';
+import { loadPresets, savePreset } from './presetManager';
 // --- End Save to file feature ---
 
 // --- File Preset Commands ---
 import {
     SAVE_FILE_PRESET,
     APPLY_FILE_PRESET,
-    DELETE_FILE_PRESET,
     REQUEST_FILE_PRESETS,
     UPDATE_FILE_PRESETS
 } from './constants';
@@ -385,14 +384,26 @@ export class PromptCodeWebViewProvider {
                                 return; // User cancelled
                             }
                             // Overwrite the existing preset
-                            currentPresets[existingPresetIndex].files = relativePaths;
-                            savePresets(root, currentPresets);
+                            const updatedPreset = { 
+                                name: presetName, 
+                                files: relativePaths
+                            };
+                            savePreset(root, updatedPreset);
+                            
+                            // Update the in-memory list for the UI
+                            currentPresets[existingPresetIndex] = updatedPreset;
                             this._panel.webview.postMessage({ command: UPDATE_FILE_PRESETS, presets: currentPresets });
 
                         } else {
                             // Add the new preset
-                            currentPresets.push({ name: presetName, files: relativePaths });
-                            savePresets(root, currentPresets);
+                            const newPreset = { 
+                                name: presetName, 
+                                files: relativePaths
+                            };
+                            savePreset(root, newPreset);
+                            
+                            // Update the in-memory list for the UI
+                            currentPresets.push(newPreset);
                             this._panel.webview.postMessage({ command: UPDATE_FILE_PRESETS, presets: currentPresets });
                         }
                         return;
@@ -425,17 +436,6 @@ export class PromptCodeWebViewProvider {
                             console.error(`Error applying preset "${presetName}":`, error);
                             vscode.window.showErrorMessage(`Failed to apply preset "${presetName}": ${error instanceof Error ? error.message : String(error)}`);
                         }
-                        return;
-                    }
-                    case DELETE_FILE_PRESET: {
-                        console.log('DELETE_FILE_PRESET command received with name:', message.presetName);
-                        const { presetName } = message;
-                        const root = getWorkspaceRoot();
-                        if (!root || !presetName || !this._panel) return;
-
-                        const updatedPresets = loadPresets(root).filter(p => p.name !== presetName);
-                        savePresets(root, updatedPresets);
-                        this._panel.webview.postMessage({ command: UPDATE_FILE_PRESETS, presets: updatedPresets });
                         return;
                     }
                 }

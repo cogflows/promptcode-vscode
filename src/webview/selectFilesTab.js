@@ -673,9 +673,9 @@ if (typeof window !== 'undefined') {
                 const presetPicker = document.getElementById('file-preset-picker');
                 const savePresetBtn = document.getElementById('save-preset-btn');
                 const applyPresetBtn = document.getElementById('apply-preset-btn');
-                const delPresetBtn = document.getElementById('delete-preset-btn');
+                // const delPresetBtn = document.getElementById('delete-preset-btn'); // Removed
 
-                if (presetPicker && savePresetBtn && delPresetBtn && presetNameInput && applyPresetBtn) {
+                if (presetPicker && savePresetBtn && presetNameInput && applyPresetBtn) {
                     // ask host for presets on load
                     vscode.postMessage({ command: 'requestFilePresets' });
 
@@ -688,11 +688,9 @@ if (typeof window !== 'undefined') {
                             options += presets.map(p =>
                                 `<option value="${escapeHtml(p.name)}">${escapeHtml(p.name)}</option>`).join('');
                             applyPresetBtn.disabled = false;
-                            delPresetBtn.disabled = false;
                         } else {
                             // Disable buttons if no presets
                             applyPresetBtn.disabled = true;
-                            delPresetBtn.disabled = true;
                         }
                         presetPicker.innerHTML = options;
                     }
@@ -731,32 +729,13 @@ if (typeof window !== 'undefined') {
                         vscode.postMessage({ command: 'applyFilePreset', presetName: name });
                     });
 
-                    // Changed to update selection on change too (optional)
+                    // Changed to update selection on change 
                     presetPicker.addEventListener('change', () => {
                         const name = presetPicker.value;
                         if (name) {
-                            // Optionally enable the applyPresetBtn if you want explicit application
                             applyPresetBtn.disabled = false;
-                            delPresetBtn.disabled = false;
-                            
-                            // Auto-apply on select (optional - remove if you want explicit apply button click)
-                            // console.log(`[Frontend] Auto-applying preset: "${name}"`);
-                            // vscode.postMessage({ command: 'applyFilePreset', presetName: name });
                         } else {
                             applyPresetBtn.disabled = true;
-                            delPresetBtn.disabled = true;
-                        }
-                    });
-
-                    delPresetBtn.addEventListener('click', () => {
-                        const name = presetPicker.value;
-                        if (!name) {
-                            alert('Please select a preset to delete.');
-                            return;
-                        }
-                        if (confirm(`Are you sure you want to delete the preset "${name}"?`)) {
-                            console.log(`[Frontend] Posting deleteFilePreset message with name: "${name}"`);
-                            vscode.postMessage({ command: 'deleteFilePreset', presetName: name });
                         }
                     });
 
@@ -772,8 +751,7 @@ if (typeof window !== 'undefined') {
                       presetNameInput: !presetNameInput,
                       presetPicker: !presetPicker,
                       savePresetBtn: !savePresetBtn,
-                      applyPresetBtn: !applyPresetBtn,
-                      delPresetBtn: !delPresetBtn
+                      applyPresetBtn: !applyPresetBtn
                     });
                 }
                 /* ---------- End Preset support ---------- */

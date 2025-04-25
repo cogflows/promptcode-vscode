@@ -51,10 +51,6 @@ export function getSelectFilesTabHtml(): string {
             <span class="codicon codicon-check"></span>
             Apply
           </button>
-          <button id="delete-preset-btn" class="button secondary" title="Delete selected preset">
-            <span class="codicon codicon-trash"></span>
-            Delete
-          </button>
         </div>
       </div>
     </section>
