@@ -56,6 +56,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
   private ignoreHelper: IgnoreHelper | undefined;
   private workspaceRoots: Map<string, string> = new Map(); // Uri string -> fsPath
   private includedPaths: Set<string> = new Set();
+  private checkboxQueue: Promise<void> = Promise.resolve(); // Added queue field
 
   constructor() {
     // ... (constructor initialization remains the same) ...
@@ -752,21 +753,26 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
   }
 
   // Handle checkbox state changes
-  handleCheckboxToggle(item: FileItem, checkboxState: vscode.TreeItemCheckboxState): void {
-    const isChecked = checkboxState === vscode.TreeItemCheckboxState.Checked;
+  handleCheckboxToggle(item: FileItem, state: vscode.TreeItemCheckboxState): void {
+    const isChecked = state === vscode.TreeItemCheckboxState.Checked;
 
-    // Block to prevent nested async operations from causing race conditions
-    this.processCheckboxChange(item, isChecked).then(() => {
-      // --- MODIFIED: Refresh the entire tree view after state changes ---
-      this.refresh(); 
-      // --- END MODIFIED ---
+    // Ignore no-ops – saves queue slots
+    if (checkedItems.get(item.fullPath) === isChecked) { return; }
 
-      // Notify the webview about the change in selected files
-      vscode.commands.executeCommand('promptcode.getSelectedFiles');
-    }).catch(error => {
-      console.error("Error processing checkbox change:", error);
-      this.refresh(); // Full refresh on error
-    });
+    this.checkboxQueue = this.checkboxQueue
+      .then(() => vscode.window.withProgress({
+          cancellable: false,
+          location: vscode.ProgressLocation.Window,
+          title: 'Updating selection…'
+        }, async () => {
+          await this.processCheckboxChange(item, isChecked);
+          this.refresh();
+          await vscode.commands.executeCommand('promptcode.getSelectedFiles');
+        }))
+      .catch(err => {
+        console.error('Checkbox queue error:', err);
+        this.refresh(); // Still refresh on error to potentially clear bad state
+      });
   }
 
   // Process checkbox changes synchronously to avoid race conditions
