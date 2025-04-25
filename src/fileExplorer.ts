@@ -1174,8 +1174,8 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
   // --- END RESTORED ---
 
   // --- RESTORED: Method to set checked items from a list ---
-  public async setCheckedItems(filePaths: Set<string>): Promise<void> {
-    console.log(`Restored setCheckedItems: Received ${filePaths.size} paths.`);
+  public async setCheckedItems(absoluteFilePaths: Set<string>): Promise<void> {
+    console.log(`Restored setCheckedItems: Received ${absoluteFilePaths.size} absolute paths.`);
     if (!this.ignoreHelper) {
         console.warn('Ignore helper not initialized, cannot filter based on ignore rules.');
         // Optionally, initialize it here if feasible or throw an error
@@ -1186,7 +1186,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
 
     // Set initial checked state for provided files, respecting ignore rules
     let checkedCount = 0;
-    for (const filePath of filePaths) {
+    for (const filePath of absoluteFilePaths) {
         // Use the public shouldIgnore method we are also restoring/ensuring exists
         if (this.ignoreHelper?.shouldIgnore(filePath)) {
             console.log(`Ignoring file from list: ${filePath}`);
@@ -1247,4 +1247,81 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
     vscode.commands.executeCommand('promptcode.getSelectedFiles');
   }
   // --- END RESTORED ---
+
+  // --- ADDED: Get selected file paths (relative to workspace root) ---
+  public getSelectedPaths(): string[] {
+    if (!this.workspaceRoots.size) {
+      return [];
+    }
+    const selectedPaths: string[] = [];
+    const workspaceRootPaths = Array.from(this.workspaceRoots.values());
+
+    for (const [fullPath, isChecked] of checkedItems.entries()) {
+      if (isChecked) {
+        // Check if it's a file (or handle directories if needed)
+        try {
+          // Only include files, not directories, in the path list
+          const stats = fs.statSync(fullPath);
+          if (stats.isFile()) {
+             // Find the workspace root this path belongs to
+            const containingRoot = workspaceRootPaths.find(root => fullPath.startsWith(root + path.sep));
+            if (containingRoot) {
+              selectedPaths.push(path.relative(containingRoot, fullPath));
+            } else {
+               console.warn(`Selected path ${fullPath} does not belong to any known workspace root.`);
+            }
+          }
+        } catch (error) {
+          // Ignore errors if file was deleted between selection and this call
+           if (error instanceof Error && (error as NodeJS.ErrnoException).code !== 'ENOENT') {
+              console.error(`Error stating file ${fullPath} in getSelectedPaths:`, error);
+           }
+        }
+      }
+    }
+    return selectedPaths;
+  }
+  // --- END ADDED ---
+
+  // --- ADDED: Select files programmatically based on relative paths ---
+  public async selectFiles(relativePaths: string[]): Promise<void> {
+    console.log(`FileExplorerProvider: selectFiles called with ${relativePaths.length} paths.`);
+    if (!this.workspaceRoots.size) {
+      console.warn('selectFiles called with no workspace roots.');
+      return;
+    }
+
+    const absolutePaths = new Set<string>();
+    const workspaceRootEntries = Array.from(this.workspaceRoots.entries()); // [[uriString, fsPath], ...]
+
+    // Convert relative paths to absolute paths based on workspace roots
+    for (const relativePath of relativePaths) {
+        let foundRoot = false;
+        for (const [, rootPath] of workspaceRootEntries) {
+            const absolutePath = path.resolve(rootPath, relativePath); // Use resolve for robustness
+            // Basic check: Does the resolved path still seem to be within the root?
+            // This isn't perfect but prevents issues with paths like ../../outside
+            if (absolutePath.startsWith(rootPath)) {
+                 // Check if the file actually exists before adding
+                 try {
+                    await fs.promises.access(absolutePath, fs.constants.F_OK);
+                    absolutePaths.add(absolutePath);
+                    foundRoot = true;
+                    break; // Assume first match is correct for simplicity
+                 } catch (err) {
+                    // File doesn't exist or isn't accessible
+                    console.warn(`Preset file path not found or inaccessible, skipping: ${absolutePath} (from relative: ${relativePath})`);
+                 }
+            }
+        }
+        if (!foundRoot) {
+            console.warn(`Could not resolve relative path "${relativePath}" within any workspace root.`);
+        }
+    }
+
+    console.log(`Resolved ${relativePaths.length} relative paths to ${absolutePaths.size} existing absolute paths.`);
+    // Use the existing setCheckedItems logic
+    await this.setCheckedItems(absolutePaths);
+  }
+  // --- END ADDED ---
 }

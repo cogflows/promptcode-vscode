@@ -30,6 +30,36 @@ export function getSelectFilesTabHtml(): string {
       </div>
     </section>
 
+    <!-- ADDED: Presets Section -->
+    <section class="presets-section">
+      <div class="section-title">File Selection Presets</div>
+      <div class="presets-actions">
+        <div class="preset-save-container">
+          <input type="text" id="preset-name-input" placeholder="Enter preset name..." />
+          <button id="save-preset-btn" class="button" title="Save current selection as new preset">
+            <span class="codicon codicon-save"></span>
+            Save Current
+          </button>
+        </div>
+        <div class="preset-load-container">
+          <label for="file-preset-picker">Load Preset:</label> 
+          <select id="file-preset-picker">
+            <option value="" disabled selected>Select a preset...</option>
+            <!-- Options added by JS -->
+          </select>
+          <button id="apply-preset-btn" class="button" title="Apply selected preset">
+            <span class="codicon codicon-check"></span>
+            Apply
+          </button>
+          <button id="delete-preset-btn" class="button secondary" title="Delete selected preset">
+            <span class="codicon codicon-trash"></span>
+            Delete
+          </button>
+        </div>
+      </div>
+    </section>
+    <!-- END ADDED -->
+
     <!-- Actions Section -->
     <section class="actions-section">
       <div class="section-title">File Tree Actions</div>
@@ -62,6 +92,7 @@ export function getSelectFilesTabHtml(): string {
           </button>
         </div>
       </div>
+
       <div id="file-list-results" class="file-list-results" style="display: none; margin-top: var(--spacing-md);">
         <!-- Results will be displayed here -->
       </div>

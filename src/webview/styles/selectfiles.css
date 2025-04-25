@@ -512,4 +512,98 @@
 
 .button.secondary:hover {
     background: var(--vscode-button-secondaryHoverBackground);
-} 
+}
+
+/* ---------- Presets Section ---------- */
+.presets-section {
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: var(--border-radius-md);
+  margin-bottom: var(--spacing-md);
+  padding: var(--spacing-md);
+}
+
+/* Overall container for preset actions */
+.presets-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+/* Container for the save controls */
+.preset-save-container {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+/* Container for the load controls */
+.preset-load-container {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  /* Optional: add subtle separator */
+  /* padding-top: var(--spacing-sm); */
+  /* border-top: 1px solid var(--vscode-panel-border); */
+}
+
+/* Input for preset name */
+#preset-name-input {
+  flex-grow: 1;
+  background-color: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border, var(--vscode-contrastBorder, transparent));
+  border-radius: var(--border-radius-sm);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  height: calc(1.5em + 2 * var(--spacing-xs) + 2px); /* Match button height */
+  font-size: var(--vscode-font-size);
+  min-width: 150px;
+}
+
+#preset-name-input:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+/* Select dropdown */
+#file-preset-picker {
+  flex-grow: 1;
+  background-color: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border, var(--vscode-contrastBorder, transparent));
+  border-radius: var(--border-radius-sm);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  height: calc(1.5em + 2 * var(--spacing-xs) + 2px); /* Match button height */
+  font-size: var(--vscode-font-size);
+  min-width: 150px;
+}
+
+#file-preset-picker:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+/* Preset buttons */
+.presets-actions .button .codicon {
+  margin-right: var(--spacing-xs);
+}
+
+/* Label styling */
+.preset-load-container label {
+  white-space: nowrap;
+}
+
+/* Media query for smaller screens */
+@media (max-width: 600px) {
+  .preset-save-container,
+  .preset-load-container {
+    flex-wrap: wrap;
+  }
+  
+  #preset-name-input,
+  #file-preset-picker {
+    flex-basis: 100%;
+    width: 100%;
+  }
+}
+/* ---------- End Presets Section ---------- */ 

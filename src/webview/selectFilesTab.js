@@ -647,6 +647,12 @@ if (typeof window !== 'undefined') {
                                     console.warn('File list results div not found.');
                                 }
                                 return true;
+                            case 'updateFilePresets':
+                                console.log('[Frontend] Received updateFilePresets message with:', message.presets?.length || 0, 'presets');
+                                if (window.selectFilesTab.handlePresetUpdate) {
+                                    window.selectFilesTab.handlePresetUpdate(message.presets);
+                                }
+                                return true;
                             default:
                                 return false;
                         }
@@ -662,19 +668,120 @@ if (typeof window !== 'undefined') {
                     });
                 };
 
-                console.log('Debug: Successfully initialized selectFilesTab');
-            } catch (err) {
-                console.error('Debug: Error in initSelectFilesTab:', err);
+                /* ----------  Preset support  ---------- */
+                const presetNameInput = document.getElementById('preset-name-input');
+                const presetPicker = document.getElementById('file-preset-picker');
+                const savePresetBtn = document.getElementById('save-preset-btn');
+                const applyPresetBtn = document.getElementById('apply-preset-btn');
+                const delPresetBtn = document.getElementById('delete-preset-btn');
+
+                if (presetPicker && savePresetBtn && delPresetBtn && presetNameInput && applyPresetBtn) {
+                    // ask host for presets on load
+                    vscode.postMessage({ command: 'requestFilePresets' });
+
+                    function populatePresetPicker(presets) {
+                        if (!presets) return;
+                        // Create the default option
+                        let options = '<option value="" disabled selected>Select a preset...</option>';
+                        // Add preset options
+                        if (presets.length > 0) {
+                            options += presets.map(p =>
+                                `<option value="${escapeHtml(p.name)}">${escapeHtml(p.name)}</option>`).join('');
+                            applyPresetBtn.disabled = false;
+                            delPresetBtn.disabled = false;
+                        } else {
+                            // Disable buttons if no presets
+                            applyPresetBtn.disabled = true;
+                            delPresetBtn.disabled = true;
+                        }
+                        presetPicker.innerHTML = options;
+                    }
+
+                    savePresetBtn.addEventListener('click', () => {
+                        console.log('[Frontend] Save Preset button clicked');
+                        const name = presetNameInput.value.trim();
+                        
+                        if (!name) {
+                            console.log('[Frontend] Preset name is empty.');
+                            alert('Please enter a name for the preset.');
+                            presetNameInput.focus();
+                            return;
+                        }
+                        
+                        console.log(`[Frontend] Posting saveFilePreset message with name: "${name}"`);
+                        vscode.postMessage({ command: 'saveFilePreset', presetName: name });
+                        // Clear the input after saving
+                        presetNameInput.value = '';
+                    });
+
+                    // Enter key in preset name input triggers save
+                    presetNameInput.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter') {
+                            savePresetBtn.click();
+                        }
+                    });
+
+                    applyPresetBtn.addEventListener('click', () => {
+                        const name = presetPicker.value;
+                        if (!name) {
+                            alert('Please select a preset to apply.');
+                            return;
+                        }
+                        console.log(`[Frontend] Posting applyFilePreset message with name: "${name}"`);
+                        vscode.postMessage({ command: 'applyFilePreset', presetName: name });
+                    });
+
+                    // Changed to update selection on change too (optional)
+                    presetPicker.addEventListener('change', () => {
+                        const name = presetPicker.value;
+                        if (name) {
+                            // Optionally enable the applyPresetBtn if you want explicit application
+                            applyPresetBtn.disabled = false;
+                            delPresetBtn.disabled = false;
+                            
+                            // Auto-apply on select (optional - remove if you want explicit apply button click)
+                            // console.log(`[Frontend] Auto-applying preset: "${name}"`);
+                            // vscode.postMessage({ command: 'applyFilePreset', presetName: name });
+                        } else {
+                            applyPresetBtn.disabled = true;
+                            delPresetBtn.disabled = true;
+                        }
+                    });
+
+                    delPresetBtn.addEventListener('click', () => {
+                        const name = presetPicker.value;
+                        if (!name) {
+                            alert('Please select a preset to delete.');
+                            return;
+                        }
+                        if (confirm(`Are you sure you want to delete the preset "${name}"?`)) {
+                            console.log(`[Frontend] Posting deleteFilePreset message with name: "${name}"`);
+                            vscode.postMessage({ command: 'deleteFilePreset', presetName: name });
+                        }
+                    });
+
+                    // Add listener for preset updates from host
+                    // This listener needs to be accessible to the global message handler
+                    window.selectFilesTab.handlePresetUpdate = function(presets) {
+                        populatePresetPicker(presets);
+                    };
+                    
+                    console.log('Preset UI elements initialized.');
+                } else {
+                    console.error('Preset UI elements not found! Missing:', {
+                      presetNameInput: !presetNameInput,
+                      presetPicker: !presetPicker,
+                      savePresetBtn: !savePresetBtn,
+                      applyPresetBtn: !applyPresetBtn,
+                      delPresetBtn: !delPresetBtn
+                    });
+                }
+                /* ---------- End Preset support ---------- */
+            } catch (error) {
+                console.error('Error in initSelectFilesTab:', error);
             }
         };
-
-        console.log('Debug: Successfully defined initSelectFilesTab');
-    } catch (err) {
-        console.error('Debug: Error setting up selectFilesTab.js:', err);
+    } catch (error) {
+        console.error('Error in selectFilesTab.js:', error);
     }
-} else {
-    console.error('Debug: Not in a browser environment');
 }
-
-// Double-check that the function is available
-console.log('Debug: Final check - initSelectFilesTab available:', typeof window.initSelectFilesTab); 

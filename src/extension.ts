@@ -3,7 +3,7 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
-import { FileExplorerProvider, checkedItems, FileItem } from './fileExplorer';
+import { FileExplorerProvider, checkedItems as checkedItemsMap, FileItem } from './fileExplorer';
 import { generatePrompt as generatePromptFromGenerator, copyToClipboard } from './promptGenerator';
 import { PromptCodeWebViewProvider } from './webviewProvider';
 import { countTokensInFile, countTokensWithCache, clearTokenCache, initializeTokenCounter } from './tokenCounter';
@@ -22,6 +22,12 @@ let lastGeneratedPrompt: string | null = null; // Variable to store the last gen
 export function getLastGeneratedPrompt(): string | null {
 	return lastGeneratedPrompt;
 }
+
+// --- Exported Variables for Webview Access ---
+export let fileExplorerProvider: FileExplorerProvider;
+// Export the map itself, consumers can use it directly
+export const checkedItems = checkedItemsMap;
+// --- End Exported Variables ---
 
 let lastGeneratedTokenCount: number | null = null;
 let webviewProvider: PromptCodeWebViewProvider | null = null;
@@ -67,8 +73,8 @@ export function activate(context: vscode.ExtensionContext) {
 		? vscode.workspace.workspaceFolders[0].uri.fsPath
 		: undefined;
 
-	// Create the file explorer provider
-	const fileExplorerProvider = new FileExplorerProvider();
+	// Create the file explorer provider and assign to exported variable
+	fileExplorerProvider = new FileExplorerProvider();
 	// const ignoreHelper = new IgnoreHelper(); // ignoreHelper is now internal to fileExplorerProvider
 
 	// Register the tree data provider

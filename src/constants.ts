@@ -148,4 +148,12 @@ export const OPEN_PROMPT_COMMAND = 'openPrompt';
 
 // --- Save to file feature ---
 export const SAVE_PROMPT_TO_FILE = 'savePromptToFile';
-// --- End Save to file feature --- 
+// --- End Save to file feature ---
+
+// --- File Preset Commands ---
+export const SAVE_FILE_PRESET      = 'saveFilePreset';
+export const APPLY_FILE_PRESET     = 'applyFilePreset';
+export const DELETE_FILE_PRESET    = 'deleteFilePreset';
+export const REQUEST_FILE_PRESETS  = 'requestFilePresets';
+export const UPDATE_FILE_PRESETS   = 'updateFilePresets'; // host -> webview
+// --- End File Preset Commands --- 

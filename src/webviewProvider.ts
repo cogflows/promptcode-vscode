@@ -13,8 +13,19 @@ import * as https from 'https';
 
 // --- Save to file feature ---
 import { SAVE_PROMPT_TO_FILE } from './constants';
-import { savePromptToFile, getLastGeneratedPrompt } from './extension';
+import { savePromptToFile, getLastGeneratedPrompt, fileExplorerProvider, checkedItems } from './extension';
+import { loadPresets, savePresets } from './presetManager';
 // --- End Save to file feature ---
+
+// --- File Preset Commands ---
+import {
+    SAVE_FILE_PRESET,
+    APPLY_FILE_PRESET,
+    DELETE_FILE_PRESET,
+    REQUEST_FILE_PRESETS,
+    UPDATE_FILE_PRESETS
+} from './constants';
+// --- End File Preset Commands ---
 
 export class PromptCodeWebViewProvider {
     public static readonly viewType = 'promptcode.webview';
@@ -59,8 +70,19 @@ export class PromptCodeWebViewProvider {
         this._panel.webview.html = this._getHtmlForWebview(this._panel.webview, prompts);
 
         this._panel.webview.onDidReceiveMessage(
-            message => {
+            async message => {
                 console.log('WebView message received:', message);
+
+                // --- Helper to get workspace root ---
+                const getWorkspaceRoot = (): string | undefined => {
+                    const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+                    if (!root) {
+                        console.error("No workspace folder found.");
+                        vscode.window.showErrorMessage("No workspace folder open.");
+                    }
+                    return root;
+                };
+                // --- End Helper ---
 
                 switch (message.command) {
                     case 'search':
@@ -324,6 +346,98 @@ export class PromptCodeWebViewProvider {
                             }
                         })(); // Immediately invoke the async function
                         return;
+                    case REQUEST_FILE_PRESETS: {
+                        console.log('REQUEST_FILE_PRESETS command received');
+                        const root = getWorkspaceRoot();
+                        if (!root || !this._panel) return;
+                        const presets = loadPresets(root);
+                        this._panel.webview.postMessage({ command: UPDATE_FILE_PRESETS, presets });
+                        return;
+                    }
+                    case SAVE_FILE_PRESET: {
+                        console.log('SAVE_FILE_PRESET command received with name:', message.presetName);
+                        const { presetName } = message;
+                        const root = getWorkspaceRoot();
+                        if (!root || !presetName || !this._panel) return;
+
+                        // Ensure fileExplorerProvider is available
+                        if (!fileExplorerProvider || typeof fileExplorerProvider.getSelectedPaths !== 'function') {
+                            console.error("fileExplorerProvider or getSelectedPaths method is not available.");
+                            vscode.window.showErrorMessage("Error saving preset: File selection provider is not ready.");
+                            return;
+                        }
+
+                        const currentPresets = loadPresets(root);
+                        const existingPresetIndex = currentPresets.findIndex(p => p.name === presetName);
+
+                        // Get correctly resolved relative paths from the provider
+                        const relativePaths = fileExplorerProvider.getSelectedPaths(); 
+                        console.log(`Saving preset '${presetName}' with ${relativePaths.length} files.`);
+
+                        if (existingPresetIndex > -1) {
+                            // Preset with the same name exists
+                            const overwrite = await vscode.window.showWarningMessage(
+                                `Preset "${presetName}" already exists. Overwrite?`,
+                                { modal: true },
+                                'Overwrite'
+                            );
+                            if (overwrite !== 'Overwrite') {
+                                return; // User cancelled
+                            }
+                            // Overwrite the existing preset
+                            currentPresets[existingPresetIndex].files = relativePaths;
+                            savePresets(root, currentPresets);
+                            this._panel.webview.postMessage({ command: UPDATE_FILE_PRESETS, presets: currentPresets });
+
+                        } else {
+                            // Add the new preset
+                            currentPresets.push({ name: presetName, files: relativePaths });
+                            savePresets(root, currentPresets);
+                            this._panel.webview.postMessage({ command: UPDATE_FILE_PRESETS, presets: currentPresets });
+                        }
+                        return;
+                    }
+                    case APPLY_FILE_PRESET: {
+                        console.log('APPLY_FILE_PRESET command received with name:', message.presetName);
+                        const { presetName } = message;
+                        const root = getWorkspaceRoot();
+                        if (!root || !presetName) return;
+
+                        const preset = loadPresets(root).find(p => p.name === presetName);
+                        if (!preset) {
+                            vscode.window.showWarningMessage(`Preset "${presetName}" not found.`);
+                            return;
+                        }
+
+                        // Ensure fileExplorerProvider and its selectFiles method are available
+                        if (!fileExplorerProvider || typeof fileExplorerProvider.selectFiles !== 'function') {
+                             console.error("fileExplorerProvider or selectFiles method is not available.");
+                             vscode.window.showErrorMessage("Error applying preset: File selection provider is not ready.");
+                             return;
+                        }
+
+                        try {
+                            await fileExplorerProvider.selectFiles(preset.files); // Add await if selectFiles is async
+                            console.log(`Applied preset "${presetName}" successfully.`);
+                            // Optionally, notify the webview or refresh parts of it if needed after applying
+                            // this._panel?.webview.postMessage({ command: 'presetApplied', presetName });
+                        } catch (error) {
+                            console.error(`Error applying preset "${presetName}":`, error);
+                            vscode.window.showErrorMessage(`Failed to apply preset "${presetName}": ${error instanceof Error ? error.message : String(error)}`);
+                        }
+                        return;
+                    }
+                    case DELETE_FILE_PRESET: {
+                        console.log('DELETE_FILE_PRESET command received with name:', message.presetName);
+                        const { presetName } = message;
+                        const root = getWorkspaceRoot();
+                        if (!root || !presetName || !this._panel) return;
+
+                        const updatedPresets = loadPresets(root).filter(p => p.name !== presetName);
+                        savePresets(root, updatedPresets);
+                        this._panel.webview.postMessage({ command: UPDATE_FILE_PRESETS, presets: updatedPresets });
+                        return;
+                    }
                 }
             },
             undefined,
