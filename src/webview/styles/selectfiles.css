@@ -530,39 +530,12 @@
   gap: var(--spacing-md);
 }
 
-/* Container for the save controls */
-.preset-save-container {
+/* Container for the preset controls in a row */
+.preset-controls {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-}
-
-/* Container for the load controls */
-.preset-load-container {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  /* Optional: add subtle separator */
-  /* padding-top: var(--spacing-sm); */
-  /* border-top: 1px solid var(--vscode-panel-border); */
-}
-
-/* Input for preset name */
-#preset-name-input {
-  flex-grow: 1;
-  background-color: var(--vscode-input-background);
-  color: var(--vscode-input-foreground);
-  border: 1px solid var(--vscode-input-border, var(--vscode-contrastBorder, transparent));
-  border-radius: var(--border-radius-sm);
-  padding: var(--spacing-xs) var(--spacing-sm);
-  height: calc(1.5em + 2 * var(--spacing-xs) + 2px); /* Match button height */
-  font-size: var(--vscode-font-size);
-  min-width: 150px;
-}
-
-#preset-name-input:focus {
-  outline: 1px solid var(--vscode-focusBorder);
-  outline-offset: -1px;
+  flex-wrap: wrap;
 }
 
 /* Select dropdown */
@@ -575,7 +548,8 @@
   padding: var(--spacing-xs) var(--spacing-sm);
   height: calc(1.5em + 2 * var(--spacing-xs) + 2px); /* Match button height */
   font-size: var(--vscode-font-size);
-  min-width: 150px;
+  min-width: 230px; /* Wide enough for good UX */
+  cursor: pointer; /* Show pointer cursor to indicate it's interactive */
 }
 
 #file-preset-picker:focus {
@@ -583,27 +557,43 @@
   outline-offset: -1px;
 }
 
+#file-preset-picker option {
+  padding: var(--spacing-xs) var(--spacing-sm);
+}
+
+/* Save and Re-apply buttons */
+#save-preset-btn,
+#reapply-preset-btn {
+  white-space: nowrap;
+  min-width: auto;
+}
+
+/* Disabled button styles */
+button[disabled] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* Preset buttons */
 .presets-actions .button .codicon {
   margin-right: var(--spacing-xs);
 }
 
-/* Label styling */
-.preset-load-container label {
-  white-space: nowrap;
-}
-
 /* Media query for smaller screens */
 @media (max-width: 600px) {
-  .preset-save-container,
-  .preset-load-container {
+  .preset-controls {
     flex-wrap: wrap;
   }
   
-  #preset-name-input,
   #file-preset-picker {
     flex-basis: 100%;
     width: 100%;
+    margin-bottom: var(--spacing-sm);
+  }
+  
+  #save-preset-btn,
+  #reapply-preset-btn {
+    flex: 1;
   }
 }
 /* ---------- End Presets Section ---------- */ 

@@ -650,7 +650,7 @@ if (typeof window !== 'undefined') {
                             case 'updateFilePresets':
                                 console.log('[Frontend] Received updateFilePresets message with:', message.presets?.length || 0, 'presets');
                                 if (window.selectFilesTab.handlePresetUpdate) {
-                                    window.selectFilesTab.handlePresetUpdate(message.presets);
+                                    window.selectFilesTab.handlePresetUpdate(message.presets, message.selectPreset);
                                 }
                                 return true;
                             default:
@@ -669,89 +669,104 @@ if (typeof window !== 'undefined') {
                 };
 
                 /* ----------  Preset support  ---------- */
-                const presetNameInput = document.getElementById('preset-name-input');
                 const presetPicker = document.getElementById('file-preset-picker');
                 const savePresetBtn = document.getElementById('save-preset-btn');
-                const applyPresetBtn = document.getElementById('apply-preset-btn');
-                // const delPresetBtn = document.getElementById('delete-preset-btn'); // Removed
+                const reapplyPresetBtn = document.getElementById('reapply-preset-btn');
 
-                if (presetPicker && savePresetBtn && presetNameInput && applyPresetBtn) {
+                if (presetPicker && savePresetBtn && reapplyPresetBtn) {
                     // ask host for presets on load
                     vscode.postMessage({ command: 'requestFilePresets' });
+                    
+                    // Track current selected preset
+                    let currentPresetName = null;
 
                     function populatePresetPicker(presets) {
                         if (!presets) return;
-                        // Create the default option
-                        let options = '<option value="" disabled selected>Select a preset...</option>';
+                        // Create the "No preset selected" option as the first option
+                        let options = '<option value="none">No preset selected</option>';
                         // Add preset options
                         if (presets.length > 0) {
                             options += presets.map(p =>
                                 `<option value="${escapeHtml(p.name)}">${escapeHtml(p.name)}</option>`).join('');
-                            applyPresetBtn.disabled = false;
-                        } else {
-                            // Disable buttons if no presets
-                            applyPresetBtn.disabled = true;
                         }
                         presetPicker.innerHTML = options;
+                        
+                        // Disable re-apply when no preset is selected
+                        reapplyPresetBtn.disabled = true;
                     }
 
+                    // Save button to trigger VSCode's native save dialog
                     savePresetBtn.addEventListener('click', () => {
-                        console.log('[Frontend] Save Preset button clicked');
-                        const name = presetNameInput.value.trim();
-                        
-                        if (!name) {
-                            console.log('[Frontend] Preset name is empty.');
-                            alert('Please enter a name for the preset.');
-                            presetNameInput.focus();
-                            return;
-                        }
-                        
-                        console.log(`[Frontend] Posting saveFilePreset message with name: "${name}"`);
-                        vscode.postMessage({ command: 'saveFilePreset', presetName: name });
-                        // Clear the input after saving
-                        presetNameInput.value = '';
-                    });
-
-                    // Enter key in preset name input triggers save
-                    presetNameInput.addEventListener('keydown', (e) => {
-                        if (e.key === 'Enter') {
-                            savePresetBtn.click();
+                        try {
+                            console.log('[Frontend] Save button clicked');
+                            const selectedPreset = presetPicker.value;
+                            
+                            // Request the extension to show a save dialog
+                            vscode.postMessage({ 
+                                command: 'saveFilePreset', 
+                                currentPreset: selectedPreset !== 'none' ? selectedPreset : null,
+                                useSaveDialog: true
+                            });
+                        } catch (error) {
+                            console.error('[Frontend] Error in save preset button:', error);
                         }
                     });
-
-                    applyPresetBtn.addEventListener('click', () => {
+                    
+                    // Re-apply button to explicitly re-apply current selection
+                    reapplyPresetBtn.addEventListener('click', () => {
                         const name = presetPicker.value;
-                        if (!name) {
-                            alert('Please select a preset to apply.');
-                            return;
+                        if (name && name !== 'none') {
+                            console.log(`[Frontend] Re-applying preset: "${name}"`);
+                            vscode.postMessage({ command: 'applyFilePreset', presetName: name });
                         }
-                        console.log(`[Frontend] Posting applyFilePreset message with name: "${name}"`);
-                        vscode.postMessage({ command: 'applyFilePreset', presetName: name });
                     });
 
-                    // Changed to update selection on change 
+                    // Auto-apply functionality on preset selection
                     presetPicker.addEventListener('change', () => {
                         const name = presetPicker.value;
-                        if (name) {
-                            applyPresetBtn.disabled = false;
-                        } else {
-                            applyPresetBtn.disabled = true;
+                        
+                        // Update re-apply button state
+                        reapplyPresetBtn.disabled = !name || name === 'none';
+                        
+                        // Auto-apply on selection
+                        if (name && name !== 'none') {
+                            currentPresetName = name;
+                            console.log(`[Frontend] Auto-applying preset: "${name}"`);
+                            vscode.postMessage({ command: 'applyFilePreset', presetName: name });
+                        } else if (name === 'none') {
+                            currentPresetName = null;
+                            console.log('[Frontend] "None" selected, clearing selection');
+                            vscode.postMessage({ command: 'deselectAll' });
                         }
                     });
 
                     // Add listener for preset updates from host
                     // This listener needs to be accessible to the global message handler
-                    window.selectFilesTab.handlePresetUpdate = function(presets) {
+                    window.selectFilesTab.handlePresetUpdate = function(presets, selectPreset) {
                         populatePresetPicker(presets);
+                        
+                        // If selectPreset is provided, select that preset in the dropdown
+                        if (selectPreset) {
+                            presetPicker.value = selectPreset;
+                            
+                            // Enable the re-apply button for the selected preset
+                            reapplyPresetBtn.disabled = !selectPreset || selectPreset === 'none';
+                            
+                            // If current selection is not 'none', auto-apply it
+                            if (selectPreset !== 'none') {
+                                console.log(`[Frontend] Auto-applying newly saved preset: "${selectPreset}"`);
+                                vscode.postMessage({ command: 'applyFilePreset', presetName: selectPreset });
+                                currentPresetName = selectPreset;
+                            }
+                        }
                     };
                     
                     console.log('Preset UI elements initialized.');
                 } else {
                     console.error('Preset UI elements not found! Missing:', {
-                      presetNameInput: !presetNameInput,
                       presetPicker: !presetPicker,
                       savePresetBtn: !savePresetBtn,
-                      applyPresetBtn: !applyPresetBtn
+                      reapplyPresetBtn: !reapplyPresetBtn
                     });
                 }
                 /* ---------- End Preset support ---------- */

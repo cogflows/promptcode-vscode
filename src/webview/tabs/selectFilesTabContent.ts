@@ -34,22 +34,18 @@ export function getSelectFilesTabHtml(): string {
     <section class="presets-section">
       <div class="section-title">File Selection Presets</div>
       <div class="presets-actions">
-        <div class="preset-save-container">
-          <input type="text" id="preset-name-input" placeholder="Enter preset name..." />
-          <button id="save-preset-btn" class="button" title="Save current selection as new preset">
-            <span class="codicon codicon-save"></span>
-            Save Current
-          </button>
-        </div>
-        <div class="preset-load-container">
-          <label for="file-preset-picker">Load Preset:</label> 
+        <div class="preset-controls">
           <select id="file-preset-picker">
-            <option value="" disabled selected>Select a preset...</option>
+            <option value="none">No preset selected</option>
             <!-- Options added by JS -->
           </select>
-          <button id="apply-preset-btn" class="button" title="Apply selected preset">
-            <span class="codicon codicon-check"></span>
-            Apply
+          <button id="reapply-preset-btn" class="button" title="Re-apply the selected preset" disabled>
+            <span class="codicon codicon-refresh"></span>
+            Re-apply
+          </button>
+          <button id="save-preset-btn" class="button" title="Save current selection as preset">
+            <span class="codicon codicon-save"></span>
+            Save
           </button>
         </div>
       </div>

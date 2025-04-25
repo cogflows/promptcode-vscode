@@ -354,10 +354,10 @@ export class PromptCodeWebViewProvider {
                         return;
                     }
                     case SAVE_FILE_PRESET: {
-                        console.log('SAVE_FILE_PRESET command received with name:', message.presetName);
-                        const { presetName } = message;
+                        console.log('SAVE_FILE_PRESET command received with options:', message);
+                        const { presetName, currentPreset, useSaveDialog } = message;
                         const root = getWorkspaceRoot();
-                        if (!root || !presetName || !this._panel) return;
+                        if (!root || !this._panel) return;
 
                         // Ensure fileExplorerProvider is available
                         if (!fileExplorerProvider || typeof fileExplorerProvider.getSelectedPaths !== 'function') {
@@ -366,11 +366,95 @@ export class PromptCodeWebViewProvider {
                             return;
                         }
 
+                        // Get correctly resolved relative paths from the provider
+                        const relativePaths = fileExplorerProvider.getSelectedPaths();
+                        if (relativePaths.length === 0) {
+                            vscode.window.showWarningMessage("No files selected. Please select files before saving a preset.");
+                            return;
+                        }
+                        
+                        // Handle cases using native save dialog
+                        if (useSaveDialog) {
+                            (async () => {
+                                try {
+                                    // Prepare preset directory
+                                    const presetsDir = path.join(root, '.promptcode/presets');
+                                    if (!fs.existsSync(presetsDir)) {
+                                        fs.mkdirSync(presetsDir, { recursive: true });
+                                    }
+                                    
+                                    // Set default file name based on current selection or suggested name
+                                    let defaultFileName = 'my-preset.json';
+                                    if (currentPreset) {
+                                        // Use the selected preset name if one is selected
+                                        defaultFileName = currentPreset.replace(/[/\\?%*:|"<>]/g, '-')
+                                            .replace(/\s+/g, '_').toLowerCase() + '.json';
+                                    }
+                                    
+                                    // Create URI for default save location
+                                    const defaultUri = vscode.Uri.file(path.join(presetsDir, defaultFileName));
+                                    
+                                    // Show save dialog
+                                    const saveDialogOptions = {
+                                        defaultUri,
+                                        filters: {
+                                            'JSON Files': ['json']
+                                        },
+                                        title: 'Save File Preset',
+                                        saveLabel: 'Save Preset'
+                                    };
+                                    
+                                    const fileUri = await vscode.window.showSaveDialog(saveDialogOptions);
+                                    if (!fileUri) {
+                                        console.log('User cancelled the save dialog');
+                                        return; // User cancelled
+                                    }
+                                    
+                                    // Extract name from selected path (remove extension and directory)
+                                    const selectedPath = fileUri.fsPath;
+                                    const fileName = path.basename(selectedPath, '.json');
+                                    const presetName = fileName;
+                                    
+                                    // Create preset object
+                                    const newPreset = {
+                                        name: presetName,
+                                        files: relativePaths
+                                    };
+                                    
+                                    // Write to the selected file
+                                    fs.writeFileSync(selectedPath, JSON.stringify(newPreset, null, 2), 'utf8');
+                                    console.log(`Saved preset "${presetName}" to ${selectedPath}`);
+                                    
+                                    // Reload and update UI
+                                    const currentPresets = loadPresets(root);
+                                    if (this._panel) {
+                                        // Update presets list and select the newly saved preset
+                                        this._panel.webview.postMessage({ 
+                                            command: UPDATE_FILE_PRESETS, 
+                                            presets: currentPresets,
+                                            selectPreset: presetName // Tell frontend to select this preset
+                                        });
+                                    }
+                                    
+                                    // Show success message
+                                    vscode.window.showInformationMessage(`Preset "${presetName}" saved successfully.`);
+                                } catch (error) {
+                                    console.error('Error saving preset with dialog:', error);
+                                    vscode.window.showErrorMessage(`Failed to save preset: ${error instanceof Error ? error.message : String(error)}`);
+                                }
+                            })();
+                            return;
+                        }
+                        
+                        // Traditional save without dialog (legacy path)
+                        if (!presetName) {
+                            vscode.window.showErrorMessage("No preset name provided for saving.");
+                            return;
+                        }
+                        
                         const currentPresets = loadPresets(root);
                         const existingPresetIndex = currentPresets.findIndex(p => p.name === presetName);
-
-                        // Get correctly resolved relative paths from the provider
-                        const relativePaths = fileExplorerProvider.getSelectedPaths(); 
+                        
                         console.log(`Saving preset '${presetName}' with ${relativePaths.length} files.`);
 
                         if (existingPresetIndex > -1) {
@@ -383,29 +467,32 @@ export class PromptCodeWebViewProvider {
                             if (overwrite !== 'Overwrite') {
                                 return; // User cancelled
                             }
-                            // Overwrite the existing preset
-                            const updatedPreset = { 
-                                name: presetName, 
-                                files: relativePaths
-                            };
-                            savePreset(root, updatedPreset);
-                            
-                            // Update the in-memory list for the UI
-                            currentPresets[existingPresetIndex] = updatedPreset;
-                            this._panel.webview.postMessage({ command: UPDATE_FILE_PRESETS, presets: currentPresets });
-
-                        } else {
-                            // Add the new preset
-                            const newPreset = { 
-                                name: presetName, 
-                                files: relativePaths
-                            };
-                            savePreset(root, newPreset);
-                            
-                            // Update the in-memory list for the UI
-                            currentPresets.push(newPreset);
-                            this._panel.webview.postMessage({ command: UPDATE_FILE_PRESETS, presets: currentPresets });
                         }
+                        
+                        // Save the preset (either new or overwrite)
+                        const updatedPreset = { 
+                            name: presetName, 
+                            files: relativePaths
+                        };
+                        savePreset(root, updatedPreset);
+                        
+                        // Update UI with the new list of presets
+                        if (existingPresetIndex > -1) {
+                            // Replace existing preset
+                            currentPresets[existingPresetIndex] = updatedPreset;
+                        } else {
+                            // Add new preset
+                            currentPresets.push(updatedPreset);
+                        }
+                        
+                        this._panel.webview.postMessage({ 
+                            command: UPDATE_FILE_PRESETS, 
+                            presets: currentPresets,
+                            selectPreset: presetName // Tell frontend to select this preset
+                        });
+                        
+                        // Confirm the save
+                        vscode.window.showInformationMessage(`Preset "${presetName}" saved successfully.`);
                         return;
                     }
                     case APPLY_FILE_PRESET: {
