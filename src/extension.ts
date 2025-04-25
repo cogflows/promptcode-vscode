@@ -14,7 +14,21 @@ import { IgnoreHelper } from './ignoreHelper';
 import * as os from 'os';
 import { DEFAULT_IGNORE_PATTERNS } from './constants';
 import { TelemetryService } from './telemetry';
-import { FileListProcessor } from './fileListProcessor'; // --- ADDED ---
+import { FileListProcessor } from './fileListProcessor';
+
+let lastGeneratedPrompt: string | null = null; // Variable to store the last generated prompt
+let lastGeneratedTokenCount: number | null = null;
+let webviewProvider: PromptCodeWebViewProvider | null = null;
+let lastSaveUri: vscode.Uri | undefined = undefined; // Store the last used save URI
+
+// Define or import the SelectedFile type (adjust properties if needed)
+type SelectedFile = {
+	path: string; // relative path
+	absolutePath: string;
+	tokenCount: number;
+	workspaceFolderRootPath: string;
+	workspaceFolderName: string;
+};
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -639,42 +653,64 @@ export function activate(context: vscode.ExtensionContext) {
 
 			console.log(`Found ${selectedFilePaths.length} selected files to show in webview`);
 
-			// Calculate token counts for each file using cache and add workspace info
-			const selectedFilesWithTokens = await Promise.all(
-				selectedFilePaths.map(async (absolutePath) => {
-					// Find which workspace folder this file belongs to
-					let workspaceFolderName = '';
-					let workspaceFolderRootPath = '';
-					let relativePath = absolutePath;
+			// Get file contents and token counts
+			const selectedFilesPromises = selectedFilePaths.map(async (absolutePath): Promise<SelectedFile> => { // Ensure the map returns a Promise<SelectedFile>
+				// Find which workspace folder this file belongs to
+				let workspaceFolderName: string | undefined = undefined;
+				let workspaceFolderRootPath: string | undefined = undefined;
+				let relativePath = absolutePath; // Default to absolute if not in workspace
 
-                    const folder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(absolutePath));
-                    if (folder) {
-                        workspaceFolderName = folder.name;
-                        workspaceFolderRootPath = folder.uri.fsPath;
-                        relativePath = path.relative(workspaceFolderRootPath, absolutePath);
-                    }
+				const folder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(absolutePath));
+				if (folder) {
+					workspaceFolderName = folder.name;
+					workspaceFolderRootPath = folder.uri.fsPath;
+					relativePath = path.relative(workspaceFolderRootPath, absolutePath);
+				}
 
+				// If still undefined, try to find the *closest* workspace folder if multiple exist
+				if (!workspaceFolderRootPath && vscode.workspace.workspaceFolders) {
+					let bestMatch: vscode.WorkspaceFolder | undefined;
+					let maxOverlap = -1;
 
-					const tokenCount = await countTokensWithCache(absolutePath);
+					vscode.workspace.workspaceFolders.forEach(wsFolder => {
+						if (absolutePath.startsWith(wsFolder.uri.fsPath)) {
+							const overlap = wsFolder.uri.fsPath.length;
+							if (overlap > maxOverlap) {
+								maxOverlap = overlap;
+								bestMatch = wsFolder;
+							}
+						}
+					});
 
-					return {
-						path: relativePath,
-						absolutePath,
-						workspaceFolderName,
-						workspaceFolderRootPath,
-						tokenCount
-					};
-				})
-			);
+					if (bestMatch) {
+						workspaceFolderName = bestMatch.name;
+						workspaceFolderRootPath = bestMatch.uri.fsPath;
+						relativePath = path.relative(workspaceFolderRootPath, absolutePath);
+					}
+				}
+
+				const tokenCount = await countTokensWithCache(absolutePath);
+
+				// Return an object matching the SelectedFile type
+				return {
+					path: relativePath,
+					absolutePath,
+					tokenCount,
+					workspaceFolderName: workspaceFolderName || 'Unknown Workspace', // Provide default string
+					workspaceFolderRootPath: workspaceFolderRootPath || '', // Provide default string
+				};
+			});
+
+			const selectedFiles = await Promise.all(selectedFilesPromises);
 
 			// Calculate total tokens
-			const totalTokens = selectedFilesWithTokens.reduce((sum, file) => sum + file.tokenCount, 0);
+			const totalTokens = selectedFiles.reduce((sum, file) => sum + file.tokenCount, 0);
 
 			// Send the selected files with token counts back to the webview
 			if (promptCodeProvider._panel) {
 				promptCodeProvider._panel.webview.postMessage({
 					command: 'updateSelectedFiles',
-					selectedFiles: selectedFilesWithTokens,
+					selectedFiles: selectedFiles,
 					totalTokens: totalTokens
 				});
 			}
@@ -1409,13 +1445,7 @@ async function generatePrompt(
 }
 
 // Helper function to get selected files with content
-async function getSelectedFilesWithContent(): Promise<{
-	path: string;
-	tokenCount: number;
-	workspaceFolderRootPath?: string;
-	absolutePath?: string;
-	workspaceFolderName?: string;
-}[]> {
+async function getSelectedFilesWithContent(): Promise<SelectedFile[]> {
 	if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
 		// Allow returning empty if no workspace, might still generate prompt with only instructions
         // throw new Error('No workspace folder is open');
@@ -1438,32 +1468,95 @@ async function getSelectedFilesWithContent(): Promise<{
 		});
 
 	// Get file contents and token counts
-	const selectedFiles = await Promise.all(
-		selectedFilePaths.map(async (absolutePath) => {
-			// Find which workspace folder this file belongs to
-			let workspaceFolderName = '';
-			let workspaceFolderRootPath = '';
-			let relativePath = absolutePath; // Default to absolute if not in workspace
+	const selectedFilesPromises = selectedFilePaths.map(async (absolutePath): Promise<SelectedFile> => { // Ensure the map returns a Promise<SelectedFile>
+		// Find which workspace folder this file belongs to
+		let workspaceFolderName: string | undefined = undefined;
+		let workspaceFolderRootPath: string | undefined = undefined;
+		let relativePath = absolutePath; // Default to absolute if not in workspace
 
-            const folder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(absolutePath));
-            if (folder) {
-                workspaceFolderName = folder.name;
-                workspaceFolderRootPath = folder.uri.fsPath;
-                relativePath = path.relative(workspaceFolderRootPath, absolutePath);
-            }
+		const folder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(absolutePath));
+		if (folder) {
+			workspaceFolderName = folder.name;
+			workspaceFolderRootPath = folder.uri.fsPath;
+			relativePath = path.relative(workspaceFolderRootPath, absolutePath);
+		}
 
+		// If still undefined, try to find the *closest* workspace folder if multiple exist
+		if (!workspaceFolderRootPath && vscode.workspace.workspaceFolders) {
+			let bestMatch: vscode.WorkspaceFolder | undefined;
+			let maxOverlap = -1;
 
-			const tokenCount = await countTokensWithCache(absolutePath);
+			vscode.workspace.workspaceFolders.forEach(wsFolder => {
+				if (absolutePath.startsWith(wsFolder.uri.fsPath)) {
+					const overlap = wsFolder.uri.fsPath.length;
+					if (overlap > maxOverlap) {
+						maxOverlap = overlap;
+						bestMatch = wsFolder;
+					}
+				}
+			});
 
-			return {
-				path: relativePath, // This is the relative path
-				absolutePath,
-				workspaceFolderName,
-				workspaceFolderRootPath,
-				tokenCount
-			};
-		})
-	);
+			if (bestMatch) {
+				workspaceFolderName = bestMatch.name;
+				workspaceFolderRootPath = bestMatch.uri.fsPath;
+				relativePath = path.relative(workspaceFolderRootPath, absolutePath);
+			}
+		}
+
+		const tokenCount = await countTokensWithCache(absolutePath);
+
+		// Return an object matching the SelectedFile type
+		return {
+			path: relativePath,
+			absolutePath,
+			tokenCount,
+			workspaceFolderName: workspaceFolderName || 'Unknown Workspace', // Provide default string
+			workspaceFolderRootPath: workspaceFolderRootPath || '', // Provide default string
+		};
+	});
+
+	const selectedFiles = await Promise.all(selectedFilesPromises);
 
 	return selectedFiles;
 }
+
+// --- Save to file feature --- (Modified)
+/**
+ * Saves the provided prompt text to a file chosen by the user,
+ * remembering the last used location.
+ * @param prompt The string content of the prompt to save.
+ */
+export async function savePromptToFile(prompt: string) {
+    // Determine the default URI: use the last saved one, or the default filename
+    const defaultUri = lastSaveUri instanceof vscode.Uri 
+        ? lastSaveUri 
+        : vscode.Uri.file('promptcode-output.txt');
+
+    const uri = await vscode.window.showSaveDialog({
+        title: 'Save generated prompt',
+        defaultUri: defaultUri,
+        filters: { Text: ['txt'], Markdown: ['md'] }
+    });
+
+    if (!uri) { 
+        console.log('User cancelled save dialog.');
+        return; // User cancelled
+    }
+
+    try {
+        await vscode.workspace.fs.writeFile(uri, Buffer.from(prompt, 'utf8'));
+        vscode.window.showInformationMessage(`Prompt saved to ${uri.fsPath}`);
+        
+        // Remember this URI for the next time
+        lastSaveUri = uri; 
+
+        // Optional: Add telemetry here
+        // ... telemetry code ...
+    } catch (error: any) {
+        console.error(`Error writing file ${uri.fsPath}:`, error);
+        vscode.window.showErrorMessage(`Failed to save prompt to file: ${error.message || 'Unknown error'}`);
+        // Optional: Add error telemetry
+        // ... error telemetry code ...
+    }
+}
+// --- End Save to file feature ---

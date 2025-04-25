@@ -142,4 +142,10 @@ htmlcov/
 tmp/
 temp/
 .temp/
-`; 
+`;
+
+export const OPEN_PROMPT_COMMAND = 'openPrompt';
+
+// --- Save to file feature ---
+export const SAVE_PROMPT_TO_FILE = 'savePromptToFile';
+// --- End Save to file feature --- 

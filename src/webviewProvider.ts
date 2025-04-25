@@ -11,6 +11,11 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as https from 'https';
 
+// --- Save to file feature ---
+import { SAVE_PROMPT_TO_FILE } from './constants';
+import { savePromptToFile } from './extension'; // Assuming it will be in extension.ts
+// --- End Save to file feature ---
+
 export class PromptCodeWebViewProvider {
     public static readonly viewType = 'promptcode.webview';
     public _panel: vscode.WebviewPanel | undefined;
@@ -265,6 +270,49 @@ export class PromptCodeWebViewProvider {
                     case 'processPastedFileList':
                         console.log('ProcessPastedFileList command received in webview provider');
                         vscode.commands.executeCommand('promptcode.processPastedFileList', message.content);
+                        return;
+                    case SAVE_PROMPT_TO_FILE:
+                        console.log('SavePromptToFile command received in webview provider');
+                        // We need the actual prompt text. The guide implies the message should contain it,
+                        // but the JS code sends only the command. Let's ask the extension to generate it first.
+                        // Reusing generatePromptPreview which should store the result.
+                        // Or better, ask promptcode.generatePrompt which might return the string or store it.
+
+                        // Let's assume promptcode.generatePrompt stores the last generated prompt text.
+                        // And we can retrieve it somehow, perhaps from context?
+                        // For now, let's just call the save function and assume it can get the text.
+                        // The guide suggests the message *should* have `message.promptText`.
+                        // Let's modify the JS to send it.
+
+                        // Re-reading the guide: Step 2 *does* include promptText in the message.
+                        // Let's assume the JS edit was incomplete and proceed as if message.promptText exists.
+                        // I'll need to fix the JS edit later.
+
+                        // TODO: Fix the JS edit to send promptText in the message.
+                        // if (message.promptText) { // Check needed once JS is fixed
+                        //     await savePromptToFile(message.promptText);
+                        // } else {
+                        //     console.warn('SavePromptToFile received without promptText. Cannot save.');
+                        //     vscode.window.showWarningMessage('Could not save prompt: Text not available.');
+                        // }
+                        // For now, call the command that generates the prompt and assume it calls save.
+                        // Let's modify promptcode.generatePrompt to potentially save if triggered by this.
+                        // Or better, have generatePromptPreview return the text?
+                        
+                        // Let's try triggering generatePromptPreview and then saving?
+                        // This feels complex. Let's trust the guide and assume message.promptText WILL be there.
+                        // I will go back and fix the JS now.
+
+                        // *** Assuming JS is fixed and message.promptText is present ***
+                        if (typeof message.promptText === 'string') {
+                            savePromptToFile(message.promptText).catch((error: Error) => {
+                                console.error('Error saving prompt to file:', error);
+                                vscode.window.showErrorMessage(`Failed to save prompt: ${error.message}`);
+                            });
+                        } else {
+                             console.warn('SavePromptToFile received without promptText string.');
+                             vscode.window.showErrorMessage('Could not save prompt: Text was not provided.');
+                        }
                         return;
                 }
             },

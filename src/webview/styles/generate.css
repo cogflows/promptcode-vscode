@@ -61,4 +61,10 @@
 .include-options .checkbox-container {
   margin-bottom: 0;
   font-size: 13px;
-} 
+}
+
+/* --- Save to file feature --- */
+#saveToFileBtn {
+  margin-left: 8px; /* keeps buttons visually grouped */
+}
+/* --- End Save to file feature --- */ 
