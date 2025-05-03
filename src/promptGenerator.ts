@@ -5,6 +5,8 @@ import { checkedItems } from './fileExplorer';
 import { countTokensWithCache } from './tokenCounter';
 import { countTokens } from 'gpt-tokenizer/encoding/o200k_base';
 import { fetchResourceContent } from './promptcodeDataFetcher';
+import { buildTreeFromSelection } from './utils/buildTreeFromSelection';
+import type { SelectedFile } from './types/selectedFile';
 
 // --- LOGGING HELPER ---
 function log(message: string, data?: any) {
@@ -13,15 +15,6 @@ function log(message: string, data?: any) {
 // ----------------------
 
 // Define interfaces for clarity
-interface SelectedFile {
-    path: string;
-    absolutePath: string;
-    workspaceFolderName: string;
-    workspaceFolderRootPath: string;
-    tokenCount: number;
-    content?: string; // Content will be added later if needed
-}
-
 interface IncludeOptions {
     files: boolean;
     instructions: boolean;
@@ -284,19 +277,14 @@ export async function generatePrompt(
     // 3. Generate File Map (If included)
     if (includeOptions.files) {
         log('Generating file map...');
-        if (typeof generateDirectoryTree === 'function') { 
-            try {
-                 finalPromptText += '<file_map>\n';
-                 finalPromptText += await generateDirectoryTree([...workspaceFolders]); 
-                 finalPromptText += '</file_map>\n\n';
-                 log('File map generated.');
-            } catch (error) {
-                 log('Error generating file map:', error);
-                 finalPromptText += '<file_map>\n<!-- Error generating file map -->\n</file_map>\n\n';
-            }
-        } else {
-             log('generateDirectoryTree function not found. Skipping file map.');
-             finalPromptText += '<file_map>\n<!-- File map generation unavailable -->\n</file_map>\n\n';
+        try {
+            finalPromptText += '<file_map>\n';
+            finalPromptText += buildTreeFromSelection(selectedFiles);
+            finalPromptText += '</file_map>\n\n';
+            log('File map generated from selection.');
+        } catch (error) {
+            log('Error generating file map from selection:', error);
+            finalPromptText += '<file_map>\n<!-- Error generating file map from selection -->\n</file_map>\n\n';
         }
     } else {
          log('File map not included.');
@@ -338,132 +326,6 @@ export async function generatePrompt(
     
     log('--- Finished generatePrompt ---');
     return finalPromptText;
-}
-
-// Generate a directory tree representation for the prompt
-export async function generateDirectoryTree(workspaceFolders: vscode.WorkspaceFolder[]): Promise<string> {
-  let result = '';
-
-  for (const folder of workspaceFolders) {
-    const rootPath = folder.uri.fsPath;
-    const rootName = folder.name;
-
-    result += `# Workspace: ${rootName}\n`;
-
-    // Helper function to check if a directory or its children contain selected files
-    const hasSelectedFiles = async (dirPath: string): Promise<boolean> => {
-      // Use a Set for efficient checking of checked items
-      const checkedPathsSet = new Set(Array.from(checkedItems.keys()));
-
-      // Recursive helper function
-      const checkRecursively = async (currentPath: string): Promise<boolean> => {
-        // Check if the current path itself is selected
-        if (checkedPathsSet.has(currentPath)) {
-          return true;
-        }
-
-        try {
-          const stats = await fs.promises.stat(currentPath);
-          if (!stats.isDirectory()) {
-            return false; // Not a directory, cannot contain selected children
-          }
-
-          const entries = await fs.promises.readdir(currentPath, { withFileTypes: true });
-
-          for (const entry of entries) {
-            // Skip common ignored directories/files
-            if (entry.name === 'node_modules' || entry.name === '.git') {
-              continue;
-            }
-
-            const entryPath = path.join(currentPath, entry.name);
-
-            if (entry.isDirectory()) {
-              // Recursively check subdirectories
-              if (await checkRecursively(entryPath)) {
-                return true;
-              }
-            } else {
-              // Check if this file is selected
-              if (checkedPathsSet.has(entryPath)) {
-                return true;
-              }
-            }
-          }
-        } catch (error) {
-          // Log error but continue checking other paths
-          log(`Error checking selected files in ${currentPath}`, error);
-        }
-        return false;
-      };
-
-      return await checkRecursively(dirPath);
-    };
-
-    // Build the tree recursively for this workspace
-    const buildTree = async (dirPath: string, prefix: string = ''): Promise<void> => {
-      try {
-        // Get all entries in this directory
-        const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
-
-        // Sort entries (directories first, then files)
-        const sortedEntries = entries.sort((a, b) => {
-          if (a.isDirectory() && !b.isDirectory()) return -1;
-          if (!a.isDirectory() && b.isDirectory()) return 1;
-          return a.name.localeCompare(b.name);
-        });
-
-        // Process each entry
-        for (let i = 0; i < sortedEntries.length; i++) {
-          const entry = sortedEntries[i];
-          const entryPath = path.join(dirPath, entry.name);
-
-          // Skip common ignored directories/files
-          if (entry.name === 'node_modules' || entry.name === '.git') {
-            continue;
-          }
-
-          // Check if this entry is the last one at this level
-          const isLast = i === sortedEntries.length - 1;
-
-          // Determine the branch character
-          const branchChar = isLast ? '└──' : '├──';
-
-          // Determine the prefix for the next level
-          const nextPrefix = prefix + (isLast ? '    ' : '│   ');
-
-          if (entry.isDirectory()) {
-            // Check if this directory or its children contain any selected files before including it
-            // Also ensure the directory itself should be processed (not explicitly ignored)
-            if (await hasSelectedFiles(entryPath)) {
-              // Add directory entry
-              result += `${prefix}${branchChar} ${entry.name}/\n`;
-              // Recursively process subdirectory
-              await buildTree(entryPath, nextPrefix);
-            }
-          } else {
-            // Check if this file is selected
-            if (checkedItems.get(entryPath)) {
-                // Get the relative path from the specific workspace root for display
-                const relativePath = path.relative(rootPath, entryPath);
-                // Add file entry
-                result += `${prefix}${branchChar} ${entry.name} (${relativePath})\n`;
-            }
-          }
-        }
-      } catch (error) {
-        log(`Error building tree for ${dirPath}`, error);
-      }
-    };
-
-    // Start building the tree from the workspace root
-    await buildTree(rootPath);
-
-    // Add a separator between workspaces
-    result += '\n';
-  }
-
-  return result.trimEnd(); // Trim trailing newline from the last workspace
 }
 
 export async function copyToClipboard(text: string): Promise<void> {

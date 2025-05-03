@@ -15,6 +15,8 @@ import * as os from 'os';
 import { DEFAULT_IGNORE_PATTERNS } from './constants';
 import { TelemetryService } from './telemetry';
 import { FileListProcessor } from './fileListProcessor';
+// Import the moved type
+import type { SelectedFile } from './types/selectedFile';
 
 let lastGeneratedPrompt: string | null = null; // Variable to store the last generated prompt
 
@@ -34,6 +36,7 @@ let webviewProvider: PromptCodeWebViewProvider | null = null;
 let lastSaveUri: vscode.Uri | undefined = undefined; // Store the last used save URI
 
 // Define or import the SelectedFile type (adjust properties if needed)
+/*
 type SelectedFile = {
 	path: string; // relative path
 	absolutePath: string;
@@ -41,6 +44,7 @@ type SelectedFile = {
 	workspaceFolderRootPath: string;
 	workspaceFolderName: string;
 };
+*/
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -205,7 +209,7 @@ export function activate(context: vscode.ExtensionContext) {
 					throw new Error('Invalid includeOptions found. Please visit the Generate Prompt tab first to set your preferences.');
 				}
 
-				const promptText = await generatePromptFromGenerator(selectedFiles, instructions, savedOptions);
+				const promptText = await generatePrompt(selectedFiles, instructions, savedOptions);
 				const executionTime = Date.now() - startTime;
 
 				// Create a new document to show the prompt
@@ -267,7 +271,7 @@ export function activate(context: vscode.ExtensionContext) {
 			context.workspaceState.update('promptcode.includeOptions', includeOptions);
 
 			// Generate preview with options
-			const promptText = await generatePromptFromGenerator(selectedFiles, instructions, includeOptions);
+			const promptText = await generatePrompt(selectedFiles, instructions, includeOptions);
 
 			// Cache the generated prompt
 			lastGeneratedPrompt = promptText;
@@ -322,7 +326,7 @@ export function activate(context: vscode.ExtensionContext) {
 					throw new Error('Invalid includeOptions found. Please visit the Generate Prompt tab first to set your preferences.');
 				}
 
-				const promptText = await generatePromptFromGenerator(selectedFiles, instructions, savedOptions);
+				const promptText = await generatePrompt(selectedFiles, instructions, savedOptions);
 				const executionTime = Date.now() - startTime;
 
 				// Copy to clipboard directly
