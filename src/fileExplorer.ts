@@ -250,6 +250,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
 
   // Set the search term and refresh the tree
   async setSearchTerm(term: string): Promise<void> {
+    console.log(`[Debug] setSearchTerm called with: "${term}"`); // DEBUG LOG
     console.log(`FileExplorer: Setting search term to "${term}"`);
 
     const previousTerm = this.searchTerm;
@@ -260,6 +261,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
       await this.rebuildSearchPaths(); // Wait for this to complete
 
       // Then refresh the tree to show matching items
+      console.log(`[Debug] setSearchTerm: Refreshing tree after search.`); // DEBUG LOG
       this.refresh();
 
       // After refreshing, expand all matching directories
@@ -276,6 +278,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
       this.includedPaths.clear();
 
       // Full refresh when clearing search
+      console.log(`[Debug] setSearchTerm: Refreshing tree after clearing search.`); // DEBUG LOG
       this.refresh();
     }
   }
@@ -309,142 +312,154 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
 
   // First stage of search: find all matches and build path inclusion set
   private async rebuildSearchPaths(): Promise<void> {
-    console.log(`FileExplorer: Rebuilding search paths for "${this.searchTerm}"`);
-    this.includedPaths.clear();
+    console.log(`[Debug] rebuildSearchPaths START (New Logic) for term: "${this.searchTerm}"`);
+    this.includedPaths.clear(); // Clear the final set
+    const directMatches = new Set<string>(); // Set for Pass 1 results
 
     if (!this.searchTerm.trim()) {
-      return; // No search term, no filtering
+      console.log(`[Debug] rebuildSearchPaths: Search term is empty. No filtering needed.`);
+      // No need to refresh here, getChildren will handle showing everything
+      return;
     }
 
-    // Function to collect all matches in a directory
-    const findMatchesInDirectory = async (dirPath: string): Promise<string[]> => {
-      const matches: string[] = [];
-      // Attempt to convert glob pattern to regex
-      const globRegex = this.globToRegex(this.searchTerm);
-      const searchTermLower = this.searchTerm.toLowerCase();
+    const normalizedSearchTerm = this.searchTerm.trim().toLowerCase();
+    const globRegex = this.globToRegex(normalizedSearchTerm);
+    console.log(`[Debug] rebuildSearchPaths: Normalized term: "${normalizedSearchTerm}", Glob regex:`, globRegex);
 
+    // --- PASS 1: Find Direct Matches (by name) --- 
+    console.log("[Debug] rebuildSearchPaths: Starting Pass 1 (Finding direct matches by name)");
+    const findDirectMatchesRecursive = async (dirPath: string): Promise<void> => {
       try {
         const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
 
         for (const entry of entries) {
-          // Skip ignored files
           const fullPath = path.join(dirPath, entry.name);
+          const entryName = entry.name; // Use original name for glob matching
+          const entryNameLower = entryName.toLowerCase();
+
+          // Skip ignored files/directories
           if (this.ignoreHelper && this.ignoreHelper.shouldIgnore(fullPath)) {
             continue;
           }
 
-          // Check if this entry matches
+          // Check if entry name matches
           let isMatch = false;
           if (globRegex) {
-            isMatch = globRegex.test(entry.name); // Use glob regex if available
+            isMatch = globRegex.test(entryName);
           } else {
-            isMatch = entry.name.toLowerCase().includes(searchTermLower); // Fallback to substring search
+            isMatch = entryNameLower.includes(normalizedSearchTerm);
           }
-          
+
           if (isMatch) {
-            matches.push(fullPath);
+            directMatches.add(fullPath);
           }
 
           // Recurse into directories
           if (entry.isDirectory()) {
-            const subMatches = await findMatchesInDirectory(fullPath);
-            matches.push(...subMatches);
+            await findDirectMatchesRecursive(fullPath);
           }
         }
       } catch (error) {
         // Ignore errors like permission denied
         if (error instanceof Error && (error as NodeJS.ErrnoException).code !== 'EACCES' && (error as NodeJS.ErrnoException).code !== 'ENOENT') {
-            console.error(`Error finding matches in ${dirPath}:`, error);
+          console.error(`Error during Pass 1 scan in ${dirPath}:`, error);
         }
       }
-
-      return matches;
     };
 
-    // Find all matches in all workspace roots
-    const allMatches: string[] = [];
+    // Run Pass 1 for each workspace root
     for (const rootPath of this.workspaceRoots.values()) {
-      const matches = await findMatchesInDirectory(rootPath);
-      allMatches.push(...matches);
+      await findDirectMatchesRecursive(rootPath);
     }
 
-    console.log(`FileExplorer: Found ${allMatches.length} direct matches`);
+    // Print sorted direct matches
+    const sortedDirectMatches = Array.from(directMatches).sort();
+    console.log(`[Debug] rebuildSearchPaths: Pass 1 Results (Direct Matches):`, sortedDirectMatches);
 
-    // Add all matches to included paths
-    for (const matchPath of allMatches) {
-      this.includedPaths.add(matchPath);
+    // If no direct matches found, no need for Pass 2
+    if (directMatches.size === 0) {
+        console.log("[Debug] rebuildSearchPaths: No direct matches found, skipping Pass 2.");
+        // includedPaths remains empty, so refresh will show nothing
+        return;
+    }
 
-      // Add all ancestors
+    // --- PASS 2: Add Ancestors and Descendants --- 
+    console.log("[Debug] rebuildSearchPaths: Starting Pass 2 (Adding ancestors and descendants)");
+    // Initialize final set with direct matches
+    this.includedPaths = new Set(directMatches);
+
+    // Helper function to add all descendants recursively
+    const addDescendantsRecursive = async (dirPath: string): Promise<void> => {
+      try {
+        const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
+        for (const entry of entries) {
+          const fullPath = path.join(dirPath, entry.name);
+          // Skip ignored items
+          if (this.ignoreHelper && this.ignoreHelper.shouldIgnore(fullPath)) {
+            continue;
+          }
+          // Add the descendant
+          this.includedPaths.add(fullPath);
+          // Recurse if it's a directory
+          if (entry.isDirectory()) {
+            await addDescendantsRecursive(fullPath);
+          }
+        }
+      } catch (error) {
+         // Ignore errors like permission denied
+        if (error instanceof Error && (error as NodeJS.ErrnoException).code !== 'EACCES' && (error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          console.error(`Error adding descendants for ${dirPath}:`, error);
+        }
+      }
+    };
+
+    // Process each direct match for Pass 2
+    for (const matchPath of directMatches) {
+      // 2a: Add Ancestors
       let currentPath = matchPath;
-      while (currentPath !== path.dirname(currentPath)) { // Loop up to the root
-          const parentPath = path.dirname(currentPath);
-          if (parentPath === currentPath) break; // Stop at filesystem root
-          
-          // Check if parent is a workspace root before adding
-          let isWorkspaceRoot = false;
-          for(const root of this.workspaceRoots.values()) {
-              if(parentPath === root) {
-                  isWorkspaceRoot = true;
-                  break;
-              }
-          }
-          
-          this.includedPaths.add(parentPath); // Add parent path
-          
-          if(isWorkspaceRoot) {
-              break; // Stop if parent is a workspace root
-          }
-          currentPath = parentPath; // Move to parent
-      }
-      
-      // --- ADDED: Ensure the containing workspace root itself is included ---
-      const containingWorkspaceRoot = [...this.workspaceRoots.values()].find(root => matchPath.startsWith(root + path.sep));
-      if (containingWorkspaceRoot) {
-          this.includedPaths.add(containingWorkspaceRoot);
-      }
-      // --- END ADDED ---
+      while (currentPath !== path.dirname(currentPath)) { // Loop up towards the root
+        const parentPath = path.dirname(currentPath);
+        if (parentPath === currentPath) break; // Stop at filesystem root
 
-      // For directory matches, add all descendants (will be handled later during tree traversal)
+        this.includedPaths.add(parentPath); // Add ancestor
+
+        // Stop if we hit a workspace root
+        const isWorkspaceRoot = Array.from(this.workspaceRoots.values()).some(root => parentPath === root);
+        if (isWorkspaceRoot) {
+          break;
+        }
+        currentPath = parentPath;
+      }
+
+      // 2b: Add Descendants (if it's a directory)
       try {
         const stats = await fs.promises.stat(matchPath);
         if (stats.isDirectory()) {
-          // Mark this as a directory match to include all its children
-          this.includedPaths.add(`${matchPath}:DIR_MATCH`);
+          await addDescendantsRecursive(matchPath);
         }
       } catch (error) {
-        // Ignore errors (file might have been deleted)
+        // Ignore errors if item was deleted between passes
+         if (error instanceof Error && (error as NodeJS.ErrnoException).code !== 'ENOENT') {
+             console.error(`Error stating direct match ${matchPath} for descendant check:`, error);
+         }
       }
     }
 
-    console.log(`FileExplorer: Built inclusion set with ${this.includedPaths.size} paths`);
+    console.log(`[Debug] rebuildSearchPaths: Pass 2 Complete. Final includedPaths size: ${this.includedPaths.size}`);
+    // console.log(`[Debug] rebuildSearchPaths: Final includedPaths:`, Array.from(this.includedPaths).sort()); // Optional: Log full final set
   }
 
   // Check if an item should be included in search results based on the inclusion set
   private shouldIncludeInSearch(fullPath: string, isDirectory: boolean): boolean {
-    // No search term, include everything
+    // If no search term is active, include everything
     if (!this.searchTerm.trim()) {
       return true;
     }
 
-    // Always include the item if its path is directly in the inclusion set
-    if (this.includedPaths.has(fullPath)) {
-      return true;
-    }
-
-    // Check if any parent directory is a matched directory
-    // If so, include all its children
-    let currentPath = path.dirname(fullPath);
-    while (currentPath !== path.dirname(currentPath) && this.workspaceRoots.has(vscode.Uri.file(currentPath).toString())) {
-      if (this.includedPaths.has(`${currentPath}:DIR_MATCH`)) {
-        return true;
-      }
-      const parentPath = path.dirname(currentPath);
-      if (parentPath === currentPath) break;
-      currentPath = parentPath;
-    }
-
-
-    return false;
+    // Otherwise, include only if the path exists in the final includedPaths set
+    const include = this.includedPaths.has(fullPath);
+    console.log(`[Debug] shouldIncludeInSearch: Checking "${fullPath}". Included: ${include}`); // Simplified log
+    return include;
   }
 
   // Get the current search term
@@ -668,6 +683,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
   }
 
   private async processDirectoryEntries(directoryPath: string, entries: fs.Dirent[]): Promise<FileItem[]> {
+    console.log(`[Debug] processDirectoryEntries: Processing "${directoryPath}"`); // DEBUG LOG
     // Filter entries using ignore helper
     let filteredEntries = entries;
 
@@ -705,11 +721,15 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
 
     // Apply search filtering
     if (this.searchTerm.trim()) {
+      console.log(`[Debug] processDirectoryEntries: Applying search filter for "${directoryPath}"`); // DEBUG LOG
       // Check if we should include this directory's children based on the inclusion set
       const matchingEntries = filteredEntries.filter(entry => {
           const fullPath = path.join(directoryPath, entry.name);
-          return this.shouldIncludeInSearch(fullPath, entry.isDirectory());
+          const include = this.shouldIncludeInSearch(fullPath, entry.isDirectory());
+          console.log(`[Debug] processDirectoryEntries:  - Filter check for "${entry.name}": ${include}`); // DEBUG LOG
+          return include;
       });
+      console.log(`[Debug] processDirectoryEntries:  - Found ${matchingEntries.length} matching entries in "${directoryPath}"`); // DEBUG LOG
 
       return matchingEntries.map(entry => {
         const fullPath = path.join(directoryPath, entry.name);
@@ -733,6 +753,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
 
 
     // No search term, return all filtered entries
+    console.log(`[Debug] processDirectoryEntries: No search term, returning ${filteredEntries.length} entries for "${directoryPath}"`); // DEBUG LOG
     return filteredEntries.map(entry => {
       const fullPath = path.join(directoryPath, entry.name);
       const fileItem = this.createFileItem(
