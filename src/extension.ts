@@ -825,6 +825,11 @@ export function activate(context: vscode.ExtensionContext) {
                 }
 			}
 
+			// Convert empty path or ROOT_DIR_KEY to '.' for root dir
+			if (dirPath === '' || dirPath === '__ROOT__') {
+				dirPath = '.';
+			}
+
 			// Get all checked items
 			const checkedFilePaths = Array.from(checkedItems.entries())
 				.filter(([_, isChecked]) => isChecked)

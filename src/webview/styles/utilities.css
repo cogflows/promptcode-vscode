@@ -96,4 +96,10 @@ svg {
   font-family: codicon;
   font-size: 16px;
   line-height: 1;
+}
+
+.directory-remove-button svg,
+.trash-btn svg,
+.trash-btn i {
+  vertical-align: middle;
 } 

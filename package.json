@@ -3,7 +3,7 @@
   "name": "promptcode",
   "displayName": "promptcode",
   "description": "Generate prompt for LLM from your code",
-  "version": "0.2.39",
+  "version": "0.2.40",
   "license": "SEE LICENSE IN LICENSE",
   "repository": {
     "type": "git",
@@ -169,6 +169,7 @@
     "build:dev": "node ./scripts/build.js"
   },
   "devDependencies": {
+    "@playwright/test": "^1.52.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "20.x",
     "@types/vscode": "^1.96.0",
@@ -184,6 +185,8 @@
     "typescript": "^5.7.3"
   },
   "dependencies": {
-    "@vscode/extension-telemetry": "^0.9.8"
+    "@types/uuid": "^10.0.0",
+    "@vscode/extension-telemetry": "^0.9.8",
+    "uuid": "^11.1.0"
   }
 }

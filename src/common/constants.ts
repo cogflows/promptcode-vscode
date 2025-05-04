@@ -1,0 +1,1 @@
+export const ROOT_DIR_KEY = '__ROOT__'; 

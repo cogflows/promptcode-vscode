@@ -512,7 +512,7 @@ h1 {
   height: 14px;
 }
 
-.directory-remove-button {
+.directory-remove-button, .trash-btn {
   display: inline-flex;
   background: none;
   border: none;
@@ -524,10 +524,11 @@ h1 {
   margin-left: 8px;
 }
 
-.directory-remove-button:hover {
+.directory-remove-button:hover, .trash-btn:hover {
   opacity: 1;
 }
 
+.directory-remove-button svg, .trash-btn svg, .trash-btn i {
 .directory-remove-button svg {
   width: 16px;
   height: 16px;

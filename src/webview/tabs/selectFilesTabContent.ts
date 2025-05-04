@@ -1,3 +1,6 @@
+import { v4 as uuidv4 } from 'uuid';
+import { ROOT_DIR_KEY } from '../../common/constants';
+
 /** 
  * This function returns the HTML snippet for the "Select Files" tab content.
  * You can tweak or reorganize the markup here if desired.
@@ -145,5 +148,21 @@ src/utils/helper.js
       </div>
       <div id="selected-files-list" class="selected-files-list"></div>
     </section>
+  `;
+}
+
+// Helper function to render directory headers with UUIDs
+export function renderDirectoryHeader(dirPath: string, workspaceFolderName: string = ''): string {
+  const id = uuidv4();
+  window.directoryMap = window.directoryMap || {};
+  window.directoryMap[id] = dirPath || ROOT_DIR_KEY;
+  
+  return /* html */ `
+    <div class="directory-header flex items-center" onclick="toggleDirectoryFiles(this)" data-dir-id="${id}">
+      <span class="folder-label truncate">${dirPath || 'workspace root'}</span>
+      <button class="trash-btn action-button ml-auto" title="Remove folder" onclick="event.stopPropagation(); removeDirectory('${dirPath || ''}', '${workspaceFolderName}');">
+        <i class="codicon codicon-trash"></i>
+      </button>
+    </div>
   `;
 } 

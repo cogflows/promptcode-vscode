@@ -92,53 +92,36 @@
       });
   };
 
-  window.removeDirectory = function(dirPath, workspaceFolderName) {
-      console.log('Removing all files from directory:', dirPath, 'in workspace folder:', workspaceFolderName);
-      
-      // Find the directory section containing the files
-      const selector = workspaceFolderName 
-          ? `.directory-section[data-directory="${dirPath}"][data-workspace-folder="${workspaceFolderName}"]` 
-          : `.directory-section[data-directory="${dirPath}"]`;
-      const dirSection = document.querySelector(selector);
-      
-      if (!dirSection) {
-          // Handle case for root directory
-          if (dirPath === '.') {
-              const rootFiles = document.querySelectorAll(`.selected-file-item${workspaceFolderName ? `[data-workspace-folder="${workspaceFolderName}"]` : ''}`);
-              rootFiles.forEach(item => {
-                  const filePath = item.getAttribute('data-path');
-                  const itemWorkspaceFolder = item.getAttribute('data-workspace-folder');
-                  if (!filePath.includes('/') && (!workspaceFolderName || itemWorkspaceFolder === workspaceFolderName)) {
-                      vscode.postMessage({
-                          command: 'deselectFile',
-                          filePath: filePath,
-                          workspaceFolderRootPath: itemWorkspaceFolder ? vscode.getState()?.workspaceFolderRootPaths?.[itemWorkspaceFolder] : undefined
-                      });
-                  }
-              });
-          }
-          return;
-      }
-      
-      // Only get files that are visible in this directory's section (files that would be visible when expanded)
-      const selectedFileItems = dirSection.querySelectorAll('.selected-file-item');
-      if (!selectedFileItems.length) {
-          return;
-      }
-      
-      // Deselect each file in the directory section
-      selectedFileItems.forEach(item => {
-          const filePath = item.getAttribute('data-path');
-          const itemWorkspaceFolder = item.getAttribute('data-workspace-folder');
-          const workspaceFolderRootPath = itemWorkspaceFolder ? vscode.getState()?.workspaceFolderRootPaths?.[itemWorkspaceFolder] : undefined;
-          
-          vscode.postMessage({
-              command: 'deselectFile',
-              filePath: filePath,
-              workspaceFolderRootPath: workspaceFolderRootPath
-          });
-      });
-  };
+  window.directoryMap = window.directoryMap || {};
+
+  // Attach event listener to selected-files-list for event delegation
+  document.getElementById('selected-files-list')?.addEventListener('click', (event) => {
+    // Find the closest trash button in the event path
+    const trash = event.target.closest('.trash-btn');
+    if (!trash) return; // Not a trash button click
+    
+    // Prevent propagation to avoid triggering other click handlers
+    event.preventDefault();
+    event.stopPropagation();
+    
+    const header = trash.closest('.directory-header');
+    if (!header) return; // Not found in a directory header
+    
+    const dirId = header.dataset.dirId;
+    if (!dirId) return console.warn('No dirId found on directory header');
+    
+    const dirPath = window.directoryMap[dirId];
+    if (!dirPath) return console.warn('Directory path not found in map for ID:', dirId);
+    
+    // Use the ROOT_DIR_KEY for empty strings or the special root key
+    const normalizedDirPath = dirPath === '__ROOT__' ? '' : dirPath;
+    
+    console.log('Removing directory via delegation:', normalizedDirPath);
+    vscode.postMessage({
+      command: 'removeDirectory',
+      dirPath: normalizedDirPath
+    });
+  });
 
   // Initialize UI state
   function updateClearButtonVisibility() {

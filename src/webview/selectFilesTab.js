@@ -160,6 +160,7 @@ if (typeof window !== 'undefined') {
 
                 // Render file items in a consistent way
                 function renderFileItems(files, totalTokens) {
+                    // Use the files in the order they are passed in, don't sort again
                     return files.map(file => {
                         // More robust filename extraction
                         let fileName = '';
@@ -208,17 +209,27 @@ if (typeof window !== 'undefined') {
                 // Directory toggle function
                 window.toggleDirectoryFiles = function(header) {
                     const directorySection = header.closest('.directory-section');
-                    const dirPath = directorySection.getAttribute('data-directory');
+                    const dirId = directorySection.getAttribute('data-dir-id');
                     const workspaceFolderName = directorySection.getAttribute('data-workspace-folder') || '';
-                    const dirId = workspaceFolderName ? `${workspaceFolderName}:${dirPath}` : dirPath;
+                    const dirPath = window.directoryMap[dirId] || '';
                     
                     directorySection.classList.toggle('collapsed');
                     
                     if (directorySection.classList.contains('collapsed')) {
-                        expandedDirectories.delete(dirId);
+                        expandedDirectories.delete(`${workspaceFolderName}:${dirPath}`);
                     } else {
-                        expandedDirectories.add(dirId);
+                        expandedDirectories.add(`${workspaceFolderName}:${dirPath}`);
                     }
+                };
+
+                // Add back the removeDirectory function
+                window.removeDirectory = function(dirPath, workspaceFolderName) {
+                    console.log('Removing directory:', dirPath, workspaceFolderName);
+                    vscode.postMessage({
+                        command: 'removeDirectory',
+                        dirPath: dirPath,
+                        workspaceFolderName: workspaceFolderName
+                    });
                 };
 
                 // Handle selected files updates
@@ -230,6 +241,12 @@ if (typeof window !== 'undefined') {
                     }
 
                     console.log(`Updating selected files UI: ${message.selectedFiles ? message.selectedFiles.length : 0} files`);
+
+                    // Store current expanded directories to maintain state
+                    const expandedDirs = new Set([...expandedDirectories]);
+
+                    // Store current scroll position
+                    const scrollTop = selectedFilesList.scrollTop || window.scrollY;
 
                     // Handle empty selection
                     if (!message.selectedFiles || message.selectedFiles.length === 0) {
@@ -272,7 +289,7 @@ if (typeof window !== 'undefined') {
                         
                         const totalTokens = message.selectedFiles.reduce((sum, file) => sum + file.tokenCount, 0);
                         
-                        // Sort directories by token count
+                        // Sort directories by token count, but don't resort the files within them
                         const sortedDirectories = Object.values(filesByDirectory)
                             .map(dir => ({
                                 ...dir,
@@ -286,8 +303,13 @@ if (typeof window !== 'undefined') {
                             const isExpanded = expandedDirectories.has(`${workspaceFolderName}:${dirPath}`);
                             const workspaceLabel = workspaceFolderName ? ` (${workspaceFolderName})` : '';
                             
+                            // Generate a unique ID for this directory
+                            const id = (Math.random() + 1).toString(36).substring(2, 15) + (Math.random() + 1).toString(36).substring(2, 15);
+                            window.directoryMap = window.directoryMap || {};
+                            window.directoryMap[id] = dirPath === '.' ? '__ROOT__' : dirPath;
+
                             return `
-                                <div class="directory-section ${isExpanded ? '' : 'collapsed'}" data-directory="${dirPath}" data-workspace-folder="${workspaceFolderName}">
+                                <div class="directory-section ${isExpanded ? '' : 'collapsed'}" data-dir-id="${id}" data-workspace-folder="${workspaceFolderName}">
                                     <div class="directory-header" onclick="toggleDirectoryFiles(this)">
                                         <div class="header-left">
                                             <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -297,7 +319,7 @@ if (typeof window !== 'undefined') {
                                         </div>
                                         <div class="header-right">
                                             <span class="directory-stats">${formatTokenCount(dirTokens)} tokens (${dirPercentage}%)</span>
-                                            <button class="action-button directory-remove-button" onclick="event.stopPropagation(); window.removeDirectory('${dirPath}', '${workspaceFolderName}')" title="Remove all files in this directory">
+                                            <button class="trash-btn action-button" title="Remove all files in this directory" onclick="event.stopPropagation(); removeDirectory('${dirPath}', '${workspaceFolderName}');">
                                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                                     <path d="M3 6h18"/>
                                                     <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
@@ -307,23 +329,34 @@ if (typeof window !== 'undefined') {
                                         </div>
                                     </div>
                                     <div class="directory-files">
-                                        ${renderFileItems(files.sort((a, b) => b.tokenCount - a.tokenCount), dirTokens)}
+                                        ${renderFileItems(files, dirTokens)}
                                     </div>
                                 </div>
                             `;
                         }).join('');
                     } else {
                         // File view mode (flat list)
-                        const sortedFiles = [...message.selectedFiles].sort((a, b) => b.tokenCount - a.tokenCount);
-                        const totalTokens = sortedFiles.reduce((sum, file) => sum + file.tokenCount, 0);
+                        const totalTokens = message.selectedFiles.reduce((sum, file) => sum + file.tokenCount, 0);
                         html = `
                             <div class="directory-files" style="margin-top: 0;">
-                                ${renderFileItems(sortedFiles, totalTokens)}
+                                ${renderFileItems(message.selectedFiles, totalTokens)}
                             </div>
                         `;
                     }
 
                     selectedFilesList.innerHTML = html;
+                    
+                    // Restore scroll position
+                    setTimeout(() => {
+                        if (typeof selectedFilesList.scrollTo === 'function') {
+                            selectedFilesList.scrollTo(0, scrollTop);
+                        } else {
+                            window.scrollTo(0, scrollTop);
+                        }
+                    }, 10);
+                    
+                    // Restore expanded directories
+                    expandedDirectories = expandedDirs;
                 }
 
                 // ----------------------------------------------------------
@@ -657,15 +690,6 @@ if (typeof window !== 'undefined') {
                                 return false;
                         }
                     }
-                };
-
-                // Add removeDirectory functionality
-                window.removeDirectory = function(dirPath, workspaceFolderName) {
-                    vscode.postMessage({
-                        command: 'removeDirectory',
-                        dirPath: dirPath,
-                        workspaceFolderName: workspaceFolderName
-                    });
                 };
 
                 /* ----------  Preset support  ---------- */
