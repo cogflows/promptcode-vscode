@@ -36,6 +36,17 @@ if (typeof window !== 'undefined') {
                          .replace(/'/g, "&#039;");
                 }
 
+                /**
+                 * Sort files DESC by tokenCount, breaking ties alphabetically.
+                 * Does NOT mutate the original array.
+                 */
+                function sortByTokenDesc(files) {
+                    return [...files].sort((a, b) => {
+                        const diff = (b.tokenCount ?? 0) - (a.tokenCount ?? 0);
+                        return diff !== 0 ? diff : (a.path || '').localeCompare(b.path || '');
+                    });
+                }
+
                 // ----------------------------------------------------------
                 // Grab elements related to the "Select Files" tab
                 // ----------------------------------------------------------
@@ -160,7 +171,7 @@ if (typeof window !== 'undefined') {
 
                 // Render file items in a consistent way
                 function renderFileItems(files, totalTokens) {
-                    // Use the files in the order they are passed in, don't sort again
+                    // Expect files to be pre-sorted by caller (largest tokens first)
                     return files.map(file => {
                         // More robust filename extraction
                         let fileName = '';
@@ -287,9 +298,14 @@ if (typeof window !== 'undefined') {
                             return acc;
                         }, {});
                         
+                        // Sort files within each directory by token count (descending)
+                        Object.values(filesByDirectory).forEach(dir => {
+                            dir.files = sortByTokenDesc(dir.files);
+                        });
+                        
                         const totalTokens = message.selectedFiles.reduce((sum, file) => sum + file.tokenCount, 0);
                         
-                        // Sort directories by token count, but don't resort the files within them
+                        // Sort directories by token count
                         const sortedDirectories = Object.values(filesByDirectory)
                             .map(dir => ({
                                 ...dir,
@@ -337,9 +353,10 @@ if (typeof window !== 'undefined') {
                     } else {
                         // File view mode (flat list)
                         const totalTokens = message.selectedFiles.reduce((sum, file) => sum + file.tokenCount, 0);
+                        const sortedFiles = sortByTokenDesc(message.selectedFiles);
                         html = `
                             <div class="directory-files" style="margin-top: 0;">
-                                ${renderFileItems(message.selectedFiles, totalTokens)}
+                                ${renderFileItems(sortedFiles, totalTokens)}
                             </div>
                         `;
                     }

@@ -9,12 +9,12 @@ PromptCode is a VS Code extension that bridges codebases with AI models. It help
 ## Common Development Commands
 
 ### Build Commands
-- `npm run compile` - Development build
-- `npm run build:prod` - Production build with minification  
+- `npm run compile` - Development build with source maps
+- `npm run build:prod` - Production build with minification, no source maps
 - `npm run watch` - Watch mode for auto-rebuilds during development
 
 ### Testing & Linting
-- `npm test` - Run all tests (includes linting)
+- `npm test` - Run linting (no unit tests currently)
 - `npm run lint` - Run ESLint on source files
 
 ### Debugging
@@ -29,13 +29,13 @@ The extension follows a standard VS Code extension architecture with a main exte
 
 2. **Webview System** - Multi-tab interface managed by `webviewProvider.ts`:
    - Select Files tab - File tree with checkbox selection
-   - Instructions tab - Custom prompt builder with template support
+   - Instructions tab - Custom prompt builder with template support  
    - Generate Prompt tab - Final prompt generation with token counting
-   - Merge tab - AI response parsing and code diff visualization
+   - Apply & Review tab - AI response parsing and code diff visualization
 
 3. **File Selection** (`src/fileExplorer.ts`) - Custom tree view provider that respects .gitignore and custom ignore patterns
 
-4. **Prompt Generation** (`src/promptGenerator.ts`) - Generates structured prompts with file contents and token optimization
+4. **Prompt Generation** (`src/promptGenerator.ts`) - Generates structured prompts with XML-like tags for file contents and instructions
 
 5. **Token Counting** (`src/tokenCounter.ts`) - Uses GPT tokenizer with caching for real-time token counts
 
@@ -50,3 +50,10 @@ The extension follows a standard VS Code extension architecture with a main exte
 - File selection state is managed in the extension and synced to webview
 - Templates are loaded from both built-in locations and workspace `.promptcode/prompts` directory
 - Token counting is cached for performance
+
+### CSS Organization
+Per the Cursor rules in `.cursor/rules/css-rules.md`:
+- All CSS must be in separate `.css` files under `src/webview/styles/`
+- No inline styles in JavaScript/TypeScript files
+- CSS is organized by component (buttons.css, layout.css, tabs.css, etc.)
+- All CSS imports go through `index.css`

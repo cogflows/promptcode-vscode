@@ -26,4 +26,25 @@ test('trash icon deletes first directory header', async ({ page }) => {
 
   // The header should be gone, so the count should be one less
   await expect(page.locator('.directory-header')).toHaveCount(initialHeaderCount - 1);
+});
+
+test('files are sorted by token count descending', async ({ page }) => {
+  // Open the Select Files tab
+  await openSelectFilesTab(page);
+
+  // Wait for files to be loaded
+  await page.waitForSelector('.selected-file-item');
+
+  // Get all token count values
+  const tokenTexts = await page.locator('.selected-file-item .token-count').allTextContents();
+  
+  // Parse the token values (e.g., "1.50k tokens (25.0%)" -> 1500)
+  const tokenValues = tokenTexts.map(text => {
+    const match = text.match(/(\d+\.\d+)k/);
+    return match ? parseFloat(match[1]) * 1000 : 0;
+  });
+
+  // Verify they are sorted in descending order
+  const sortedValues = [...tokenValues].sort((a, b) => b - a);
+  expect(tokenValues).toEqual(sortedValues);
 }); 
