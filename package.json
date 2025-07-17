@@ -3,7 +3,7 @@
   "name": "promptcode",
   "displayName": "promptcode",
   "description": "Generate prompt for LLM from your code",
-  "version": "0.2.43",
+  "version": "0.3.2",
   "license": "SEE LICENSE IN LICENSE",
   "repository": {
     "type": "git",
@@ -191,6 +191,7 @@
     "@types/uuid": "^10.0.0",
     "@vscode/extension-telemetry": "^0.9.8",
     "fast-glob": "^3.3.2",
+    "lru-cache": "^11.1.0",
     "uuid": "^11.1.0"
   }
 }

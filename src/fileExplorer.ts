@@ -41,6 +41,15 @@ export class FileItem extends vscode.TreeItem {
     } else {
       this.tooltip = fullPath;
     }
+
+    // Add command to open file when clicking on the label (not checkbox)
+    if (!isDirectory) {
+      this.command = {
+        command: 'promptcode.openFileFromTree',
+        title: 'Open File',
+        arguments: [resourceUri]
+      };
+    }
   }
 }
 

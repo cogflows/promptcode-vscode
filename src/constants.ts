@@ -142,6 +142,20 @@ htmlcov/
 tmp/
 temp/
 .temp/
+.tmp/
+**/.tmp/
+
+# Cache directories
+**/cache_utils.session_tree_cache/
+**/.cache/
+**/node_modules/.cache/
+*.cache
+*.tmp
+
+# Python cache files
+*.pyc
+*.pyo
+*$py.class
 `;
 
 export const OPEN_PROMPT_COMMAND = 'openPrompt';

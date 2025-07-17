@@ -336,7 +336,7 @@ export class PromptCodeWebViewProvider {
 
                             // Proceed with saving if we have text
                             if (textToSave) {
-                                savePromptToFile(textToSave).catch((error: Error) => {
+                                savePromptToFile(textToSave, this._extensionContext).catch((error: Error) => {
                                     console.error('Error saving prompt to file:', error);
                                     vscode.window.showErrorMessage(`Failed to save prompt: ${error.message}`);
                                 });
@@ -535,6 +535,10 @@ export class PromptCodeWebViewProvider {
                             
                             await fileExplorerProvider.selectFiles(filesToSelect);
                             console.log(`Applied preset "${presetName}" successfully.`);
+                            
+                            // Store the applied preset name in workspace state
+                            await this._extensionContext.workspaceState.update('promptcode.appliedPresetName', presetName);
+                            
                             // Optionally, notify the webview or refresh parts of it if needed after applying
                             // this._panel?.webview.postMessage({ command: 'presetApplied', presetName });
                         } catch (error) {

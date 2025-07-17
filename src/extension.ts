@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 import { FileExplorerProvider, checkedItems as checkedItemsMap, FileItem } from './fileExplorer';
 import { generatePrompt as generatePromptFromGenerator, copyToClipboard } from './promptGenerator';
 import { PromptCodeWebViewProvider } from './webviewProvider';
-import { countTokensInFile, countTokensWithCache, clearTokenCache, initializeTokenCounter } from './tokenCounter';
+import { countTokensInFile, countTokensWithCache, countTokensWithCacheDetailed, clearTokenCache, initializeTokenCounter, tokenCache } from './tokenCounter';
 import { countTokens } from 'gpt-tokenizer/encoding/o200k_base';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -34,6 +34,9 @@ export const checkedItems = checkedItemsMap;
 let lastGeneratedTokenCount: number | null = null;
 let webviewProvider: PromptCodeWebViewProvider | null = null;
 let lastSaveUri: vscode.Uri | undefined = undefined; // Store the last used save URI
+
+// Cache for file types to avoid repeated stat() calls
+const fileTypeCache = new Map<string, boolean>();
 
 // Define or import the SelectedFile type (adjust properties if needed)
 /*
@@ -68,6 +71,33 @@ export function activate(context: vscode.ExtensionContext) {
 		console.log(`Using fallback storage path: ${storagePath}`);
 	}
 
+	// Create FileSystemWatcher to invalidate token cache on file changes
+	const watcher = vscode.workspace.createFileSystemWatcher('**/*', false, false, false);
+	// On file change or delete, invalidate the cache entry
+	watcher.onDidChange(uri => {
+		const deleted = tokenCache.delete(uri.fsPath);
+		if (deleted) {
+			console.log(`[FileSystemWatcher] Invalidated cache for changed file: ${path.basename(uri.fsPath)}`);
+		}
+		// Also clear file type cache
+		fileTypeCache.delete(uri.fsPath);
+	});
+	watcher.onDidDelete(uri => {
+		const deleted = tokenCache.delete(uri.fsPath);
+		if (deleted) {
+			console.log(`[FileSystemWatcher] Invalidated cache for deleted file: ${path.basename(uri.fsPath)}`);
+		}
+		// Also clear file type cache
+		fileTypeCache.delete(uri.fsPath);
+	});
+	// Also watch for new files
+	watcher.onDidCreate(uri => {
+		// Clear file type cache for new files (in case path was reused)
+		fileTypeCache.delete(uri.fsPath);
+	});
+	// Register watcher for cleanup on extension deactivation
+	context.subscriptions.push(watcher);
+
 	// Initialize output channel
 	const outputChannel = vscode.window.createOutputChannel('PromptCode');
 	outputChannel.show(true);
@@ -101,6 +131,8 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 		});
 	});
+
+	// Remove the selection change handler - we'll use a command instead
 
 	// Listen for configuration changes
 	context.subscriptions.push(
@@ -148,15 +180,29 @@ export function activate(context: vscode.ExtensionContext) {
 	}
 
 	// Register select all command
-	const selectAllCommand = vscode.commands.registerCommand('promptcode.selectAll', () => {
-		fileExplorerProvider.selectAll();
-		TelemetryService.getInstance().sendTelemetryEvent('select_all_files');
+	const selectAllCommand = vscode.commands.registerCommand('promptcode.selectAll', async () => {
+		await vscode.window.withProgress({
+			location: vscode.ProgressLocation.Notification,
+			title: "Selecting all files...",
+			cancellable: false
+		}, async () => {
+			fileExplorerProvider.selectAll();
+			TelemetryService.getInstance().sendTelemetryEvent('select_all_files');
+		});
 	});
 
 	// Register deselect all command
-	const deselectAllCommand = vscode.commands.registerCommand('promptcode.deselectAll', () => {
-		fileExplorerProvider.deselectAll();
-		TelemetryService.getInstance().sendTelemetryEvent('deselect_all_files');
+	const deselectAllCommand = vscode.commands.registerCommand('promptcode.deselectAll', async () => {
+		await vscode.window.withProgress({
+			location: vscode.ProgressLocation.Notification,
+			title: "Deselecting all files...",
+			cancellable: false
+		}, async () => {
+			fileExplorerProvider.deselectAll();
+			// Clear the applied preset name when deselecting all
+			context.workspaceState.update('promptcode.appliedPresetName', undefined);
+			TelemetryService.getInstance().sendTelemetryEvent('deselect_all_files');
+		});
 	});
 
 	// Register expand all command
@@ -634,25 +680,75 @@ export function activate(context: vscode.ExtensionContext) {
 			return;
 		}
 
-		try {
-			console.log('Getting selected files to update webview');
-            const currentIgnoreHelper = fileExplorerProvider.getIgnoreHelper(); // Get current helper
+		const commandStartTime = Date.now();
+		let tokenCountStartTime: number;
+		let tokenCountEndTime: number;
+		let cacheHits = 0;
+		let cacheMisses = 0;
+
+		// Show progress indicator
+		await vscode.window.withProgress({
+			location: vscode.ProgressLocation.Notification,
+			title: "Processing selected files...",
+			cancellable: false
+		}, async (progress) => {
+			try {
+				console.log('[getSelectedFiles] Starting to process selected files...');
+				
+				// Log initial cache state
+				const initialCacheSize = tokenCache.size;
+				console.log(`[getSelectedFiles] Initial cache size: ${initialCacheSize} entries`);
+				
+				const currentIgnoreHelper = fileExplorerProvider.getIgnoreHelper(); // Get current helper
 
 			// Get all checked items
-			const selectedFilePaths = Array.from(checkedItems.entries())
+			const allCheckedPaths = Array.from(checkedItems.entries())
 				.filter(([_, isChecked]) => isChecked)
-				.map(([filePath, _]) => filePath)
-				// Filter to only include files (not directories)
-				.filter(filePath => {
-					try {
-						// Double check existence and type
-                        if (!fs.existsSync(filePath)) return false;
-						return fs.statSync(filePath).isFile();
-					} catch (error) {
-						console.log(`Error checking file ${filePath}:`, error);
-						return false;
-					}
-				})
+				.map(([filePath, _]) => filePath);
+			
+			console.log(`[getSelectedFiles] Processing ${allCheckedPaths.length} checked items`);
+			console.log(`[getSelectedFiles] File type cache size: ${fileTypeCache.size} entries`);
+			
+			// Update progress
+			progress.report({ message: `Checking ${allCheckedPaths.length} items...` });
+			
+			let fileTypeCacheHits = 0;
+			let fileTypeCacheMisses = 0;
+			
+			// Filter asynchronously to avoid blocking I/O, using cache when possible
+			const fileCheckPromises = allCheckedPaths.map(async (filePath) => {
+				// Check cache first
+				if (fileTypeCache.has(filePath)) {
+					fileTypeCacheHits++;
+					return { filePath, isFile: fileTypeCache.get(filePath)! };
+				}
+				
+				fileTypeCacheMisses++;
+				
+				try {
+					// Use async fs operations instead of sync
+					const stats = await fs.promises.stat(filePath);
+					const isFile = stats.isFile();
+					
+					// Cache the result
+					fileTypeCache.set(filePath, isFile);
+					
+					return { filePath, isFile };
+				} catch (error) {
+					// File doesn't exist or other error
+					console.log(`[getSelectedFiles] Error checking ${filePath}:`, error);
+					checkedItems.delete(filePath); // Remove from selection
+					fileTypeCache.delete(filePath); // Remove from cache
+					return { filePath, isFile: false };
+				}
+			});
+			
+			const fileCheckResults = await Promise.all(fileCheckPromises);
+			
+			// Now filter based on results
+			const selectedFilePaths = fileCheckResults
+				.filter(result => result.isFile)
+				.map(result => result.filePath)
 				// Add filter to exclude files that should be ignored based on current ignore rules
 				.filter(filePath => {
 					// If ignoreHelper doesn't exist yet, include all files
@@ -670,8 +766,18 @@ export function activate(context: vscode.ExtensionContext) {
 					return !shouldBeIgnored;
 				});
 
-			console.log(`Found ${selectedFilePaths.length} selected files to show in webview`);
+			console.log(`[getSelectedFiles] Found ${selectedFilePaths.length} files after filtering`);
+			console.log(`[getSelectedFiles] File type cache performance: ${fileTypeCacheHits} hits, ${fileTypeCacheMisses} misses`);
 
+			// Update progress for token counting
+			progress.report({ 
+				message: `Counting tokens for ${selectedFilePaths.length} files...`,
+				increment: 30 
+			});
+
+			// Track token counting performance
+			tokenCountStartTime = Date.now();
+			
 			// Get file contents and token counts
 			const selectedFilesPromises = selectedFilePaths.map(async (absolutePath): Promise<SelectedFile> => { // Ensure the map returns a Promise<SelectedFile>
 				// Find which workspace folder this file belongs to
@@ -708,7 +814,13 @@ export function activate(context: vscode.ExtensionContext) {
 					}
 				}
 
-				const tokenCount = await countTokensWithCache(absolutePath);
+				const tokenResult = await countTokensWithCacheDetailed(absolutePath);
+				if (tokenResult.cacheHit) {
+					cacheHits++;
+				} else {
+					cacheMisses++;
+				}
+				const tokenCount = tokenResult.count;
 
 				// Return an object matching the SelectedFile type
 				return {
@@ -721,9 +833,31 @@ export function activate(context: vscode.ExtensionContext) {
 			});
 
 			const selectedFiles = await Promise.all(selectedFilesPromises);
+			
+			tokenCountEndTime = Date.now();
 
 			// Calculate total tokens
 			const totalTokens = selectedFiles.reduce((sum, file) => sum + file.tokenCount, 0);
+
+			// Log performance summary
+			const totalTime = Date.now() - commandStartTime;
+			const tokenCountTime = tokenCountEndTime - tokenCountStartTime;
+			const cacheHitRate = selectedFiles.length > 0 ? ((cacheHits / selectedFiles.length) * 100).toFixed(1) : 0;
+			const avgTimePerFile = selectedFiles.length > 0 ? (tokenCountTime / selectedFiles.length).toFixed(1) : 0;
+			
+			console.log(`[getSelectedFiles] Performance Summary:`);
+			console.log(`  - Total files processed: ${selectedFiles.length}`);
+			console.log(`  - Cache hits: ${cacheHits}, Cache misses: ${cacheMisses}`);
+			console.log(`  - Cache hit rate: ${cacheHitRate}%`);
+			console.log(`  - Total tokens: ${totalTokens.toLocaleString()}`);
+			console.log(`  - Token counting time: ${tokenCountTime}ms (${avgTimePerFile}ms per file)`);
+			console.log(`  - Total command time: ${totalTime}ms`);
+			console.log(`  - Final cache size: ${tokenCache.size} entries`);
+			
+			// Warn if token count is very high
+			if (totalTokens > 1000000) {
+				console.warn(`[getSelectedFiles] WARNING: Total token count (${totalTokens.toLocaleString()}) exceeds 1M tokens!`);
+			}
 
 			// Send the selected files with token counts back to the webview
 			if (promptCodeProvider._panel) {
@@ -733,9 +867,11 @@ export function activate(context: vscode.ExtensionContext) {
 					totalTokens: totalTokens
 				});
 			}
-		} catch (error) {
-			console.error('Error getting selected files:', error);
-		}
+			} catch (error) {
+				console.error('Error getting selected files:', error);
+				vscode.window.showErrorMessage('Error processing selected files');
+			}
+		});
 	});
 
 
@@ -923,9 +1059,23 @@ export function activate(context: vscode.ExtensionContext) {
 
 	// Register clear token cache command
 	const clearTokenCacheCommand = vscode.commands.registerCommand('promptcode.clearTokenCache', () => {
+		// Get cache sizes before clearing
+		const tokenCacheSize = tokenCache.size;
+		const fileTypeCacheSize = fileTypeCache.size;
+		
+		// Clear both caches
 		clearTokenCache();
+		fileTypeCache.clear();
+		
+		// Refresh UI
 		fileExplorerProvider.refresh();
-		vscode.window.showInformationMessage('Token cache cleared successfully');
+		
+		// Show detailed message
+		vscode.window.showInformationMessage(
+			`Cache cleared successfully! Removed ${tokenCacheSize} token entries and ${fileTypeCacheSize} file type entries.`
+		);
+		
+		console.log(`[ClearCache] Cleared ${tokenCacheSize} token cache entries and ${fileTypeCacheSize} file type cache entries`);
 	});
 
 	// Register complete file explorer refresh command
@@ -935,6 +1085,17 @@ export function activate(context: vscode.ExtensionContext) {
 		fileExplorerProvider.refresh();
 		vscode.commands.executeCommand('promptcode.getSelectedFiles');
 		vscode.window.showInformationMessage('File explorer refreshed successfully');
+	});
+
+	// Register command to open file from tree (triggered by clicking on label)
+	const openFileFromTreeCommand = vscode.commands.registerCommand('promptcode.openFileFromTree', async (resourceUri: vscode.Uri) => {
+		try {
+			const doc = await vscode.workspace.openTextDocument(resourceUri);
+			await vscode.window.showTextDocument(doc, { preview: false });
+		} catch (error) {
+			console.error('Error opening file:', error);
+			vscode.window.showErrorMessage(`Failed to open file: ${error instanceof Error ? error.message : String(error)}`);
+		}
 	});
 
 	// Register open file in editor command
@@ -1213,6 +1374,7 @@ export function activate(context: vscode.ExtensionContext) {
 		'promptcode.copyFilePath': copyFilePathCommand,
 		'promptcode.copyRelativeFilePath': copyRelativeFilePathCommand,
 		'promptcode.openFileInEditor': openFileInEditorCommand,
+		'promptcode.openFileFromTree': openFileFromTreeCommand,
 		// Add a new debug command for telemetry status
 		'promptcode.checkTelemetryStatus': () => {
 			const status = TelemetryService.getInstance().getTelemetryStatus();
@@ -1549,12 +1711,24 @@ async function getSelectedFilesWithContent(): Promise<SelectedFile[]> {
  * Saves the provided prompt text to a file chosen by the user,
  * remembering the last used location.
  * @param prompt The string content of the prompt to save.
+ * @param context The extension context for accessing workspace state.
  */
-export async function savePromptToFile(prompt: string) {
-    // Determine the default URI: use the last saved one, or the default filename
+export async function savePromptToFile(prompt: string, context?: vscode.ExtensionContext) {
+    // Get the applied preset name from workspace state if context is provided
+    let defaultFileName = 'promptcode-output.txt';
+    if (context) {
+        const presetName = context.workspaceState.get<string>('promptcode.appliedPresetName');
+        if (presetName) {
+            // Sanitize the preset name for use as a filename
+            const sanitizedName = presetName.replace(/[/\\?%*:|"<>]/g, '-').replace(/\s+/g, '_').toLowerCase();
+            defaultFileName = `${sanitizedName}-prompt.txt`;
+        }
+    }
+    
+    // Determine the default URI: use the last saved one, or the default filename with preset name
     const defaultUri = lastSaveUri instanceof vscode.Uri 
         ? lastSaveUri 
-        : vscode.Uri.file('promptcode-output.txt');
+        : vscode.Uri.file(defaultFileName);
 
     const uri = await vscode.window.showSaveDialog({
         title: 'Save generated prompt',
