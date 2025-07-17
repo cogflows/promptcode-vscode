@@ -14,7 +14,9 @@ import * as https from 'https';
 // --- Save to file feature ---
 import { SAVE_PROMPT_TO_FILE } from './constants';
 import { savePromptToFile, getLastGeneratedPrompt, fileExplorerProvider, checkedItems } from './extension';
-import { loadPresets, savePreset } from './presetManager';
+import { loadPresets, savePreset, savePatternPreset } from './presetManager';
+import { generatePatternsFromSelection } from './utils/generatePatternsFromSelection';
+import { listFilesByPatternsFile } from './utils/filePattern';
 // --- End Save to file feature ---
 
 // --- File Preset Commands ---
@@ -384,11 +386,11 @@ export class PromptCodeWebViewProvider {
                                     }
                                     
                                     // Set default file name based on current selection or suggested name
-                                    let defaultFileName = 'my-preset.json';
+                                    let defaultFileName = 'my-preset.patterns';
                                     if (currentPreset) {
                                         // Use the selected preset name if one is selected
                                         defaultFileName = currentPreset.replace(/[/\\?%*:|"<>]/g, '-')
-                                            .replace(/\s+/g, '_').toLowerCase() + '.json';
+                                            .replace(/\s+/g, '_').toLowerCase() + '.patterns';
                                     }
                                     
                                     // Create URI for default save location
@@ -398,7 +400,7 @@ export class PromptCodeWebViewProvider {
                                     const saveDialogOptions = {
                                         defaultUri,
                                         filters: {
-                                            'JSON Files': ['json']
+                                            'Pattern Files': ['patterns']
                                         },
                                         title: 'Save File Preset',
                                         saveLabel: 'Save Preset'
@@ -412,18 +414,16 @@ export class PromptCodeWebViewProvider {
                                     
                                     // Extract name from selected path (remove extension and directory)
                                     const selectedPath = fileUri.fsPath;
-                                    const fileName = path.basename(selectedPath, '.json');
+                                    const fileName = path.basename(selectedPath, '.patterns');
                                     const presetName = fileName;
                                     
-                                    // Create preset object
-                                    const newPreset = {
-                                        name: presetName,
-                                        files: relativePaths
-                                    };
+                                    // Generate patterns from the selected files
+                                    const patterns = generatePatternsFromSelection(relativePaths, root);
                                     
-                                    // Write to the selected file
-                                    fs.writeFileSync(selectedPath, JSON.stringify(newPreset, null, 2), 'utf8');
-                                    console.log(`Saved preset "${presetName}" to ${selectedPath}`);
+                                    // Write patterns to the selected file
+                                    const content = patterns.join('\n') + '\n'; // Add trailing newline
+                                    fs.writeFileSync(selectedPath, content, 'utf8');
+                                    console.log(`Saved pattern preset "${presetName}" to ${selectedPath}`);
                                     
                                     // Reload and update UI
                                     const currentPresets = loadPresets(root);
@@ -469,12 +469,17 @@ export class PromptCodeWebViewProvider {
                             }
                         }
                         
-                        // Save the preset (either new or overwrite)
+                        // Generate patterns from the selected files
+                        const patterns = generatePatternsFromSelection(relativePaths, root);
+                        
+                        // Save the preset in the new pattern format
+                        savePatternPreset(root, presetName, patterns);
+                        
+                        // Create updatedPreset object for UI
                         const updatedPreset = { 
                             name: presetName, 
-                            files: relativePaths
+                            patternFile: path.join(root, '.promptcode/presets', `${presetName.replace(/[/\\?%*:|"<>]/g, '-').replace(/\s+/g, '_').toLowerCase()}.patterns`)
                         };
-                        savePreset(root, updatedPreset);
                         
                         // Update UI with the new list of presets
                         if (existingPresetIndex > -1) {
@@ -515,7 +520,20 @@ export class PromptCodeWebViewProvider {
                         }
 
                         try {
-                            await fileExplorerProvider.selectFiles(preset.files); // Add await if selectFiles is async
+                            let filesToSelect: string[];
+                            
+                            if (preset.patternFile) {
+                                // New pattern-based preset
+                                filesToSelect = await listFilesByPatternsFile(preset.patternFile, root);
+                            } else if (preset.files) {
+                                // Legacy JSON preset
+                                filesToSelect = preset.files;
+                            } else {
+                                vscode.window.showErrorMessage(`Preset "${presetName}" has no files or patterns.`);
+                                return;
+                            }
+                            
+                            await fileExplorerProvider.selectFiles(filesToSelect);
                             console.log(`Applied preset "${presetName}" successfully.`);
                             // Optionally, notify the webview or refresh parts of it if needed after applying
                             // this._panel?.webview.postMessage({ command: 'presetApplied', presetName });

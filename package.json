@@ -3,7 +3,7 @@
   "name": "promptcode",
   "displayName": "promptcode",
   "description": "Generate prompt for LLM from your code",
-  "version": "0.2.41",
+  "version": "0.2.43",
   "license": "SEE LICENSE IN LICENSE",
   "repository": {
     "type": "git",
@@ -165,11 +165,14 @@
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src",
     "test": "vscode-test",
+    "test:unit": "npm run compile && npm run compile:tests && node ./out/test/runTests.js",
+    "compile:tests": "node ./scripts/build-tests.js",
     "build:prod": "node ./scripts/build.js --minify --publish",
     "build:dev": "node ./scripts/build.js"
   },
   "devDependencies": {
     "@playwright/test": "^1.52.0",
+    "@types/glob": "^8.1.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "20.x",
     "@types/vscode": "^1.96.0",
@@ -180,13 +183,14 @@
     "@vscode/test-electron": "^2.4.1",
     "esbuild": "^0.25.1",
     "eslint": "^9.21.0",
+    "glob": "^11.0.3",
     "gpt-tokenizer": "^2.1.2",
-    "ignore": "^7.0.3",
     "typescript": "^5.7.3"
   },
   "dependencies": {
     "@types/uuid": "^10.0.0",
     "@vscode/extension-telemetry": "^0.9.8",
+    "fast-glob": "^3.3.2",
     "uuid": "^11.1.0"
   }
 }
