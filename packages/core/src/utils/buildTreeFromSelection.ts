@@ -1,5 +1,5 @@
 import * as path from 'node:path';
-import type { SelectedFile } from '@promptcode/core';
+import type { SelectedFile } from '../types/selectedFile';
 
 /**
  * Builds a POSIX-style directory tree string from a list of selected files.

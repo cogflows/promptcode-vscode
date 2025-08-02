@@ -2,11 +2,10 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { checkedItems } from './fileExplorer';
-import { countTokensWithCache } from './tokenCounter';
-import { countTokens } from 'gpt-tokenizer/encoding/o200k_base';
+import { countTokensWithCache, countTokens } from '@promptcode/core';
 import { fetchResourceContent } from './promptcodeDataFetcher';
-import { buildTreeFromSelection } from './utils/buildTreeFromSelection';
-import type { SelectedFile } from './types/selectedFile';
+import { buildTreeFromSelection } from '@promptcode/core';
+import type { SelectedFile } from '@promptcode/core';
 
 // --- LOGGING HELPER ---
 function log(message: string, data?: any) {

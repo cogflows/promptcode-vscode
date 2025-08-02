@@ -1,0 +1,25 @@
+{
+  "name": "@promptcode/core",
+  "version": "0.1.0",
+  "description": "Core functionality for PromptCode - Generate AI-ready prompts from codebases",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "fast-glob": "^3.3.2",
+    "gpt-tokenizer": "^2.1.2",
+    "ignore": "^5.3.0",
+    "lru-cache": "^11.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.7.3"
+  }
+}

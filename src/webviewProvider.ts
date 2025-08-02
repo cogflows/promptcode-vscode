@@ -15,8 +15,8 @@ import * as https from 'https';
 import { SAVE_PROMPT_TO_FILE } from './constants';
 import { savePromptToFile, getLastGeneratedPrompt, fileExplorerProvider, checkedItems } from './extension';
 import { loadPresets, savePreset, savePatternPreset } from './presetManager';
-import { generatePatternsFromSelection } from './utils/generatePatternsFromSelection';
-import { listFilesByPatternsFile } from './utils/filePattern';
+import { generatePatternsFromSelection } from '@promptcode/core';
+import { listFilesByPatternsFile } from '@promptcode/core';
 // --- End Save to file feature ---
 
 // --- File Preset Commands ---
@@ -154,7 +154,7 @@ export class PromptCodeWebViewProvider {
                         break;
                     case 'clearTokenCache':
                         console.log('ClearTokenCache command received in webview provider');
-                        const { clearTokenCache } = require('./tokenCounter');
+                        const { clearTokenCache } = require('@promptcode/core');
                         clearTokenCache();
                         vscode.window.showInformationMessage('Token cache cleared successfully');
                         return;

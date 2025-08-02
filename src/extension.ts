@@ -6,8 +6,7 @@ import * as vscode from 'vscode';
 import { FileExplorerProvider, checkedItems as checkedItemsMap, FileItem } from './fileExplorer';
 import { generatePrompt as generatePromptFromGenerator, copyToClipboard } from './promptGenerator';
 import { PromptCodeWebViewProvider } from './webviewProvider';
-import { countTokensInFile, countTokensWithCache, countTokensWithCacheDetailed, clearTokenCache, initializeTokenCounter, tokenCache } from './tokenCounter';
-import { countTokens } from 'gpt-tokenizer/encoding/o200k_base';
+import { countTokensInFile, countTokensWithCache, countTokensWithCacheDetailed, clearTokenCache, initializeTokenCounter, tokenCache, countTokens } from '@promptcode/core';
 import * as path from 'path';
 import * as fs from 'fs';
 import { IgnoreHelper } from './ignoreHelper';
@@ -16,7 +15,7 @@ import { DEFAULT_IGNORE_PATTERNS } from './constants';
 import { TelemetryService } from './telemetry';
 import { FileListProcessor } from './fileListProcessor';
 // Import the moved type
-import type { SelectedFile } from './types/selectedFile';
+import type { SelectedFile } from '@promptcode/core';
 
 let lastGeneratedPrompt: string | null = null; // Variable to store the last generated prompt
 
