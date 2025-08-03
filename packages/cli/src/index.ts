@@ -8,11 +8,12 @@ import { listTemplates } from './commands/templates';
 import { presetCommand } from './commands/preset';
 import { expertCommand } from './commands/expert';
 import { configCommand } from './commands/config';
+import { BUILD_VERSION } from './version';
 
 const program = new Command()
   .name('promptcode')
   .description('Generate AI-ready prompts from codebases - designed for AI coding assistants')
-  .version('0.1.0')
+  .version(BUILD_VERSION)
   .addHelpText('after', `
 Quick Start:
   $ promptcode generate -f "src/**/*.ts" -o prompt.md   # Generate prompt
@@ -317,6 +318,30 @@ Examples:
   .action(async (responseFile, options) => {
     const { extractCommand } = await import('./commands/extract');
     await extractCommand(responseFile, options);
+  });
+
+// Version info command - show detailed version information
+program
+  .command('version-info')
+  .description('Show detailed version and build information')
+  .action(() => {
+    console.log(chalk.bold('PromptCode CLI'));
+    console.log(chalk.gray('─'.repeat(50)));
+    console.log(`Version: ${chalk.cyan(BUILD_VERSION)}`);
+    
+    // Parse version to show build info
+    if (BUILD_VERSION.includes('-dev.')) {
+      const parts = BUILD_VERSION.split('-dev.');
+      const [date, hash] = parts[1].split('.');
+      console.log(`Build type: ${chalk.yellow('Development')}`);
+      console.log(`Build date: ${chalk.gray(date.slice(0, 4) + '-' + date.slice(4, 6) + '-' + date.slice(6, 8))}`);
+      console.log(`Git commit: ${chalk.gray(hash)}`);
+    } else {
+      console.log(`Build type: ${chalk.green('Production')}`);
+    }
+    
+    console.log(`Node.js: ${chalk.gray(process.version)}`);
+    console.log(`Platform: ${chalk.gray(process.platform + ' ' + process.arch)}`);
   });
 
 // Parse arguments

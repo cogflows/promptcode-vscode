@@ -1,5 +1,34 @@
 # Contributing to PromptCode CLI
 
+## Build and Versioning
+
+### Development Builds
+
+Development builds automatically include version information in the format:
+```
+<version>-dev.<YYYYMMDD>.<gitHash>
+```
+
+Example: `0.1.0-dev.20250803.abc123f`
+
+To build:
+```bash
+npm run build        # Development build with git info
+npm run build:prod   # Production build (clean version)
+```
+
+### Version Resolution
+
+The build system uses `scripts/resolveVersion.js` to determine the version:
+- **Development**: Appends date and git commit hash
+- **Production**: Uses clean version from package.json
+- **CI/CD**: Detects git tags for release builds
+
+Environment variables:
+- `PROD_BUILD=1`: Force production version
+- `GIT_TAG=v1.0.0`: Indicates a tagged release
+- `FORCE_VERSION=x.y.z`: Override version completely
+
 ## Adding New AI Models
 
 When adding support for new AI models, please follow these guidelines:

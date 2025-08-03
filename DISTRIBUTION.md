@@ -26,8 +26,25 @@
 
 ## Version Information
 - VS Code Extension: 0.3.2
-- CLI: 0.1.0 
+- CLI: 0.1.0 (shows as 0.1.0-dev.YYYYMMDD.hash in dev builds)
 - Core: 0.1.0
+
+### Version Display
+Development builds show extended version info:
+```bash
+$ ./packages/cli/dist/promptcode --version
+0.1.0-dev.20250803.fd95714
+
+$ ./packages/cli/dist/promptcode version-info
+PromptCode CLI
+──────────────────────────────────────────────────
+Version: 0.1.0-dev.20250803.fd95714
+Build type: Development
+Build date: 2025-08-03
+Git commit: fd95714
+Node.js: v24.3.0
+Platform: darwin arm64
+```
 
 ## Recent Changes
 - Fixed token counting showing 0 for all AI models

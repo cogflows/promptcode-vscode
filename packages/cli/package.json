@@ -6,7 +6,8 @@
     "promptcode": "./dist/promptcode"
   },
   "scripts": {
-    "build": "bun build src/index.ts --compile --target=bun --outfile dist/promptcode",
+    "build": "node scripts/inject-version.js && bun build src/index.ts --compile --target=bun --outfile dist/promptcode",
+    "build:prod": "PROD_BUILD=1 npm run build",
     "dev": "bun run src/index.ts",
     "clean": "rm -rf dist",
     "test": "bun test"
