@@ -4,12 +4,18 @@ import chalk from 'chalk';
 
 interface ConfigOptions {
   setOpenaiKey?: string;
+  setAnthropicKey?: string;
+  setGoogleKey?: string;
+  setXaiKey?: string;
   show?: boolean;
   reset?: boolean;
 }
 
 interface Config {
   openaiApiKey?: string;
+  anthropicApiKey?: string;
+  googleApiKey?: string;
+  xaiApiKey?: string;
   defaultModel?: string;
   cacheDir?: string;
 }
@@ -59,13 +65,27 @@ async function saveConfig(config: Config): Promise<void> {
  */
 export async function configCommand(options: ConfigOptions): Promise<void> {
   try {
-    if (options.setOpenaiKey) {
-      // Set OpenAI API key
+    if (options.setOpenaiKey || options.setAnthropicKey || options.setGoogleKey || options.setXaiKey) {
       const config = await loadConfig();
-      config.openaiApiKey = options.setOpenaiKey;
-      await saveConfig(config);
       
-      console.log(chalk.green('✓ OpenAI API key saved'));
+      if (options.setOpenaiKey) {
+        config.openaiApiKey = options.setOpenaiKey;
+        console.log(chalk.green('✓ OpenAI API key saved'));
+      }
+      if (options.setAnthropicKey) {
+        config.anthropicApiKey = options.setAnthropicKey;
+        console.log(chalk.green('✓ Anthropic API key saved'));
+      }
+      if (options.setGoogleKey) {
+        config.googleApiKey = options.setGoogleKey;
+        console.log(chalk.green('✓ Google API key saved'));
+      }
+      if (options.setXaiKey) {
+        config.xaiApiKey = options.setXaiKey;
+        console.log(chalk.green('✓ xAI API key saved'));
+      }
+      
+      await saveConfig(config);
       console.log(chalk.gray('You can now use: promptcode expert <question>'));
       
     } else if (options.show) {
@@ -77,11 +97,19 @@ export async function configCommand(options: ConfigOptions): Promise<void> {
       console.log(chalk.gray('─'.repeat(50)));
       console.log(`Config file: ${configPath}`);
       console.log(`OpenAI API key: ${config.openaiApiKey ? chalk.green('Set') : chalk.yellow('Not set')}`);
-      console.log(`Default model: ${config.defaultModel || 'gpt-4-turbo-preview'}`);
+      console.log(`Anthropic API key: ${config.anthropicApiKey ? chalk.green('Set') : chalk.yellow('Not set')}`);
+      console.log(`Google API key: ${config.googleApiKey ? chalk.green('Set') : chalk.yellow('Not set')}`);
+      console.log(`xAI API key: ${config.xaiApiKey ? chalk.green('Set') : chalk.yellow('Not set')}`);
+      console.log(`Default model: ${config.defaultModel || 'o3'}`);
       console.log(`Cache directory: ${config.cacheDir || '~/.cache/promptcode'}`);
       
-      if (!config.openaiApiKey) {
-        console.log(chalk.yellow('\nSet API key with: promptcode config --set-openai-key <key>'));
+      const hasAnyKey = config.openaiApiKey || config.anthropicApiKey || config.googleApiKey || config.xaiApiKey;
+      if (!hasAnyKey) {
+        console.log(chalk.yellow('\nSet API keys with:'));
+        console.log('  promptcode config --set-openai-key <key>');
+        console.log('  promptcode config --set-anthropic-key <key>');
+        console.log('  promptcode config --set-google-key <key>');
+        console.log('  promptcode config --set-xai-key <key>');
       }
       
     } else if (options.reset) {
@@ -99,13 +127,19 @@ export async function configCommand(options: ConfigOptions): Promise<void> {
       console.log(chalk.bold('PromptCode Configuration'));
       console.log(chalk.gray('─'.repeat(50)));
       console.log('Commands:');
-      console.log('  promptcode config --show                    Show current configuration');
-      console.log('  promptcode config --set-openai-key <key>    Set OpenAI API key');
-      console.log('  promptcode config --reset                   Reset configuration');
+      console.log('  promptcode config --show                       Show current configuration');
+      console.log('  promptcode config --set-openai-key <key>       Set OpenAI API key');
+      console.log('  promptcode config --set-anthropic-key <key>    Set Anthropic API key');
+      console.log('  promptcode config --set-google-key <key>       Set Google API key');
+      console.log('  promptcode config --set-xai-key <key>          Set xAI API key');
+      console.log('  promptcode config --reset                      Reset configuration');
       console.log('\nEnvironment variables:');
-      console.log('  OPENAI_API_KEY    OpenAI API key (overrides config)');
-      console.log('  XDG_CONFIG_HOME   Config directory (default: ~/.config)');
-      console.log('  XDG_CACHE_HOME    Cache directory (default: ~/.cache)');
+      console.log('  OPENAI_API_KEY      OpenAI API key (overrides config)');
+      console.log('  ANTHROPIC_API_KEY   Anthropic API key (overrides config)');
+      console.log('  GOOGLE_API_KEY      Google API key (overrides config)');
+      console.log('  XAI_API_KEY         xAI API key (overrides config)');
+      console.log('  XDG_CONFIG_HOME     Config directory (default: ~/.config)');
+      console.log('  XDG_CACHE_HOME      Cache directory (default: ~/.cache)');
     }
     
   } catch (error) {

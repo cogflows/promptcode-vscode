@@ -15,6 +15,15 @@ interface ValidationRule {
   fix?: (content: string) => string;
 }
 
+/**
+ * Allowed declarative fix operations.
+ */
+type FixSpec =
+  | { type: 'replace'; with: string }
+  | { type: 'remove' }
+  | { type: 'prepend'; text: string }
+  | { type: 'append'; text: string };
+
 const DEFAULT_RULES: ValidationRule[] = [
   {
     name: 'no-console-log',
@@ -144,13 +153,55 @@ export async function validateCommand(file: string, options: ValidateOptions) {
   }
 }
 
+function buildFixFunction(
+  regex: RegExp,
+  spec: FixSpec
+): (content: string) => string {
+  switch (spec.type) {
+    case 'replace':
+      return (content) => content.replace(regex, spec.with);
+    case 'remove':
+      return (content) => content.replace(regex, '');
+    case 'prepend':
+      return (content) => spec.text + content;
+    case 'append':
+      return (content) => content + spec.text;
+    /* istanbul ignore next */
+    default:
+      // Should never happen thanks to type system
+      return (c) => c;
+  }
+}
+
 function parseCustomRule(rule: any): ValidationRule {
+  // Basic validation – keep runtime safe even if JSON is malformed
+  if (typeof rule.name !== 'string' || typeof rule.pattern !== 'string') {
+    throw new Error('Custom rule must have "name" and "pattern" fields');
+  }
+
+  const regex = new RegExp(rule.pattern, rule.flags || 'g');
+
+  let fixFn: ((content: string) => string) | undefined;
+
+  if (rule.fix) {
+    // Whitelist approach – only the fields we expect.
+    const allowed = ['type', 'with', 'text'];
+    const unknownKeys = Object.keys(rule.fix).filter((k) => !allowed.includes(k));
+    if (unknownKeys.length) {
+      throw new Error(
+        `Unknown keys in fix spec: ${unknownKeys.join(', ')}`
+      );
+    }
+
+    fixFn = buildFixFunction(regex, rule.fix as FixSpec);
+  }
+
   return {
     name: rule.name,
-    pattern: new RegExp(rule.pattern, rule.flags || 'g'),
-    message: rule.message,
-    severity: rule.severity || 'warning',
-    fix: rule.fix ? new Function('content', rule.fix) as (content: string) => string : undefined
+    pattern: regex,
+    message: rule.message ?? '',
+    severity: rule.severity === 'error' ? 'error' : 'warning',
+    fix: fixFn,
   };
 }
 

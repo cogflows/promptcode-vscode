@@ -8,10 +8,16 @@ PromptCode is a VS Code extension that bridges codebases with AI models. It help
 
 ## Common Development Commands
 
-### Build Commands
+### Extension Build Commands
 - `npm run compile` - Development build with source maps
 - `npm run build:prod` - Production build with minification, no source maps
 - `npm run watch` - Watch mode for auto-rebuilds during development
+
+### CLI Build Commands (uses Bun)
+- `cd packages/cli && bun install` - Install CLI dependencies
+- `cd packages/cli && bun run build` - Compile CLI to standalone binary
+- `cd packages/cli && bun run dev` - Run CLI in development mode
+- Note: The CLI is built with Bun for fast compilation and distribution
 
 ### Testing & Linting
 - `npm test` - Run linting (no unit tests currently)

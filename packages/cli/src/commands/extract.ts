@@ -2,6 +2,20 @@ import chalk from 'chalk';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
+/**
+ * Sanitize a filename coming from un-trusted input.
+ * – keeps only basename (no folders)  
+ * – removes drive letters on Windows  
+ * – replaces characters outside the safe set `[A-Za-z0-9._-]`  
+ */
+function sanitizeFilename(raw: string): string {
+  // Remove Windows drive letters (e.g. C:\)
+  const withoutDrive = raw.replace(/^[a-zA-Z]:[\\/]/, '');
+  const base = path.basename(withoutDrive);
+  const cleaned = base.replace(/[^a-zA-Z0-9._-]/g, '_');
+  return cleaned || 'untitled';
+}
+
 interface ExtractOptions {
   lang?: string;
   saveDir?: string;
@@ -59,7 +73,18 @@ export async function extractCommand(responseFile: string, options: ExtractOptio
           filename = `extracted_${index + 1}${ext}`;
         }
         
+        // ─── security: sanitize & verify ──────────────────────────────
+        filename = sanitizeFilename(filename);
         const filePath = path.join(options.saveDir, filename);
+        
+        // Ensure the resolved path is still inside saveDir (defence-in-depth)
+        const resolvedDir = path.resolve(options.saveDir);
+        const resolvedFile = path.resolve(filePath);
+        if (!resolvedFile.startsWith(resolvedDir + path.sep)) {
+          throw new Error(`Invalid filename detected: ${block.filename}`);
+        }
+        // ──────────────────────────────────────────────────────────────
+        
         await fs.writeFile(filePath, block.content, 'utf-8');
         
         console.log(chalk.green(`✓ Saved: ${filename}`));

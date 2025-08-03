@@ -104,21 +104,26 @@ Examples:
 
 // Expert command - consult AI with codebase context
 program
-  .command('expert <question>')
+  .command('expert [question]')
   .description('Ask AI expert questions with full codebase context')
   .addHelpText('after', `
-Requires OpenAI API key. Set it with:
-  $ promptcode config --set-openai-key <key>
+Requires API key for chosen provider. Configure with:
+  $ promptcode config --set-openai-key <key>     # For O3, O3 Pro
+  $ promptcode config --set-anthropic-key <key>  # For Opus 4, Sonnet 4
+  $ promptcode config --set-google-key <key>     # For Gemini 2.5 Pro
+  $ promptcode config --set-xai-key <key>        # For Grok 4
 
 Examples:
   $ promptcode expert "How can I optimize the API performance?"
   $ promptcode expert "Explain the authentication flow" --preset auth
   $ promptcode expert "Find potential security issues" -f "src/api/**/*.ts"
-  $ promptcode expert "Review this code" --model gpt-4 --stream`)
+  $ promptcode expert "Review this code" --model opus-4 --stream
+  $ promptcode expert --list-models  # See all available models`)
   .option('-p, --path <dir>', 'project root directory', process.cwd())
   .option('--preset <name>', 'use a preset for context')
   .option('-f, --files <patterns...>', 'file patterns to include')
-  .option('--model <model>', 'OpenAI model (default: gpt-4-turbo-preview)')
+  .option('--model <model>', 'AI model to use (use --list-models to see available options)')
+  .option('--list-models', 'List available AI models')
   .option('-o, --output <file>', 'save response to file')
   .option('--stream', 'stream response in real-time')
   .action(async (question, options) => {
@@ -131,6 +136,9 @@ program
   .description('Manage PromptCode configuration')
   .option('--show', 'show current configuration')
   .option('--set-openai-key <key>', 'set OpenAI API key')
+  .option('--set-anthropic-key <key>', 'set Anthropic API key')
+  .option('--set-google-key <key>', 'set Google API key')
+  .option('--set-xai-key <key>', 'set xAI API key')
   .option('--reset', 'reset all configuration')
   .action(async (options) => {
     await configCommand(options);

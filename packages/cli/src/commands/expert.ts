@@ -3,6 +3,8 @@ import * as fs from 'fs';
 import chalk from 'chalk';
 import ora from 'ora';
 import { scanFiles, buildPrompt, initializeTokenCounter } from '@promptcode/core';
+import { AIProvider } from '../providers/ai-provider';
+import { MODELS, DEFAULT_MODEL, getAvailableModels } from '../providers/models';
 
 interface ExpertOptions {
   path?: string;
@@ -11,122 +13,77 @@ interface ExpertOptions {
   model?: string;
   output?: string;
   stream?: boolean;
+  listModels?: boolean;
 }
 
-/**
- * Load OpenAI API key from environment or config
- */
-function getApiKey(): string {
-  // Check environment variable first
-  if (process.env.OPENAI_API_KEY) {
-    return process.env.OPENAI_API_KEY;
-  }
-  
-  // Check config file
-  const configPath = path.join(process.env.HOME || '', '.config', 'promptcode', 'config.json');
-  if (fs.existsSync(configPath)) {
-    try {
-      const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-      if (config.openaiApiKey) {
-        return config.openaiApiKey;
-      }
-    } catch {
-      // Ignore parse errors
-    }
-  }
-  
-  throw new Error('OpenAI API key not found. Set OPENAI_API_KEY environment variable or run: promptcode config --set-openai-key');
-}
+const SYSTEM_PROMPT = `You are an expert software engineer helping analyze and improve code. Provide constructive, actionable feedback.
 
-/**
- * Call OpenAI API
- */
-async function callOpenAI(
-  question: string, 
-  context: string, 
-  model: string,
-  stream: boolean
-): Promise<string> {
-  const apiKey = getApiKey();
+Focus on:
+1. Answering the user's specific question accurately
+2. Code quality and best practices when reviewing code
+3. Potential issues or edge cases
+4. Performance and security considerations
+5. Clear, concise explanations`;
+
+function listAvailableModels() {
+  console.log(chalk.bold('\n📋 Available Models:\n'));
   
-  const messages = [
-    {
-      role: 'system',
-      content: 'You are an expert software engineer helping analyze and improve code. Be concise and specific in your responses.'
-    },
-    {
-      role: 'user',
-      content: `Here is the codebase context:\n\n${context}\n\n${question}`
+  const availableModels = getAvailableModels();
+  const modelsByProvider: Record<string, typeof MODELS[string][]> = {};
+  
+  // Group by provider
+  Object.entries(MODELS).forEach(([key, config]) => {
+    if (!modelsByProvider[config.provider]) {
+      modelsByProvider[config.provider] = [];
     }
-  ];
-  
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature: 0.7,
-      stream
-    })
+    modelsByProvider[config.provider].push({ ...config, key } as any);
   });
   
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`OpenAI API error: ${error}`);
-  }
-  
-  if (stream) {
-    // Handle streaming response
-    const reader = response.body?.getReader();
-    const decoder = new TextDecoder();
-    let result = '';
+  // Display by provider
+  Object.entries(modelsByProvider).forEach(([provider, models]) => {
+    const hasKey = models.some(m => availableModels.includes((m as any).key));
+    const providerName = provider.charAt(0).toUpperCase() + provider.slice(1);
     
-    if (!reader) throw new Error('No response body');
+    console.log(chalk.blue(`${providerName}:`));
     
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    models.forEach(model => {
+      const isAvailable = availableModels.includes((model as any).key);
+      const status = isAvailable ? chalk.green('✓') : chalk.gray('✗');
+      const name = isAvailable ? chalk.cyan((model as any).key) : chalk.gray((model as any).key);
+      const pricing = `$${model.pricing.input}/$${model.pricing.output}/M`;
       
-      const chunk = decoder.decode(value);
-      const lines = chunk.split('\n');
-      
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6);
-          if (data === '[DONE]') continue;
-          
-          try {
-            const parsed = JSON.parse(data);
-            const content = parsed.choices?.[0]?.delta?.content;
-            if (content) {
-              process.stdout.write(content);
-              result += content;
-            }
-          } catch {
-            // Ignore parse errors
-          }
-        }
-      }
+      console.log(`  ${status} ${name.padEnd(20)} ${model.description.padEnd(50)} ${chalk.gray(pricing)}`);
+    });
+    
+    if (!hasKey) {
+      console.log(chalk.yellow(`     Set ${provider.toUpperCase()}_API_KEY to enable these models\n`));
+    } else {
+      console.log();
     }
-    
-    return result;
-  } else {
-    const data = await response.json();
-    return data.choices[0].message.content;
-  }
+  });
+  
+  console.log(chalk.gray('✓ = Available (API key configured)'));
+  console.log(chalk.gray('✗ = Unavailable (missing API key)\n'));
 }
 
-/**
- * Expert consultation command
- */
-export async function expertCommand(question: string, options: ExpertOptions): Promise<void> {
+export async function expertCommand(question: string | undefined, options: ExpertOptions): Promise<void> {
+  // Handle --list-models flag
+  if (options.listModels) {
+    listAvailableModels();
+    return;
+  }
+  
+  // Require question for actual consultation
+  if (!question) {
+    console.error(chalk.red('Error: Question is required unless using --list-models'));
+    process.exit(1);
+  }
   const spinner = !options.stream ? ora('Preparing context...').start() : null;
   
   try {
+    // Initialize AI provider
+    const aiProvider = new AIProvider();
+    
     // Initialize token counter
     const cacheDir = process.env.XDG_CACHE_HOME || path.join(process.env.HOME || '', '.cache', 'promptcode');
     initializeTokenCounter(cacheDir, '0.1.0');
@@ -170,40 +127,122 @@ export async function expertCommand(question: string, options: ExpertOptions): P
       includeFileContents: true
     });
     
-    const model = options.model || 'gpt-4-turbo-preview';
-    const tokenLimit = model.includes('gpt-4') ? 128000 : 16000;
+    // Select model
+    const modelKey = options.model || DEFAULT_MODEL;
+    const modelConfig = MODELS[modelKey];
     
-    if (result.tokenCount > tokenLimit * 0.8) {
-      spinner?.warn(`Context is large (${result.tokenCount} tokens). Consider using a preset to reduce scope.`);
+    if (!modelConfig) {
+      const available = getAvailableModels();
+      spinner?.fail(`Unknown model: ${modelKey}. Available models: ${available.join(', ')}`);
+      return;
     }
+    
+    /* ──────────────────────────────────────────────────────────
+     *  Token-limit enforcement
+     * ────────────────────────────────────────────────────────── */
+    const SAFETY_MARGIN = 256; // leave room for stop-tokens & metadata
+    const availableTokens =
+      modelConfig.contextWindow - result.tokenCount - SAFETY_MARGIN;
+
+    if (availableTokens <= 0) {
+      spinner?.fail(
+        `Prompt size (${result.tokenCount.toLocaleString()} tokens) exceeds the ${modelConfig.contextWindow.toLocaleString()}-token window of "${modelConfig.name}".\n` +
+          'Reduce the number of files or switch to a larger-context model.',
+      );
+      return;
+    }
+
+    if (availableTokens < modelConfig.contextWindow * 0.2) {
+      spinner?.warn(
+        `Large context: ${result.tokenCount.toLocaleString()} tokens. ` +
+          `${availableTokens.toLocaleString()} tokens remain for the response.`,
+      );
+    }
+
+    // Prepare the prompt
+    const fullPrompt =
+      `Here is the codebase context:\n\n${result.prompt}\n\n${question}`;
     
     if (spinner) {
-      spinner.text = `Consulting ${model}...`;
+      spinner.text = `Consulting ${modelConfig.name}...`;
+    } else if (options.stream) {
+      console.log(chalk.blue(`\n🤖 Consulting ${modelConfig.name}...`));
+      console.log(chalk.gray(`📊 ${modelConfig.description}`));
+      console.log(chalk.gray('⏳ This may take a moment...\n'));
     }
     
-    // Call OpenAI
-    const answer = await callOpenAI(question, result.prompt, model, options.stream || false);
+    // Call AI
+    const startTime = Date.now();
+    let response: { text: string; usage?: any };
+    
+    if (options.stream) {
+      response = await aiProvider.streamText(modelKey, fullPrompt, {
+        systemPrompt: SYSTEM_PROMPT,
+        maxTokens: availableTokens,
+        onChunk: (chunk) => process.stdout.write(chunk),
+      });
+      console.log(); // Add newline after streaming
+    } else {
+      response = await aiProvider.generateText(modelKey, fullPrompt, {
+        systemPrompt: SYSTEM_PROMPT,
+        maxTokens: availableTokens,
+      });
+    }
+    
+    const responseTime = (Date.now() - startTime) / 1000;
     
     if (!options.stream) {
       spinner?.succeed('Expert consultation complete');
-      console.log('\n' + answer);
-    } else {
-      // Add newline after streaming completes to ensure proper terminal state
-      console.log();
+      console.log('\n' + response.text);
     }
     
     // Save output if requested
     if (options.output) {
-      await fs.promises.writeFile(options.output, answer);
+      await fs.promises.writeFile(options.output, response.text);
       console.log(chalk.green(`\n✓ Saved response to ${options.output}`));
     }
     
-    // Show token usage estimate
-    const estimatedCost = (result.tokenCount / 1000) * 0.01 + (answer.length / 4000) * 0.03;
-    console.log(chalk.gray(`\nEstimated cost: ~$${estimatedCost.toFixed(3)}`));
+    // Show statistics
+    console.log(chalk.gray(`\n⏱️  Response time: ${responseTime.toFixed(1)}s`));
+    
+    if (response.usage && response.usage.promptTokens !== undefined) {
+      console.log(chalk.gray(`📊 Tokens: ${response.usage.promptTokens.toLocaleString()} in, ${response.usage.completionTokens.toLocaleString()} out`));
+      
+      const cost = aiProvider.calculateCost(modelKey, response.usage);
+      console.log(chalk.gray(`💰 Cost: $${cost.toFixed(4)}`));
+    }
     
   } catch (error) {
     spinner?.fail(chalk.red(`Error: ${(error as Error).message}`));
+
+    // Helpful message for context-length overflows
+    const msg = (error as Error).message.toLowerCase();
+    if (
+      msg.includes('context_length_exceeded') ||
+      msg.includes('maximum context length') ||
+      msg.includes('too many tokens')
+    ) {
+      console.log(
+        chalk.yellow(
+          '\nThe model reported that the combined prompt + completion exceeds its context window.\n' +
+            'Suggestions:\n' +
+            ' • Use a smaller preset or fewer file patterns\n' +
+            ' • Choose a model with a larger context window\n' +
+            ' • Increase the SAFETY_MARGIN only if you know what you are doing\n',
+        ),
+      );
+    }
+    
+    // Helpful error messages
+    if ((error as Error).message.includes('API key')) {
+      console.log(chalk.yellow('\nTo configure API keys:'));
+      console.log('1. Set environment variables:');
+      console.log('   export OPENAI_API_KEY="sk-..."');
+      console.log('   export ANTHROPIC_API_KEY="sk-ant-..."');
+      console.log('   export GOOGLE_API_KEY="..."');
+      console.log('\n2. Or run: promptcode config --set-<provider>-key <key>');
+    }
+    
     process.exit(1);
   }
 }
