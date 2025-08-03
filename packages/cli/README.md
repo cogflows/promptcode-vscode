@@ -1,528 +1,204 @@
 # PromptCode CLI
 
-Command-line interface for PromptCode - Generate AI-ready prompts from codebases. Perfect for AI coding agents, CI/CD pipelines, and automated code analysis.
-
-## Features
-
-- 🚀 **Fast & Lightweight** - Built with Bun for instant startup
-- 🤖 **AI Agent Ready** - Designed for integration with Claude Code, GitHub Copilot CLI, and other AI tools
-- 📊 **Token Counting** - Real-time token counts with caching for optimal context window usage
-- 🎯 **Smart File Selection** - Glob patterns, .gitignore support, and custom ignore files
-- 📝 **Template Support** - Built-in and custom prompt templates
-- 🔧 **Multiple Output Formats** - Plain text or JSON with metadata
+Command-line interface for PromptCode - generate AI-ready prompts from your codebase with preset management and AI expert consultation.
 
 ## Installation
 
-### Global Installation (Recommended)
-
+### Quick Install (Bun-based)
 ```bash
-# With Bun
-bun add -g promptcode-cli
+# Clone the repo or navigate to the CLI package
+cd packages/cli
 
-# With npm  
-npm install -g promptcode-cli
-
-# With npx (no installation)
-npx promptcode-cli generate --help
+# Run the installation script (installs Bun if needed)
+./install.sh
 ```
 
-### Local Installation
+The installation script will:
+- Install Bun if not already installed
+- Install all dependencies
+- Build the CLI
+- Create a global `promptcode` command
 
+### Manual Installation
 ```bash
-# Clone and build
-git clone https://github.com/cogflows/promptcode-vscode.git
-cd promptcode-vscode/packages/cli
+# Install Bun first (if not installed)
+curl -fsSL https://bun.sh/install | bash
+
+# Then build the CLI
+cd packages/cli
 bun install
 bun run build
+bun link
+```
 
-# Run directly
-./dist/promptcode --help
+### Via NPM (Coming Soon)
+```bash
+npm install -g promptcode-cli
 ```
 
 ## Quick Start
 
-### Generate a prompt from your current directory
 ```bash
-promptcode generate
+# Create a preset for your backend code
+promptcode preset --create backend
+
+# Generate a prompt using the preset
+promptcode generate -p backend -o prompt.md
+
+# Ask AI expert for help (requires OpenAI API key)
+promptcode config --set-openai-key sk-...
+promptcode expert "How can I optimize this API?" -p backend
 ```
 
-### Generate with specific files
+## Core Commands
+
+### Generate
+Generate AI-ready prompts from your codebase:
 ```bash
-promptcode generate -f "src/**/*.ts" "!**/*.test.ts"
+promptcode generate                      # All files
+promptcode generate -f "src/**/*.ts"     # Specific patterns
+promptcode generate -p backend           # Use preset
+promptcode generate -t code-review       # Apply template
 ```
 
-### Use a template
+### Preset Management
+Create and manage file pattern presets:
 ```bash
-promptcode generate -f "src/**/*.ts" -t code-review
+promptcode preset --list                 # List all presets
+promptcode preset --create api-routes    # Create new preset
+promptcode preset --info api-routes      # Show preset details
+promptcode preset --edit api-routes      # Edit in your editor
+promptcode preset --delete api-routes    # Delete preset
 ```
 
-### Save output to file
+### Expert Consultation
+Ask questions with full codebase context:
 ```bash
-promptcode generate -o prompt.md
+# Set up OpenAI API key first
+promptcode config --set-openai-key sk-...
+
+# Ask questions
+promptcode expert "Explain the auth flow" --preset auth
+promptcode expert "Find security issues" -f "src/api/**/*.ts"
+promptcode expert "Review this code" --stream  # Real-time response
 ```
 
-### Get JSON output for programmatic use
+### Other Commands
+
+**Stats** - Analyze token usage:
 ```bash
-promptcode generate --json | jq .tokenCount
+promptcode stats                         # Whole project
+promptcode stats -p backend              # Specific preset
 ```
 
-## Commands
-
-### `generate` - Generate AI prompts
-
-Generate structured prompts from your codebase with full control over file selection and formatting.
-
+**Diff** - Apply AI-generated changes:
 ```bash
-promptcode generate [options]
+promptcode diff response.md --preview    # Preview changes
+promptcode diff response.md --apply      # Apply changes
 ```
 
-**Options:**
-- `-p, --path <dir>` - Project root directory (default: current directory)
-- `-f, --files <patterns...>` - File glob patterns (e.g., `"src/**/*.ts" "!**/*.test.ts"`)
-- `--no-gitignore` - Ignore .gitignore rules
-- `--ignore-file <file>` - Path to custom ignore file (default: `.promptcode_ignore`)
-- `-l, --list <file>` - Read file paths from a text file (one per line)
-- `-i, --instructions <file>` - Path to markdown/text instructions file
-- `-t, --template <name>` - Use a built-in or user template
-- `-o, --out <file>` - Output file (default: stdout)
-- `--json` - Output in JSON format with metadata
-
-**Examples:**
-
+**Extract** - Extract code from AI responses:
 ```bash
-# Generate prompt for TypeScript files
-promptcode generate -f "src/**/*.ts" "!**/*.test.ts"
-
-# Use code review template
-promptcode generate -f "src/**/*.py" -t code-review
-
-# Generate JSON output for automation
-promptcode generate -f "lib/**/*.js" --json -o analysis.json
-
-# Use custom instructions
-echo "# Optimize for performance" > instructions.md
-promptcode generate -i instructions.md
-
-# Read file list from text file
-find . -name "*.go" > files.txt
-promptcode generate -l files.txt
+promptcode extract response.md           # List code blocks
+promptcode extract response.md --save-dir ./generated
 ```
 
-### `stats` - Project statistics
-
-Get quick insights about your project's token usage and file distribution.
-
+**Validate** - Check generated code:
 ```bash
-promptcode stats [options]
+promptcode validate generated.ts         # Check for issues
+promptcode validate response.md --fix    # Auto-fix
 ```
 
-**Options:**
-- `-p, --path <dir>` - Project root directory (default: current directory)
+## Presets
 
-**Example output:**
-```
-Project Statistics: my-project
-──────────────────────────────────────────────────
-Total files: 156
-Total tokens: 45,230
-Average tokens/file: 290
-
-Top file types by token count:
-  .ts              89 files      28,450 tokens  (62.9%)
-  .tsx             23 files      10,230 tokens  (22.6%)
-  .json            15 files       3,120 tokens  (6.9%)
-  .md              12 files       2,890 tokens  (6.4%)
-```
-
-### `templates` - List available templates
-
-View all available prompt templates.
+Presets are stored in `.promptcode/presets/` and use gitignore syntax:
 
 ```bash
-promptcode templates
+# backend.patterns
+# Include all TypeScript files
+**/*.ts
+**/*.tsx
+
+# Include config files
+package.json
+tsconfig.json
+
+# Exclude test files
+!**/*.test.ts
+!**/*.spec.ts
+!**/node_modules/**
 ```
 
-**Built-in templates:**
-- `code-review` - Comprehensive code review
-- `refactor` - Refactoring suggestions
+## Templates
+
+Built-in templates:
+- `code-review` - Code review checklist
 - `optimize` - Performance optimization
+- `refactor` - Refactoring suggestions
 
-**Custom templates:**
-Place `.md` files in `~/.config/promptcode/prompts/` to create custom templates.
-
-### `cache` - Manage token cache
-
-Manage the token counting cache for performance optimization.
-
-```bash
-promptcode cache <action>
-```
-
-**Actions:**
-- `clear` - Clear the token cache
-- `stats` - Show cache statistics
-
-### `diff` - Compare AI-suggested changes
-
-Compare AI-generated code with existing files and optionally apply changes.
-
-```bash
-promptcode diff <prompt-file> [options]
-```
-
-**Options:**
-- `-p, --path <dir>` - Project root directory (default: current directory)
-- `--apply` - Apply the changes to files
-- `--preview` - Show full preview of changes without applying
-
-**Examples:**
-```bash
-# Compare AI response with current files
-promptcode diff ai-response.json --preview
-
-# Apply AI-suggested changes
-promptcode diff ai-response.md --apply
-
-# Extract and diff from saved prompt
-promptcode generate --json -o prompt.json
-# ... AI makes changes ...
-promptcode diff prompt.json
-```
-
-### `context` - Manage file context
-
-Manage persistent file selections for consistent AI interactions.
-
-```bash
-promptcode context <action> [files...] [options]
-```
-
-**Actions:**
-- `add` - Add files to current context
-- `remove/rm` - Remove files from context
-- `list/ls` - Show current context
-- `clear` - Clear all context
-- `save` - Save current context with a name
-- `load` - Load a saved context
-- `saved` - List all saved contexts
-
-**Options:**
-- `-p, --path <dir>` - Project root directory
-- `--save <name>` - Save context as named selection
-- `--load <name>` - Load saved context
-
-**Examples:**
-```bash
-# Add files to context
-promptcode context add "src/**/*.ts" "!**/*.test.ts"
-
-# List current context
-promptcode context list
-
-# Save context for later
-promptcode context save --save "feature-x"
-
-# Load saved context
-promptcode context load --load "feature-x"
-
-# Remove files
-promptcode context remove "src/old-code.ts"
-```
-
-### `extract` - Extract code blocks
-
-Extract code blocks from AI response files.
-
-```bash
-promptcode extract <response-file> [options]
-```
-
-**Options:**
-- `--lang <language>` - Filter by language (e.g., typescript, python)
-- `--save-dir <dir>` - Directory to save extracted files
-- `--stdout` - Output to stdout instead of files
-
-**Examples:**
-```bash
-# List code blocks in AI response
-promptcode extract ai-response.md
-
-# Extract only TypeScript code
-promptcode extract ai-response.md --lang typescript
-
-# Save all code blocks to directory
-promptcode extract ai-response.md --save-dir ./extracted
-
-# Output to stdout for piping
-promptcode extract ai-response.md --stdout | grep "function"
-```
-
-### `watch` - Watch files and regenerate
-
-Monitor files and automatically regenerate prompts on changes.
-
-```bash
-promptcode watch [options]
-```
-
-**Options:**
-- `-p, --path <dir>` - Project root directory
-- `-f, --files <patterns...>` - File patterns to watch
-- `-o, --out <file>` - Output file to update
-- `-t, --template <name>` - Template to use
-- `--debounce <ms>` - Debounce time in milliseconds (default: 1000)
-
-**Examples:**
-```bash
-# Watch TypeScript files and update prompt
-promptcode watch -f "src/**/*.ts" -o context.md
-
-# Watch with custom debounce
-promptcode watch -f "**/*.py" --debounce 2000
-
-# Watch and use template
-promptcode watch -t code-review -o review-context.md
-```
-
-### `validate` - Validate AI-generated code
-
-Check AI-generated code against project rules and security patterns.
-
-```bash
-promptcode validate <file> [options]
-```
-
-**Options:**
-- `--rules <file>` - Custom validation rules file
-- `--fix` - Attempt to auto-fix issues
-
-**Built-in checks:**
-- No console.log statements
-- No debugger statements
-- No exposed API keys or secrets
-- No private keys
-- TODO comment detection
-
-**Examples:**
-```bash
-# Validate AI response
-promptcode validate ai-response.md
-
-# Use custom rules
-promptcode validate code.ts --rules .promptcode/rules.json
-
-# Auto-fix issues
-promptcode validate ai-output.md --fix
-```
-
-## Output Format
-
-### Standard Output
-
-The CLI generates structured prompts in XML-like format:
-
-```xml
-<instructions>
-Your instructions or template content here
-</instructions>
-
-<file_map>
-project/
-├── src/
-│   ├── index.ts
-│   └── utils.ts
-└── package.json
-</file_map>
-
-<file_contents>
-File: src/index.ts (125 tokens)
-```typescript
-// File content here
-```
-
-File: src/utils.ts (89 tokens)
-```typescript
-// File content here
-```
-</file_contents>
-```
-
-### JSON Output
-
-With `--json` flag, outputs structured data:
-
-```json
-{
-  "prompt": "...",
-  "tokenCount": 1234,
-  "sections": {
-    "instructions": 150,
-    "fileMap": 45,
-    "fileContents": 1039,
-    "resources": 0
-  },
-  "files": [
-    {
-      "path": "src/index.ts",
-      "tokens": 125
-    }
-  ]
-}
-```
-
-## AI Agent Integration
-
-PromptCode CLI is specifically designed to enhance AI coding assistants' capabilities:
-
-### Key Commands for AI Agents
-
-1. **`context`** - Maintain persistent file selections across conversations
-   ```bash
-   # AI agents can save working context
-   promptcode context add "src/feature/**/*.ts"
-   promptcode context save --save "current-feature"
-   ```
-
-2. **`diff`** - Apply AI-generated changes safely
-   ```bash
-   # AI can generate code, then apply it
-   promptcode diff ai-changes.md --preview
-   promptcode diff ai-changes.md --apply
-   ```
-
-3. **`extract`** - Parse code from AI responses
-   ```bash
-   # Extract code blocks from conversation
-   promptcode extract conversation.md --save-dir ./generated
-   ```
-
-4. **`watch`** - Monitor changes during development
-   ```bash
-   # Keep context updated as files change
-   promptcode watch -f "src/**/*.ts" -o current-context.md
-   ```
-
-5. **`validate`** - Ensure generated code meets standards
-   ```bash
-   # Check AI-generated code for issues
-   promptcode validate generated-code.ts
-   ```
-
-## Integration Examples
-
-### With Claude Code
-
-```bash
-# Generate and copy to clipboard (macOS)
-promptcode generate -f "src/**/*.ts" -t refactor | pbcopy
-
-# Generate and save for later use
-promptcode generate -f "src/**/*.ts" -o context.md
-```
-
-### In CI/CD Pipeline
-
-```yaml
-# GitHub Actions example
-- name: Generate code context
-  run: |
-    npx promptcode-cli generate \
-      -f "src/**/*.ts" \
-      -t code-review \
-      --json \
-      -o context.json
-    
-- name: Run AI analysis
-  run: |
-    # Use the generated context with your AI tool
-    cat context.json | your-ai-tool analyze
-```
-
-### Shell Scripts
-
-```bash
-#!/bin/bash
-# analyze.sh - Generate context and analyze with AI
-
-# Generate prompt
-promptcode generate \
-  -f "src/**/*.{ts,tsx}" \
-  -t optimize \
-  -o /tmp/context.md
-
-# Send to AI (example with curl)
-curl -X POST https://api.example.com/analyze \
-  -H "Content-Type: text/plain" \
-  --data-binary @/tmp/context.md
-```
-
-### Programmatic Use
-
-```javascript
-// Node.js example
-import { execSync } from 'child_process';
-
-const result = execSync('promptcode generate -f "src/**/*.ts" --json', {
-  encoding: 'utf8'
-});
-
-const { prompt, tokenCount, files } = JSON.parse(result);
-console.log(`Generated prompt with ${tokenCount} tokens from ${files.length} files`);
-```
+Custom templates go in `~/.config/promptcode/prompts/`.
 
 ## Configuration
 
-### Custom Ignore Patterns
-
-Create `.promptcode_ignore` in your project root:
-
-```
-# .promptcode_ignore
-*.log
-build/
-dist/
-coverage/
-*.tmp
-.env*
-```
-
-### Custom Templates
-
-Create templates in `~/.config/promptcode/prompts/`:
+Configuration is stored in `~/.config/promptcode/config.json`:
 
 ```bash
-# ~/.config/promptcode/prompts/security-audit.md
-# Security Audit
+promptcode config --show                 # View config
+promptcode config --set-openai-key KEY   # Set API key
+promptcode config --reset                # Reset all
+```
 
-Please analyze the code for:
-1. Authentication vulnerabilities
-2. SQL injection risks
-3. XSS vulnerabilities
-4. Sensitive data exposure
-5. Dependency vulnerabilities
+Environment variables:
+- `OPENAI_API_KEY` - OpenAI API key (overrides config)
+- `XDG_CONFIG_HOME` - Config directory
+- `XDG_CACHE_HOME` - Cache directory
+
+## Examples
+
+### Code Review Workflow
+```bash
+# Create preset for feature
+promptcode preset --create feature-auth
+
+# Generate context for review
+promptcode generate -p feature-auth -t code-review -o review.md
+
+# Get AI review
+promptcode expert "Review this auth implementation" -p feature-auth
+```
+
+### Debugging Workflow
+```bash
+# Analyze specific files
+promptcode generate -f "src/api/*.ts" "logs/*.log" -o debug-context.md
+
+# Ask for help
+promptcode expert "Why is the API returning 500 errors?" -f "src/api/*.ts"
+```
+
+### Refactoring Workflow
+```bash
+# Create preset for refactoring target
+promptcode preset --create old-components
+
+# Get suggestions
+promptcode generate -p old-components -t refactor | your-ai-tool
+
+# Apply changes
+promptcode diff suggestions.md --preview
+promptcode diff suggestions.md --apply
 ```
 
 ## Tips
 
-1. **Token Optimization**: Use `promptcode stats` to understand your project's token distribution
-2. **Pattern Testing**: Test glob patterns with small sets first
-3. **Template Reuse**: Create custom templates for common tasks
-4. **Cache Management**: Clear cache after major refactoring with `promptcode cache clear`
-5. **JSON for Automation**: Use `--json` output for integration with other tools
+1. **Use presets** for different parts of your codebase
+2. **Check token counts** with `stats` before generating
+3. **Always preview** before applying diffs
+4. **Stream responses** for long expert consultations
+5. **Save outputs** to `.promptcode/outputs/` for reference
 
 ## Troubleshooting
 
-### Binary not found
-- Ensure the package is installed globally
-- Check your PATH includes npm/bun global bin directory
-
-### Permission denied
-- Make the binary executable: `chmod +x /path/to/promptcode`
-
-### Token count seems wrong
-- Clear cache: `promptcode cache clear`
-- Check for binary files being counted
-
-## License
-
-MIT - See LICENSE file in the root directory
+- **Command not found**: Ensure `~/.local/bin` is in your PATH
+- **Token counts wrong**: Clear cache with `promptcode cache clear`
+- **API errors**: Check your OpenAI API key with `promptcode config --show`

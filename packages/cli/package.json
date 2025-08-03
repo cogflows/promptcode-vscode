@@ -23,6 +23,7 @@
     "@types/diff": "^5.0.9",
     "@types/minimatch": "^5.1.2",
     "@types/node": "^20.0.0",
-    "bun-types": "latest"
+    "bun-types": "latest",
+    "typescript": "^5.0.0"
   }
 }

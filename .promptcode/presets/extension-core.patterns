@@ -1,0 +1,4 @@
+# Core extension files only
+src/extension.ts
+package.json
+README.md

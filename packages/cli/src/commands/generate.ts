@@ -30,14 +30,38 @@ async function loadInstructions(instructionsPath: string): Promise<string> {
 }
 
 /**
- * Load file list from plain text file
- * @param listPath Path to file list
+ * Load file list from plain text file or preset
+ * @param listPath Path to file list or preset name
  * @param basePath Base path to resolve relative paths
  * @returns Array of file patterns
  */
 async function loadFileList(listPath: string, basePath: string): Promise<string[]> {
+  let resolvedPath = listPath;
+  
+  // If the file doesn't exist directly, try looking for it as a preset
+  if (!fs.existsSync(listPath)) {
+    // Try in .promptcode/presets/
+    const presetDir = path.join(basePath, '.promptcode', 'presets');
+    
+    // Add .patterns extension if not present
+    const filename = listPath.endsWith('.patterns') ? listPath : `${listPath}.patterns`;
+    const presetPath = path.join(presetDir, filename);
+    
+    if (fs.existsSync(presetPath)) {
+      resolvedPath = presetPath;
+      console.log(chalk.gray(`Using preset: ${filename}`));
+    } else {
+      // Also try without adding extension in case it's a full filename
+      const altPresetPath = path.join(presetDir, listPath);
+      if (fs.existsSync(altPresetPath)) {
+        resolvedPath = altPresetPath;
+        console.log(chalk.gray(`Using preset: ${listPath}`));
+      }
+    }
+  }
+  
   try {
-    const content = await fs.promises.readFile(listPath, 'utf8');
+    const content = await fs.promises.readFile(resolvedPath, 'utf8');
     return content
       .split('\n')
       .map(line => line.trim())
@@ -50,7 +74,7 @@ async function loadFileList(listPath: string, basePath: string): Promise<string[
         return file;
       });
   } catch (error) {
-    throw new Error(`Failed to read file list: ${listPath}`);
+    throw new Error(`Failed to read file list: ${resolvedPath}`);
   }
 }
 
@@ -171,6 +195,10 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
         console.log(chalk.gray(`  Files included: ${selectedFiles.length}`));
       } else {
         console.log(result.prompt);
+        // Add a helpful tip about saving outputs
+        if (!options.json && selectedFiles.length > 5) {
+          console.error(chalk.gray('\nTip: Consider saving large outputs with -o .promptcode/outputs/<name>.md'));
+        }
       }
     }
     

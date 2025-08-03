@@ -43,6 +43,7 @@ scripts/.telemetry-config.json
 # PromptCode CLI specific
 .promptcode/context.json
 .promptcode/contexts/
+.promptcode/outputs/
 packages/cli/dist/
 packages/core/lib/
 packages/core/dist/

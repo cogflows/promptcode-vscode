@@ -1,29 +1,38 @@
 #!/usr/bin/env bun
 import { Command } from 'commander';
 import chalk from 'chalk';
+import * as fs from 'fs';
 import { generateCommand } from './commands/generate';
 import { cacheCommand } from './commands/cache';
 import { listTemplates } from './commands/templates';
+import { presetCommand } from './commands/preset';
+import { expertCommand } from './commands/expert';
+import { configCommand } from './commands/config';
 
 const program = new Command()
   .name('promptcode')
   .description('Generate AI-ready prompts from codebases - designed for AI coding assistants')
   .version('0.1.0')
   .addHelpText('after', `
-Common AI Agent Workflow:
-  $ promptcode context add "src/**/*.ts"          # 1. Add files to context
-  $ promptcode generate -o prompt.md              # 2. Generate prompt
-  $ # ... AI generates response.md ...
-  $ promptcode diff response.md --preview         # 3. Preview changes
-  $ promptcode diff response.md --apply           # 4. Apply changes
+Quick Start:
+  $ promptcode generate -f "src/**/*.ts" -o prompt.md   # Generate prompt
+  $ promptcode preset --create backend                   # Create preset
+  $ promptcode expert "How to optimize this?" -p backend # Ask AI expert
   
-Quick Examples:
-  $ promptcode generate                    # Generate prompt from all files
-  $ promptcode generate -f "src/**/*.ts"   # Generate from TypeScript files
-  $ promptcode extract response.md         # Extract code from AI response
-  $ promptcode validate generated.ts       # Validate AI-generated code
+Common Workflows:
+  1. Using presets:
+     $ promptcode preset --create api-routes
+     $ promptcode generate -l api-routes
   
-For detailed help on any command, use: promptcode <command> --help`);
+  2. Expert consultation:
+     $ promptcode config --set-openai-key sk-...
+     $ promptcode expert "Explain the auth flow" --preset auth
+  
+  3. Apply AI changes:
+     $ promptcode diff response.md --preview
+     $ promptcode diff response.md --apply
+
+For detailed help: promptcode <command> --help`);
 
 // Generate command
 program
@@ -31,19 +40,27 @@ program
   .description('Generate a prompt from selected files for AI analysis')
   .addHelpText('after', `
 Examples:
-  $ promptcode generate -f "src/**/*.ts" -o prompt.md
-  $ promptcode generate -t code-review --json
-  $ promptcode generate -i instructions.md`)
-  .option('-p, --path <dir>', 'project root directory', process.cwd())
-  .option('-f, --files <patterns...>', 'file glob patterns (e.g., "src/**/*.ts" "!**/*.test.ts")')
-  .option('--no-gitignore', 'ignore .gitignore rules')
-  .option('--ignore-file <file>', 'path to custom ignore file (default: .promptcode_ignore)')
-  .option('-l, --list <file>', 'read file paths from a text file (one per line)')
-  .option('-i, --instructions <file>', 'path to markdown/text instructions file')
-  .option('-t, --template <name>', 'use a built-in or user template')
+  $ promptcode generate                      # All files in project
+  $ promptcode generate -f "src/**/*.ts"     # Specific patterns
+  $ promptcode generate -p backend           # Use preset
+  $ promptcode generate -t code-review       # Apply template
+  $ promptcode generate -p api -o prompt.md  # Save to file`)
+  .option('-p, --preset <name>', 'use a preset (shorthand for -l)')
+  .option('-f, --files <patterns...>', 'file glob patterns')
+  .option('-l, --list <file>', 'file list or preset name (deprecated, use -p)')
+  .option('-t, --template <name>', 'apply a template')
+  .option('-i, --instructions <file>', 'custom instructions file')
   .option('-o, --out <file>', 'output file (default: stdout)')
-  .option('--json', 'output in JSON format with metadata')
-  .action(generateCommand);
+  .option('--json', 'output JSON with metadata')
+  .option('--no-gitignore', 'ignore .gitignore rules')
+  .option('--path <dir>', 'project directory', process.cwd())
+  .action(async (options) => {
+    // Handle preset shorthand
+    if (options.preset && !options.list) {
+      options.list = options.preset;
+    }
+    await generateCommand(options);
+  });
 
 // Cache command
 program
@@ -59,11 +76,72 @@ program
   .description('List available prompt templates')
   .action(listTemplates);
 
+// Preset command - manage pattern presets
+program
+  .command('preset')
+  .description('Manage file pattern presets for quick context switching')
+  .addHelpText('after', `
+Actions:
+  --list           List all presets (default)
+  --create <name>  Create a new preset
+  --info <name>    Show preset details and token count
+  --edit <name>    Edit preset in your editor
+  --delete <name>  Delete a preset
+
+Examples:
+  $ promptcode preset --create backend
+  $ promptcode preset --info backend
+  $ promptcode generate -l backend`)
+  .option('-p, --path <dir>', 'project root directory', process.cwd())
+  .option('--list', 'list all presets (default action)')
+  .option('--create <name>', 'create a new preset')
+  .option('--info <name>', 'show preset info with token count')
+  .option('--edit <name>', 'edit preset in editor')
+  .option('--delete <name>', 'delete a preset')
+  .action(async (options) => {
+    await presetCommand(options);
+  });
+
+// Expert command - consult AI with codebase context
+program
+  .command('expert <question>')
+  .description('Ask AI expert questions with full codebase context')
+  .addHelpText('after', `
+Requires OpenAI API key. Set it with:
+  $ promptcode config --set-openai-key <key>
+
+Examples:
+  $ promptcode expert "How can I optimize the API performance?"
+  $ promptcode expert "Explain the authentication flow" --preset auth
+  $ promptcode expert "Find potential security issues" -f "src/api/**/*.ts"
+  $ promptcode expert "Review this code" --model gpt-4 --stream`)
+  .option('-p, --path <dir>', 'project root directory', process.cwd())
+  .option('--preset <name>', 'use a preset for context')
+  .option('-f, --files <patterns...>', 'file patterns to include')
+  .option('--model <model>', 'OpenAI model (default: gpt-4-turbo-preview)')
+  .option('-o, --output <file>', 'save response to file')
+  .option('--stream', 'stream response in real-time')
+  .action(async (question, options) => {
+    await expertCommand(question, options);
+  });
+
+// Config command - manage configuration
+program
+  .command('config')
+  .description('Manage PromptCode configuration')
+  .option('--show', 'show current configuration')
+  .option('--set-openai-key <key>', 'set OpenAI API key')
+  .option('--reset', 'reset all configuration')
+  .action(async (options) => {
+    await configCommand(options);
+  });
+
 // Stats command (quick stats about current directory)
 program
   .command('stats')
-  .description('Show token statistics about the current project')
+  .description('Show token statistics for current project or preset')
   .option('-p, --path <dir>', 'project root directory', process.cwd())
+  .option('-l, --preset <name>', 'analyze a specific preset')
   .addHelpText('after', '\nShows file count, total tokens, and breakdown by file type.')
   .action(async (options) => {
     const { scanFiles, initializeTokenCounter } = await import('@promptcode/core');
@@ -79,10 +157,26 @@ program
       
       const projectPath = path.resolve(options.path);
       
-      // Scan all files
+      // Determine patterns
+      let patterns = ['**/*'];
+      if (options.preset) {
+        const presetPath = path.join(projectPath, '.promptcode', 'presets', `${options.preset}.patterns`);
+        if (fs.existsSync(presetPath)) {
+          const content = await fs.promises.readFile(presetPath, 'utf8');
+          patterns = content
+            .split('\n')
+            .map((line: string) => line.trim())
+            .filter((line: string) => line && !line.startsWith('#'));
+        } else {
+          spinner.fail(`Preset not found: ${options.preset}`);
+          return;
+        }
+      }
+      
+      // Scan files
       const files = await scanFiles({
         cwd: projectPath,
-        patterns: ['**/*'],
+        patterns,
         respectGitignore: true,
         workspaceName: path.basename(projectPath)
       });
@@ -103,7 +197,11 @@ program
       }
       
       // Display results
-      console.log(chalk.bold(`\nProject Statistics: ${chalk.cyan(path.basename(projectPath))}`));
+      const title = options.preset 
+        ? `Preset Statistics: ${chalk.cyan(options.preset)}`
+        : `Project Statistics: ${chalk.cyan(path.basename(projectPath))}`;
+      
+      console.log(chalk.bold(`\n${title}`));
       console.log(chalk.gray('─'.repeat(50)));
       console.log(`Total files: ${chalk.cyan(files.length)}`);
       console.log(`Total tokens: ${chalk.cyan(totalTokens.toLocaleString())}`);
@@ -151,34 +249,6 @@ Code blocks should include filename in header or first comment:
     await diffCommand(promptFile, options);
   });
 
-// Context command - add/remove files from current context
-program
-  .command('context <action> [files...]')
-  .description('Manage persistent file context for AI sessions')
-  .argument('<action>', 'action to perform')
-  .argument('[files...]', 'file paths or glob patterns')
-  .addHelpText('after', `
-Actions:
-  add [files...]    - Add files to context
-  remove [files...] - Remove files from context (alias: rm)
-  list              - Show current context (alias: ls)
-  clear             - Clear all context
-  save              - Save current context (requires --save <name>)
-  load              - Load saved context (requires --load <name>)
-  saved             - List all saved contexts
-
-Examples:
-  $ promptcode context add "src/**/*.ts"
-  $ promptcode context list
-  $ promptcode context save --save feature-x
-  $ promptcode context load --load feature-x`)
-  .option('-p, --path <dir>', 'project root directory', process.cwd())
-  .option('--save <name>', 'save context as a named selection')
-  .option('--load <name>', 'load a saved context selection')
-  .action(async (action, files, options) => {
-    const { contextCommand } = await import('./commands/context');
-    await contextCommand(action, files, options);
-  });
 
 // Watch command - monitor files and regenerate prompt on changes
 program
