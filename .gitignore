@@ -52,3 +52,6 @@ packages/core/dist/
 *.tmp
 *.temp
 .cache/
+
+# TypeScript build info
+*.tsbuildinfo
