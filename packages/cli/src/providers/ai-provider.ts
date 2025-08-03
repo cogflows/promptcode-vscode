@@ -21,6 +21,62 @@ export interface AIResponse {
   };
 }
 
+// Type-safe usage formats from different providers
+type ProviderUsage = 
+  | { inputTokens: number; outputTokens: number; totalTokens?: number }
+  | { promptTokens: number; completionTokens: number; totalTokens?: number }
+  | { tokensProcessed: number; tokensGenerated: number; totalTokens?: number };
+
+// Field mapping for different SDK naming conventions
+const TOKEN_FIELD_MAP = {
+  prompt: ['inputTokens', 'promptTokens', 'tokensProcessed'],
+  completion: ['outputTokens', 'completionTokens', 'tokensGenerated'],
+  total: ['totalTokens']
+} as const;
+
+// Export for testing
+export function normalizeUsage(usage?: ProviderUsage | any): AIResponse['usage'] | undefined {
+  if (!usage) return undefined;
+  
+  // Helper to safely convert values to numbers
+  const toNumber = (value: unknown): number => {
+    const num = Number(value);
+    return isNaN(num) ? 0 : num;
+  };
+  
+  // Helper to find first matching field from the map
+  const findTokenValue = (fieldType: keyof typeof TOKEN_FIELD_MAP): number => {
+    const fields = TOKEN_FIELD_MAP[fieldType];
+    for (const field of fields) {
+      if (field in usage) {
+        return toNumber(usage[field as keyof typeof usage]);
+      }
+    }
+    return 0;
+  };
+  
+  // Extract token values using the field map
+  const promptTokens = findTokenValue('prompt');
+  const completionTokens = findTokenValue('completion');
+  const totalTokens = findTokenValue('total') || (promptTokens + completionTokens);
+  
+  // Warn if we couldn't find any recognized token fields
+  if (promptTokens === 0 && completionTokens === 0 && !('totalTokens' in usage)) {
+    const knownFields = Object.values(TOKEN_FIELD_MAP).flat();
+    const hasUnknownShape = !knownFields.some(field => field in usage);
+    
+    if (hasUnknownShape) {
+      console.warn('[promptcode] Unknown usage object shape:', Object.keys(usage));
+    }
+  }
+  
+  return {
+    promptTokens,
+    completionTokens,
+    totalTokens
+  };
+}
+
 export class AIProvider {
   private readonly providers: Record<Provider, any> = {
     openai: undefined,
@@ -112,11 +168,7 @@ export class AIProvider {
     
     return {
       text: result.text,
-      usage: result.usage ? {
-        promptTokens: (result.usage as any).promptTokens || 0,
-        completionTokens: (result.usage as any).completionTokens || 0,
-        totalTokens: ((result.usage as any).promptTokens || 0) + ((result.usage as any).completionTokens || 0)
-      } : undefined
+      usage: normalizeUsage(result.usage)
     };
   }
   
@@ -160,11 +212,7 @@ export class AIProvider {
     
     return {
       text: fullText,
-      usage: usage ? {
-        promptTokens: (usage as any).promptTokens || 0,
-        completionTokens: (usage as any).completionTokens || 0,
-        totalTokens: ((usage as any).promptTokens || 0) + ((usage as any).completionTokens || 0)
-      } : undefined
+      usage: normalizeUsage(usage)
     };
   }
   

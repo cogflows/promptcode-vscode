@@ -8,7 +8,8 @@
   "scripts": {
     "build": "bun build src/index.ts --compile --target=bun --outfile dist/promptcode",
     "dev": "bun run src/index.ts",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "test": "bun test"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^2.0.0",

@@ -1,5 +1,12 @@
 /**
  * Model configurations and provider setup
+ * 
+ * IMPORTANT: All pricing values are in USD per million tokens
+ * - pricing.input: Cost per million input tokens
+ * - pricing.output: Cost per million output tokens
+ * 
+ * Example: If a provider charges $0.001 per 1K tokens, 
+ * the value here should be 1.0 (1000x conversion)
  */
 
 import { z } from 'zod';
