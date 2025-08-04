@@ -168,3 +168,21 @@ Use `gemini -p` when:
 - When checking implementations, be specific about what you're looking for to get accurate results
 - When looking online, I remind you that we are in 2025, so for latest information, make sure you don't check old information or documentation.
 - Make sure you are **thorough** - for example, if you install a new package, make sure our requirements.txt or package.json is updated.
+
+---
+
+## Using PromptCode CLI
+
+When working with this codebase, use the `promptcode` CLI to consult AI experts about code. After building (`./packages/cli/dist/promptcode`):
+
+```bash
+# Ask questions with context - AI-agent friendly syntax
+promptcode "Why is this slow?" src/**/*.ts
+promptcode "Explain the auth flow" @backend/ @frontend/
+promptcode "What are the security risks?"  # Entire project
+
+# Just use --help for other options
+promptcode --help
+```
+
+The CLI automatically detects whether you want to ask a question (expert mode) or generate a prompt (files only).
