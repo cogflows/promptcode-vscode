@@ -1,6 +1,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import chalk from 'chalk';
+import { ConfigService } from '../services/config-service';
 
 interface ConfigOptions {
   setOpenaiKey?: string;
@@ -93,17 +94,34 @@ export async function configCommand(options: ConfigOptions): Promise<void> {
       const config = await loadConfig();
       const configPath = getConfigPath();
       
+      // Get effective configuration (including env vars)
+      const configService = new ConfigService();
+      const effectiveKeys = configService.getAllKeys();
+      
       console.log(chalk.bold('PromptCode Configuration'));
       console.log(chalk.gray('─'.repeat(50)));
       console.log(`Config file: ${configPath}`);
-      console.log(`OpenAI API key: ${config.openaiApiKey ? chalk.green('Set') : chalk.yellow('Not set')}`);
-      console.log(`Anthropic API key: ${config.anthropicApiKey ? chalk.green('Set') : chalk.yellow('Not set')}`);
-      console.log(`Google API key: ${config.googleApiKey ? chalk.green('Set') : chalk.yellow('Not set')}`);
-      console.log(`xAI API key: ${config.xaiApiKey ? chalk.green('Set') : chalk.yellow('Not set')}`);
+      
+      // Show effective configuration with source
+      const showKeyStatus = (provider: string, fileKey: string | undefined, effectiveKey: string | undefined) => {
+        if (effectiveKey) {
+          if (fileKey) {
+            return chalk.green('Set (config file)');
+          } else {
+            return chalk.green('Set (environment)');
+          }
+        }
+        return chalk.yellow('Not set');
+      };
+      
+      console.log(`OpenAI API key: ${showKeyStatus('openai', config.openaiApiKey, effectiveKeys.openai)}`);
+      console.log(`Anthropic API key: ${showKeyStatus('anthropic', config.anthropicApiKey, effectiveKeys.anthropic)}`);
+      console.log(`Google API key: ${showKeyStatus('google', config.googleApiKey, effectiveKeys.google)}`);
+      console.log(`xAI API key: ${showKeyStatus('xai', config.xaiApiKey, effectiveKeys.xai)}`);
       console.log(`Default model: ${config.defaultModel || 'o3'}`);
       console.log(`Cache directory: ${config.cacheDir || '~/.cache/promptcode'}`);
       
-      const hasAnyKey = config.openaiApiKey || config.anthropicApiKey || config.googleApiKey || config.xaiApiKey;
+      const hasAnyKey = effectiveKeys.openai || effectiveKeys.anthropic || effectiveKeys.google || effectiveKeys.xai;
       if (!hasAnyKey) {
         console.log(chalk.yellow('\nSet API keys with:'));
         console.log('  promptcode config --set-openai-key <key>');
@@ -133,11 +151,11 @@ export async function configCommand(options: ConfigOptions): Promise<void> {
       console.log('  promptcode config --set-google-key <key>       Set Google API key');
       console.log('  promptcode config --set-xai-key <key>          Set xAI API key');
       console.log('  promptcode config --reset                      Reset configuration');
-      console.log('\nEnvironment variables:');
-      console.log('  OPENAI_API_KEY      OpenAI API key (overrides config)');
-      console.log('  ANTHROPIC_API_KEY   Anthropic API key (overrides config)');
-      console.log('  GOOGLE_API_KEY      Google API key (overrides config)');
-      console.log('  XAI_API_KEY         xAI API key (overrides config)');
+      console.log('\nEnvironment variables (first match wins):');
+      console.log('  OpenAI:     OPENAI_API_KEY, OPENAI_KEY');
+      console.log('  Anthropic:  ANTHROPIC_API_KEY, CLAUDE_API_KEY');
+      console.log('  Google:     GOOGLE_API_KEY, GOOGLE_CLOUD_API_KEY, GOOGLE_AI_API_KEY, GEMINI_API_KEY');
+      console.log('  xAI:        XAI_API_KEY, GROK_API_KEY');
       console.log('  XDG_CONFIG_HOME     Config directory (default: ~/.config)');
       console.log('  XDG_CACHE_HOME      Cache directory (default: ~/.cache)');
     }

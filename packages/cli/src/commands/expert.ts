@@ -58,7 +58,14 @@ function listAvailableModels() {
     });
     
     if (!hasKey) {
-      console.log(chalk.yellow(`     Set ${provider.toUpperCase()}_API_KEY to enable these models\n`));
+      // Show all supported env vars for this provider
+      const envVars = {
+        openai: 'OPENAI_API_KEY or OPENAI_KEY',
+        anthropic: 'ANTHROPIC_API_KEY or CLAUDE_API_KEY',
+        google: 'GOOGLE_API_KEY, GOOGLE_CLOUD_API_KEY, or GEMINI_API_KEY',
+        xai: 'XAI_API_KEY or GROK_API_KEY'
+      };
+      console.log(chalk.yellow(`     Set ${envVars[provider as keyof typeof envVars]} to enable these models\n`));
     } else {
       console.log();
     }
@@ -283,10 +290,11 @@ export async function expertCommand(question: string | undefined, options: Exper
     // Helpful error messages
     if ((error as Error).message.includes('API key')) {
       console.log(chalk.yellow('\nTo configure API keys:'));
-      console.log('1. Set environment variables:');
-      console.log('   export OPENAI_API_KEY="sk-..."');
-      console.log('   export ANTHROPIC_API_KEY="sk-ant-..."');
-      console.log('   export GOOGLE_API_KEY="..."');
+      console.log('1. Set environment variables (any of these):');
+      console.log('   export OPENAI_API_KEY="sk-..."        # or OPENAI_KEY');
+      console.log('   export ANTHROPIC_API_KEY="sk-ant-..."  # or CLAUDE_API_KEY');
+      console.log('   export GOOGLE_API_KEY="..."            # or GOOGLE_CLOUD_API_KEY, GEMINI_API_KEY');
+      console.log('   export XAI_API_KEY="..."               # or GROK_API_KEY');
       console.log('\n2. Or run: promptcode config --set-<provider>-key <key>');
     }
     

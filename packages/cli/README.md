@@ -160,8 +160,11 @@ promptcode config --set-openai-key KEY   # Set API key
 promptcode config --reset                # Reset all
 ```
 
-Environment variables:
-- `OPENAI_API_KEY` - OpenAI API key (overrides config)
+Environment variables (first match wins):
+- **OpenAI**: `OPENAI_API_KEY`, `OPENAI_KEY`
+- **Anthropic**: `ANTHROPIC_API_KEY`, `CLAUDE_API_KEY`
+- **Google**: `GOOGLE_API_KEY`, `GOOGLE_CLOUD_API_KEY`, `GOOGLE_AI_API_KEY`, `GEMINI_API_KEY`
+- **xAI**: `XAI_API_KEY`, `GROK_API_KEY`
 - `XDG_CONFIG_HOME` - Config directory
 - `XDG_CACHE_HOME` - Cache directory
 

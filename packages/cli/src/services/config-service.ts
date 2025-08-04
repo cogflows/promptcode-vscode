@@ -6,11 +6,12 @@ import * as path from 'path';
  */
 export type Provider = 'openai' | 'anthropic' | 'google' | 'xai';
 
-const ENV_VAR_MAP: Record<Provider, string> = {
-  openai: 'OPENAI_API_KEY',
-  anthropic: 'ANTHROPIC_API_KEY',
-  google: 'GOOGLE_API_KEY',
-  xai: 'XAI_API_KEY'
+// Support multiple env var names for each provider (first match wins)
+const ENV_VAR_MAP: Record<Provider, string[]> = {
+  openai: ['OPENAI_API_KEY', 'OPENAI_KEY'],
+  anthropic: ['ANTHROPIC_API_KEY', 'CLAUDE_API_KEY'],
+  google: ['GOOGLE_API_KEY', 'GOOGLE_CLOUD_API_KEY', 'GOOGLE_AI_API_KEY', 'GEMINI_API_KEY'],
+  xai: ['XAI_API_KEY', 'GROK_API_KEY']
 };
 
 export interface ApiKeys {
@@ -79,8 +80,14 @@ export class ConfigService {
     const merged: ApiKeys = { ...fileKeys };
 
     (Object.keys(ENV_VAR_MAP) as Provider[]).forEach((provider) => {
-      const envVal = process.env[ENV_VAR_MAP[provider]];
-      if (envVal?.trim()) merged[provider] = envVal.trim();
+      // Check each possible env var name for this provider
+      for (const envName of ENV_VAR_MAP[provider]) {
+        const envVal = process.env[envName];
+        if (envVal?.trim()) {
+          merged[provider] = envVal.trim();
+          break; // Use first match
+        }
+      }
     });
 
     return merged;
