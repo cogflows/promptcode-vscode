@@ -1,0 +1,21 @@
+# cli-analysis preset - CLI source files for AI agent usability analysis
+# Focused on understanding current implementation to improve for zero-knowledge usage
+
+# Core CLI files
+packages/cli/src/index.ts
+packages/cli/src/commands/expert.ts
+packages/cli/src/commands/preset.ts
+packages/cli/src/commands/generate.ts
+packages/cli/src/commands/config.ts
+
+# Supporting files
+packages/cli/src/providers/models.ts
+packages/cli/src/providers/ai-provider.ts
+packages/cli/src/services/config-service.ts
+
+# Package info
+packages/cli/package.json
+packages/cli/README.md
+
+# Example of the confusion
+CLAUDE.md

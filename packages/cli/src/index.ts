@@ -2,6 +2,7 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import * as fs from 'fs';
+import * as path from 'path';
 import { generateCommand } from './commands/generate';
 import { cacheCommand } from './commands/cache';
 import { listTemplates } from './commands/templates';
@@ -10,20 +11,103 @@ import { expertCommand } from './commands/expert';
 import { configCommand } from './commands/config';
 import { BUILD_VERSION } from './version';
 
+/**
+ * Parse positional arguments to detect question and file patterns
+ * Following o3-pro's recommendation for AI-agent friendly syntax
+ */
+function parsePositional(tokens: string[]): { question: string; patterns: string[] } {
+  const patterns: string[] = [];
+  const questionParts: string[] = [];
+  let foundQuestion = false;
+  
+  // Check if first token is a quoted question
+  if (tokens.length > 0 && (tokens[0].includes(' ') || tokens[0].endsWith('?'))) {
+    foundQuestion = true;
+    questionParts.push(tokens[0]);
+    tokens = tokens.slice(1);
+  }
+  
+  for (const token of tokens) {
+    // Strip @ prefix if present (Gemini-style)
+    const cleanToken = token.startsWith('@') ? token.slice(1) : token;
+    
+    // Check if token looks like a file/pattern
+    const hasGlobChars = /[*?[\]{}]/.test(cleanToken);
+    const existsAsFile = fs.existsSync(path.resolve(cleanToken));
+    const hasPathSeparator = cleanToken.includes('/') || cleanToken.includes('\\');
+    
+    if (hasGlobChars || existsAsFile || hasPathSeparator) {
+      patterns.push(cleanToken);
+    } else if (!foundQuestion) {
+      questionParts.push(token);
+    }
+  }
+  
+  const question = questionParts.join(' ').trim();
+  return { question, patterns };
+}
+
+/**
+ * Smart default command handler for zero-friction usage
+ * Supports: promptcode "question" file1 file2...
+ */
+async function defaultCommand(args: string[], opts: any): Promise<void> {
+  // If no args provided, check if they meant to use --help
+  if (args.length === 0) {
+    program.outputHelp();
+    return;
+  }
+  
+  // Parse positional arguments
+  const { question, patterns } = parsePositional(args);
+  
+  // If we have a question, use expert mode
+  if (question) {
+    const expertOptions = {
+      ...opts,
+      files: patterns.length > 0 ? patterns : undefined
+    };
+    await expertCommand(question, expertOptions);
+  } 
+  // If only files provided, generate prompt
+  else if (patterns.length > 0) {
+    const generateOptions = {
+      ...opts,
+      files: patterns
+    };
+    await generateCommand(generateOptions);
+  }
+  // No clear intent, show helpful error
+  else {
+    console.error(chalk.red('🙋 I need either a question or file patterns to work with.\n'));
+    console.error(chalk.yellow('Examples:'));
+    console.error(chalk.gray('  promptcode "Why is this slow?" src/**/*.ts'));
+    console.error(chalk.gray('  promptcode "Explain the auth flow" @backend/ @frontend/'));
+    console.error(chalk.gray('  promptcode src/**/*.ts  # Just generate prompt\n'));
+    console.error(chalk.gray('For more help: promptcode --help'));
+    process.exit(1);
+  }
+}
+
 const program = new Command()
   .name('promptcode')
   .description('Generate AI-ready prompts from codebases - designed for AI coding assistants')
   .version(BUILD_VERSION)
   .addHelpText('after', `
-Quick Start:
+Quick Start (AI-Agent Friendly):
+  $ promptcode "Why is this slow?" src/**/*.ts          # Ask AI about files
+  $ promptcode "Explain the auth flow" @backend/ @api/  # @ prefix supported
+  $ promptcode src/**/*.ts                              # Just generate prompt
+  
+Traditional Commands:
   $ promptcode generate -f "src/**/*.ts" -o prompt.md   # Generate prompt
   $ promptcode preset --create backend                   # Create preset
   $ promptcode expert "How to optimize this?" -p backend # Ask AI expert
   
 Common Workflows:
-  1. Using presets:
-     $ promptcode preset --create api-routes
-     $ promptcode generate -l api-routes
+  1. Zero-config usage:
+     $ promptcode "What are the security risks?"        # Analyze entire project
+     $ promptcode "Review this code" file1.py file2.js  # Specific files
   
   2. Expert consultation:
      $ promptcode config --set-openai-key sk-...
@@ -344,10 +428,22 @@ program
     console.log(`Platform: ${chalk.gray(process.platform + ' ' + process.arch)}`);
   });
 
-// Parse arguments
-program.parse();
+// Handle smart routing for zero-friction usage
+// Check if we should use the default command handler
+const args = process.argv.slice(2);
+const hasSubcommand = args.length > 0 && [
+  'generate', 'cache', 'templates', 'list-templates', 'preset', 
+  'expert', 'config', 'stats', 'diff', 'watch', 'validate', 
+  'extract', 'version-info', '--help', '-h', '--version', '-V'
+].includes(args[0]);
 
-// Show help if no command provided
-if (!process.argv.slice(2).length) {
-  program.outputHelp();
+if (!hasSubcommand && args.length > 0) {
+  // Use smart default command for zero-friction usage
+  defaultCommand(args, {}).catch(err => {
+    console.error(chalk.red(`Error: ${err.message}`));
+    process.exit(1);
+  });
+} else {
+  // Parse normally for traditional commands
+  program.parse();
 }

@@ -75,7 +75,12 @@ export async function expertCommand(question: string | undefined, options: Exper
   
   // Require question for actual consultation
   if (!question) {
-    console.error(chalk.red('Error: Question is required unless using --list-models'));
+    console.error(chalk.red('🙋 I need a question to ask the AI expert.\n'));
+    console.error(chalk.yellow('Examples:'));
+    console.error(chalk.gray('  promptcode "Why is this slow?" src/**/*.ts'));
+    console.error(chalk.gray('  promptcode "Explain the auth flow" @backend/'));
+    console.error(chalk.gray('  promptcode expert "What are the security risks?" --preset api\n'));
+    console.error(chalk.gray('To list available models: promptcode expert --list-models'));
     process.exit(1);
   }
   const spinner = !options.stream ? ora('Preparing context...').start() : null;
@@ -90,10 +95,13 @@ export async function expertCommand(question: string | undefined, options: Exper
     
     const projectPath = path.resolve(options.path || process.cwd());
     
-    // Determine patterns
-    let patterns: string[] = options.files || ['**/*'];
+    // Determine patterns - prioritize files, then preset, then default
+    let patterns: string[];
     
-    if (options.preset) {
+    if (options.files && options.files.length > 0) {
+      // Direct files provided - strip @ prefix if present
+      patterns = options.files.map(f => f.startsWith('@') ? f.slice(1) : f);
+    } else if (options.preset) {
       // Load preset
       const presetPath = path.join(projectPath, '.promptcode', 'presets', `${options.preset}.patterns`);
       if (fs.existsSync(presetPath)) {
@@ -103,8 +111,11 @@ export async function expertCommand(question: string | undefined, options: Exper
           .map(line => line.trim())
           .filter(line => line && !line.startsWith('#'));
       } else {
-        throw new Error(`Preset not found: ${options.preset}`);
+        throw new Error(`Preset not found: ${options.preset}\nCreate it with: promptcode preset --create ${options.preset}`);
       }
+    } else {
+      // Default to all files
+      patterns = ['**/*'];
     }
     
     // Scan files
@@ -117,6 +128,10 @@ export async function expertCommand(question: string | undefined, options: Exper
     
     if (files.length === 0) {
       spinner?.fail('No files found matching patterns');
+      console.error(chalk.yellow('\nTips:'));
+      console.error(chalk.gray('  - Check if the path exists: ' + patterns.join(', ')));
+      console.error(chalk.gray('  - Try using absolute paths or glob patterns'));
+      console.error(chalk.gray('  - Make sure .gitignore is not excluding your files'));
       return;
     }
     
