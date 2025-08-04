@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import { scanFiles, buildPrompt, initializeTokenCounter } from '@promptcode/core';
 import chalk from 'chalk';
 import ora from 'ora';
+import { logRun } from '../services/history';
 
 export interface GenerateOptions {
   path?: string;
@@ -14,6 +15,7 @@ export interface GenerateOptions {
   json?: boolean;
   ignoreFile?: string;
   list?: string;
+  savePreset?: string;
 }
 
 /**
@@ -142,6 +144,28 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
       patterns = await loadFileList(options.list, projectPath);
     }
     
+    // Save preset if requested
+    if (options.savePreset && patterns.length > 0) {
+      const presetDir = path.join(projectPath, '.promptcode', 'presets');
+      await fs.promises.mkdir(presetDir, { recursive: true });
+      const presetPath = path.join(presetDir, `${options.savePreset}.patterns`);
+      
+      // Check if preset exists
+      if (fs.existsSync(presetPath)) {
+        // In non-TTY environments, fail to avoid accidental overwrites
+        if (!process.stdout.isTTY) {
+          throw new Error(`Preset '${options.savePreset}' already exists. Remove it first or choose a different name.`);
+        }
+        // In TTY, we could ask for confirmation, but for now just notify
+        console.log(chalk.yellow(`⚠️  Overwriting existing preset: ${options.savePreset}`));
+      }
+      
+      // Write the preset file
+      const presetContent = `# ${options.savePreset} preset\n# Created: ${new Date().toISOString()}\n# Generated from promptcode\n\n${patterns.join('\n')}\n`;
+      await fs.promises.writeFile(presetPath, presetContent);
+      console.log(chalk.green(`✓ Saved file patterns to preset: ${options.savePreset}`));
+    }
+    
     spinner.text = 'Scanning files...';
     
     // Scan files
@@ -168,6 +192,12 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
     });
     
     spinner.succeed(`Generated prompt with ${result.tokenCount} tokens`);
+    
+    // Log to history
+    await logRun('generate', patterns, projectPath, {
+      fileCount: selectedFiles.length,
+      tokenCount: result.tokenCount
+    });
     
     // Output results
     if (options.json) {

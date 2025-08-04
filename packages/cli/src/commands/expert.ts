@@ -5,6 +5,7 @@ import ora from 'ora';
 import { scanFiles, buildPrompt, initializeTokenCounter } from '@promptcode/core';
 import { AIProvider } from '../providers/ai-provider';
 import { MODELS, DEFAULT_MODEL, getAvailableModels } from '../providers/models';
+import { logRun } from '../services/history';
 
 interface ExpertOptions {
   path?: string;
@@ -14,6 +15,7 @@ interface ExpertOptions {
   output?: string;
   stream?: boolean;
   listModels?: boolean;
+  savePreset?: string;
 }
 
 const SYSTEM_PROMPT = `You are an expert software engineer helping analyze and improve code. Provide constructive, actionable feedback.
@@ -116,6 +118,28 @@ export async function expertCommand(question: string | undefined, options: Exper
     } else {
       // Default to all files
       patterns = ['**/*'];
+    }
+    
+    // Save preset if requested
+    if (options.savePreset && patterns.length > 0) {
+      const presetDir = path.join(projectPath, '.promptcode', 'presets');
+      await fs.promises.mkdir(presetDir, { recursive: true });
+      const presetPath = path.join(presetDir, `${options.savePreset}.patterns`);
+      
+      // Check if preset exists
+      if (fs.existsSync(presetPath)) {
+        // In non-TTY environments, fail to avoid accidental overwrites
+        if (!process.stdout.isTTY) {
+          throw new Error(`Preset '${options.savePreset}' already exists. Remove it first or choose a different name.`);
+        }
+        // In TTY, we could ask for confirmation, but for now just notify
+        console.log(chalk.yellow(`⚠️  Overwriting existing preset: ${options.savePreset}`));
+      }
+      
+      // Write the preset file
+      const presetContent = `# ${options.savePreset} preset\n# Created: ${new Date().toISOString()}\n# Question: ${question || 'N/A'}\n\n${patterns.join('\n')}\n`;
+      await fs.promises.writeFile(presetPath, presetContent);
+      console.log(chalk.green(`✓ Saved file patterns to preset: ${options.savePreset}`));
     }
     
     // Scan files
@@ -226,6 +250,14 @@ export async function expertCommand(question: string | undefined, options: Exper
       const cost = aiProvider.calculateCost(modelKey, response.usage);
       console.log(chalk.gray(`💰 Cost: $${cost.toFixed(4)}`));
     }
+    
+    // Log to history
+    await logRun('expert', patterns, projectPath, {
+      question,
+      fileCount: files.length,
+      tokenCount: result.tokenCount,
+      model: modelKey
+    });
     
   } catch (error) {
     spinner?.fail(chalk.red(`Error: ${(error as Error).message}`));

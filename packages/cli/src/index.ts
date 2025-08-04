@@ -65,7 +65,8 @@ async function defaultCommand(args: string[], opts: any): Promise<void> {
   if (question) {
     const expertOptions = {
       ...opts,
-      files: patterns.length > 0 ? patterns : undefined
+      files: patterns.length > 0 ? patterns : undefined,
+      savePreset: opts.savePreset
     };
     await expertCommand(question, expertOptions);
   } 
@@ -73,7 +74,8 @@ async function defaultCommand(args: string[], opts: any): Promise<void> {
   else if (patterns.length > 0) {
     const generateOptions = {
       ...opts,
-      files: patterns
+      files: patterns,
+      savePreset: opts.savePreset
     };
     await generateCommand(generateOptions);
   }
@@ -98,6 +100,7 @@ Quick Start (AI-Agent Friendly):
   $ promptcode "Why is this slow?" src/**/*.ts          # Ask AI about files
   $ promptcode "Explain the auth flow" @backend/ @api/  # @ prefix supported
   $ promptcode src/**/*.ts                              # Just generate prompt
+  $ promptcode "Find bugs" src/**/*.ts --save-preset qa # Save patterns for reuse
   
 Traditional Commands:
   $ promptcode generate -f "src/**/*.ts" -o prompt.md   # Generate prompt
@@ -139,6 +142,7 @@ Examples:
   .option('--json', 'output JSON with metadata')
   .option('--no-gitignore', 'ignore .gitignore rules')
   .option('--path <dir>', 'project directory', process.cwd())
+  .option('--save-preset <name>', 'save file patterns as a preset')
   .action(async (options) => {
     // Handle preset shorthand
     if (options.preset && !options.list) {
@@ -211,6 +215,7 @@ Examples:
   .option('--list-models', 'List available AI models')
   .option('-o, --output <file>', 'save response to file')
   .option('--stream', 'stream response in real-time')
+  .option('--save-preset <name>', 'save file patterns as a preset')
   .action(async (question, options) => {
     await expertCommand(question, options);
   });
@@ -404,6 +409,26 @@ Examples:
     await extractCommand(responseFile, options);
   });
 
+// History command - view and manage command history
+program
+  .command('history')
+  .description('View recent command history and convert to presets')
+  .addHelpText('after', `
+Examples:
+  $ promptcode history                      # List recent entries
+  $ promptcode history --limit 20           # Show more entries
+  $ promptcode history --show 5             # Show full details of entry #5
+  $ promptcode history --preset 5 my-preset # Convert entry #5 to preset`)
+  .option('--limit <n>', 'number of entries to show', '10')
+  .option('--show <index>', 'show full details of specific entry')
+  .option('--preset <index>', 'convert entry to preset (requires --name)')
+  .option('--name <name>', 'preset name when converting from history')
+  .option('--json', 'output as JSON')
+  .action(async (options) => {
+    const { historyCommand } = await import('./commands/history');
+    await historyCommand(options);
+  });
+
 // Version info command - show detailed version information
 program
   .command('version-info')
@@ -428,18 +453,33 @@ program
     console.log(`Platform: ${chalk.gray(process.platform + ' ' + process.arch)}`);
   });
 
+// Add global options that work with the default command
+program
+  .option('--save-preset <name>', 'save file patterns as a preset for later use');
+
 // Handle smart routing for zero-friction usage
 // Check if we should use the default command handler
 const args = process.argv.slice(2);
 const hasSubcommand = args.length > 0 && [
   'generate', 'cache', 'templates', 'list-templates', 'preset', 
   'expert', 'config', 'stats', 'diff', 'watch', 'validate', 
-  'extract', 'version-info', '--help', '-h', '--version', '-V'
+  'extract', 'version-info', 'history', '--help', '-h', '--version', '-V'
 ].includes(args[0]);
 
 if (!hasSubcommand && args.length > 0) {
+  // Parse options for default command
+  const savePresetIndex = args.indexOf('--save-preset');
+  let savePreset;
+  let filteredArgs = args;
+  
+  if (savePresetIndex !== -1 && args[savePresetIndex + 1]) {
+    savePreset = args[savePresetIndex + 1];
+    // Remove --save-preset and its value from args
+    filteredArgs = args.filter((_, i) => i !== savePresetIndex && i !== savePresetIndex + 1);
+  }
+  
   // Use smart default command for zero-friction usage
-  defaultCommand(args, {}).catch(err => {
+  defaultCommand(filteredArgs, { savePreset }).catch(err => {
     console.error(chalk.red(`Error: ${err.message}`));
     process.exit(1);
   });
