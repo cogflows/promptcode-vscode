@@ -50,9 +50,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
+      - name: Install root dependencies
+        run: npm ci
+        
+      - name: Build core package
+        run: npm run build:core
+      
       - uses: oven-sh/setup-bun@v2
         
-      - name: Install dependencies
+      - name: Install CLI dependencies
         run: |
           cd packages/cli
           bun install
