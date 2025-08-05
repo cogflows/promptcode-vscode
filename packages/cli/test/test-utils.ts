@@ -54,8 +54,15 @@ export async function runCLI(
     const cliPath = path.join(__dirname, '..', 'dist', 'promptcode');
     const child = spawn(cliPath, args, {
       cwd: options.cwd || process.cwd(),
-      env: { ...process.env, ...options.env },
-      stdio: 'pipe'
+      env: {
+        ...process.env,
+        CI: 'true',           // always indicate CI
+        NO_COLOR: '1',        // avoid color codes in test output
+        PROMPTCODE_TEST: '1', // flag for CLI to detect test mode
+        ...options.env,
+      },
+      stdio: ['ignore', 'pipe', 'pipe'], // no stdin to prevent hanging
+      detached: true                     // own process group for proper cleanup
     });
     
     let stdout = '';
@@ -66,7 +73,15 @@ export async function runCLI(
     const timeout = options.timeout || 30000; // Default 30s timeout
     const timer = setTimeout(() => {
       timedOut = true;
-      child.kill('SIGTERM');
+      // Kill the entire process group to clean up any child processes
+      if (child.pid) {
+        try {
+          process.kill(-child.pid, 'SIGTERM'); // negative pid = kill process group
+        } catch (e) {
+          // Fallback to regular kill if group kill fails
+          child.kill('SIGTERM');
+        }
+      }
       reject(new Error(`Command timed out after ${timeout}ms: ${args.join(' ')}`));
     }, timeout);
     

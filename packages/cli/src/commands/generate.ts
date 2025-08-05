@@ -138,7 +138,7 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
     // Token warning threshold check
     const threshold = options.tokenWarning || (process.env.PROMPTCODE_TOKEN_WARNING ? parseInt(process.env.PROMPTCODE_TOKEN_WARNING) : 50000);
     
-    if (totalTokens > threshold && !options.yes && !options.json) {
+    if (totalTokens > threshold && !options.yes && !options.json && !process.env.PROMPTCODE_TEST) {
       if (spinner) spinner.stop();
       
       // Estimate cost (rough approximation)
@@ -150,7 +150,7 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
       console.log(`   Estimated cost: ~$${estimatedCost.toFixed(2)}`);
       
       // Check if interactive
-      const isInteractive = process.stdout.isTTY && process.stdin.isTTY;
+      const isInteractive = process.stdout.isTTY && process.stdin.isTTY && !process.env.PROMPTCODE_TEST;
       
       if (!isInteractive) {
         console.log(chalk.yellow('\nNon-interactive environment. Use --yes to proceed without confirmation.'));

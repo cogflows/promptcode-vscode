@@ -231,9 +231,9 @@ export async function expertCommand(question: string | undefined, options: Exper
     console.error(chalk.bold(`  Total:  ~$${estimatedTotalCost.toFixed(4)}`));
 
     // Check if approval is needed
-    const skipConfirm = options.noConfirm || options.yes;
+    const skipConfirm = options.noConfirm || options.yes || process.env.PROMPTCODE_TEST === '1';
     const isExpensive = estimatedTotalCost > APPROVAL_COST_THRESHOLD;
-    const isInteractive = process.stdout.isTTY && process.stdin.isTTY;
+    const isInteractive = process.stdout.isTTY && process.stdin.isTTY && !process.env.PROMPTCODE_TEST;
     
     if (!skipConfirm && (isExpensive || modelKey.includes('pro'))) {
       if (!isInteractive) {

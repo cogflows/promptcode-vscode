@@ -62,7 +62,8 @@ jobs:
       - name: Run tests
         run: |
           cd packages/cli
-          ./test/run-ci-tests.sh
+          # Now that we've fixed the hanging issues, run all tests
+          bun test
           
       - name: Smoke test
         run: |
