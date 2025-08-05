@@ -140,6 +140,7 @@ Examples:
   .option('-t, --template <name>', 'apply a template')
   .option('-i, --instructions <file>', 'custom instructions file')
   .option('-o, --out <file>', 'output file (default: stdout)')
+  .option('--output <file>', 'output file (alias for --out)')
   .option('--json', 'output JSON with metadata')
   .option('--no-gitignore', 'ignore .gitignore rules')
   .option('--path <dir>', 'project directory', process.cwd())
@@ -244,6 +245,8 @@ Examples:
   .option('-o, --output <file>', 'save response to file')
   .option('--stream', 'stream response in real-time')
   .option('--save-preset <name>', 'save file patterns as a preset')
+  .option('--no-confirm', 'skip cost confirmation prompt')
+  .option('-y, --yes', 'automatically confirm (alias for --no-confirm)')
   .action(async (question, options) => {
     await expertCommand(question, options);
   });

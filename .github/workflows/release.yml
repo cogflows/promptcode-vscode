@@ -1,0 +1,119 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:  # Allows manual testing from any branch
+
+jobs:
+  build-extension:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Build VS Code extension
+        run: |
+          npm run build:core
+          npm run vscode:prepublish
+          npx @vscode/vsce package --no-dependencies
+          
+      - name: Upload VSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vsix
+          path: '*.vsix'
+
+  build-cli:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-x64
+            binary-name: promptcode-linux-x64
+          - os: macos-latest
+            target: darwin-x64
+            binary-name: promptcode-darwin-x64
+          - os: macos-latest
+            target: darwin-arm64
+            binary-name: promptcode-darwin-arm64
+          - os: windows-latest
+            target: win-x64
+            binary-name: promptcode-win-x64.exe
+            
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: oven-sh/setup-bun@v2
+        
+      - name: Install dependencies
+        run: |
+          cd packages/cli
+          bun install
+          
+      - name: Build CLI binary
+        run: |
+          cd packages/cli
+          bun run build:prod
+          
+      - name: Rename binary
+        run: |
+          cd packages/cli/dist
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            mv promptcode.exe ../${{ matrix.binary-name }}
+          else
+            mv promptcode ../${{ matrix.binary-name }}
+          fi
+        shell: bash
+        
+      - name: Upload CLI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-${{ matrix.target }}
+          path: packages/cli/${{ matrix.binary-name }}
+
+  create-release:
+    needs: [build-extension, build-cli]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            vsix/*.vsix
+            cli-*/*
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body: |
+            ## Installation
+
+            ### VS Code Extension
+            1. Download `promptcode-${{ github.ref_name }}.vsix`
+            2. Install via Command Palette: `Extensions: Install from VSIX...`
+            3. Or via CLI: `code --install-extension promptcode-${{ github.ref_name }}.vsix`
+
+            ### CLI Tool
+            1. Download the appropriate binary for your platform
+            2. Make it executable: `chmod +x promptcode-*` (Mac/Linux)
+            3. Move to PATH: `sudo mv promptcode-* /usr/local/bin/promptcode`
+            4. Run: `promptcode --help`
+
+            See [README](https://github.com/cogflows/promptcode-vscode) for detailed documentation.

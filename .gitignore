@@ -55,3 +55,5 @@ packages/core/dist/
 
 # TypeScript build info
 *.tsbuildinfo
+
+inspiration/

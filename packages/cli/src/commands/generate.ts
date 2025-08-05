@@ -22,9 +22,11 @@ export interface GenerateOptions {
   instructions?: string;
   template?: string;
   out?: string;
+  output?: string;  // Alias for --out
   json?: boolean;
   ignoreFile?: string;
   list?: string;
+  preset?: string;  // Load patterns from preset
   savePreset?: string;
   dryRun?: boolean;
   tokenWarning?: number;
@@ -47,7 +49,33 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
     if (spinner) spinner.text = 'Loading configuration...';
     
     const instructions = await loadInstructionsFromOptions(options);
-    const patterns = await getPatternsFromOptions(options, projectPath);
+    
+    // Handle output alias
+    if (options.output && !options.out) {
+      options.out = options.output;
+    }
+    
+    // Get patterns from preset or options
+    let patterns: string[];
+    if (options.preset) {
+      // Load preset patterns
+      const presetPath = path.join(projectPath, '.promptcode', 'presets', `${options.preset}.patterns`);
+      if (fs.existsSync(presetPath)) {
+        const content = await fs.promises.readFile(presetPath, 'utf8');
+        patterns = content
+          .split('\n')
+          .map(line => line.trim())
+          .filter(line => line && !line.startsWith('#'));
+        
+        if (!options.json) {
+          console.log(chalk.gray(`📋 Using preset: ${options.preset}`));
+        }
+      } else {
+        throw new Error(`Preset not found: ${options.preset}\nCreate it with: promptcode preset --create ${options.preset}`);
+      }
+    } else {
+      patterns = await getPatternsFromOptions(options, projectPath);
+    }
     
     // Save preset if requested
     if (options.savePreset && patterns.length > 0) {

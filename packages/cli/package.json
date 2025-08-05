@@ -1,6 +1,6 @@
 {
   "name": "promptcode-cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "CLI tool for PromptCode - Generate AI-ready prompts from codebases",
   "bin": {
     "promptcode": "./dist/promptcode"
@@ -8,7 +8,7 @@
   "scripts": {
     "build": "node scripts/inject-version.js && bun build src/index.ts --compile --target=bun --outfile dist/promptcode && npm run copy-templates",
     "build:prod": "PROD_BUILD=1 npm run build",
-    "copy-templates": "cp -r src/claude-templates dist/ && cp CLAUDE.md.template dist/",
+    "copy-templates": "cp -r src/claude-templates dist/",
     "dev": "bun run src/index.ts",
     "clean": "rm -rf dist",
     "test": "bun test"

@@ -1,0 +1,61 @@
+name: Test
+
+on:
+  push:
+    branches: [ main, develop, feature/cli-integration ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:  # Allows manual triggering from GitHub UI
+
+jobs:
+  test-extension:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Build core
+        run: npm run build:core
+        
+      - name: Lint
+        run: npm run lint
+        
+      - name: Build extension
+        run: npm run compile
+        
+      - name: Test packaging
+        run: npx @vscode/vsce package --no-dependencies
+
+  test-cli:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: oven-sh/setup-bun@v2
+        
+      - name: Install dependencies
+        run: |
+          cd packages/cli
+          bun install
+          
+      - name: Run tests
+        run: |
+          cd packages/cli
+          bun test
+          
+      - name: Build CLI
+        run: |
+          cd packages/cli
+          bun run build
+          
+      - name: Smoke test
+        run: |
+          cd packages/cli
+          ./dist/promptcode --version
+          ./dist/promptcode --help

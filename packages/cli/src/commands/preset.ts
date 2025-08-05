@@ -122,6 +122,18 @@ async function showPresetInfo(presetName: string, projectPath: string): Promise<
     console.log(chalk.bold('\nPatterns:'));
     patterns.forEach(p => console.log(`  ${p}`));
     
+    console.log(chalk.bold('\nUsage Examples:'));
+    console.log(chalk.gray('  # Generate prompt with this preset:'));
+    console.log(`  ${chalk.cyan(`promptcode generate --preset ${presetName}`)}`);
+    console.log(`  ${chalk.cyan(`promptcode generate -p ${presetName} -o output.md`)}`);
+    
+    console.log(chalk.gray('\n  # Ask AI expert with this preset:'));
+    console.log(`  ${chalk.cyan(`promptcode expert "Explain the architecture" --preset ${presetName}`)}`);
+    console.log(`  ${chalk.cyan(`promptcode "What are the security risks?" --preset ${presetName}`)}`);
+    
+    console.log(chalk.gray('\n  # Save output to file:'));
+    console.log(`  ${chalk.cyan(`promptcode generate --preset ${presetName} --output /tmp/${presetName}-${new Date().toISOString().split('T')[0]}.txt`)}`);
+    
   } catch (error) {
     spinner.fail(chalk.red(`Error: ${(error as Error).message}`));
   }

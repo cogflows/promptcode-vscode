@@ -6,6 +6,7 @@ import { scanFiles, buildPrompt, initializeTokenCounter } from '@promptcode/core
 import { AIProvider } from '../providers/ai-provider';
 import { MODELS, DEFAULT_MODEL, getAvailableModels } from '../providers/models';
 import { logRun } from '../services/history';
+import { APPROVAL_COST_THRESHOLD } from '../hooks/generate-approval-hook';
 
 interface ExpertOptions {
   path?: string;
@@ -16,6 +17,8 @@ interface ExpertOptions {
   stream?: boolean;
   listModels?: boolean;
   savePreset?: string;
+  noConfirm?: boolean;
+  yes?: boolean;
 }
 
 const SYSTEM_PROMPT = `You are an expert software engineer helping analyze and improve code. Provide constructive, actionable feedback.
@@ -92,6 +95,17 @@ export async function expertCommand(question: string | undefined, options: Exper
     console.error(chalk.gray('To list available models: promptcode expert --list-models'));
     process.exit(1);
   }
+  
+  // Check if approval hook is properly installed (only in Claude Code environment)
+  if (process.env.CLAUDE_PROJECT_DIR) {
+    const hookPath = path.join(process.env.CLAUDE_PROJECT_DIR, '.claude', 'hooks', 'promptcode-cost-approval.sh');
+    const settingsPath = path.join(process.env.CLAUDE_PROJECT_DIR, '.claude', 'settings.json');
+    
+    if (!fs.existsSync(hookPath) || !fs.existsSync(settingsPath)) {
+      console.warn(chalk.yellow('⚠️  Cost approval hook not found. Run "promptcode cc" to install it.'));
+    }
+  }
+  
   const spinner = !options.stream ? ora('Preparing context...').start() : null;
   
   try {
@@ -205,16 +219,51 @@ export async function expertCommand(question: string | undefined, options: Exper
       );
     }
 
-    // Show estimated cost
+    // Calculate estimated costs
     const estimatedInputCost = (result.tokenCount / 1_000_000) * modelConfig.pricing.input;
     const estimatedOutputCost = (Math.min(availableTokens, 4000) / 1_000_000) * modelConfig.pricing.output; // Assume ~4K output
     const estimatedTotalCost = estimatedInputCost + estimatedOutputCost;
     
-    spinner?.info(
-      `📊 Estimated cost: ~$${estimatedTotalCost.toFixed(4)} ` +
-      `(${result.tokenCount.toLocaleString()} input tokens @ $${modelConfig.pricing.input}/M, ` +
-      `~4K output @ $${modelConfig.pricing.output}/M)`
-    );
+    // Show cost info (to stderr so it's always visible)
+    console.error(chalk.blue('\n📊 Cost Breakdown:'));
+    console.error(chalk.gray(`  Input:  ${result.tokenCount.toLocaleString()} tokens × $${modelConfig.pricing.input}/M = $${estimatedInputCost.toFixed(4)}`));
+    console.error(chalk.gray(`  Output: ~4,000 tokens × $${modelConfig.pricing.output}/M = $${estimatedOutputCost.toFixed(4)}`));
+    console.error(chalk.bold(`  Total:  ~$${estimatedTotalCost.toFixed(4)}`));
+
+    // Check if approval is needed
+    const skipConfirm = options.noConfirm || options.yes;
+    const isExpensive = estimatedTotalCost > APPROVAL_COST_THRESHOLD;
+    const isInteractive = process.stdout.isTTY && process.stdin.isTTY;
+    
+    if (!skipConfirm && (isExpensive || modelKey.includes('pro'))) {
+      if (!isInteractive) {
+        console.error(chalk.yellow('\nNon-interactive environment detected.'));
+        console.error(chalk.yellow('Use --no-confirm or --yes to proceed without approval.'));
+        process.exit(1);
+      }
+      
+      console.log(chalk.yellow(`\n⚠️  This consultation will cost approximately $${estimatedTotalCost.toFixed(2)}`));
+      if (modelKey.includes('pro')) {
+        console.log(chalk.yellow('   Note: Using premium model with higher costs'));
+      }
+      
+      const readline = await import('readline');
+      const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout
+      });
+      
+      const answer = await new Promise<string>((resolve) => {
+        rl.question(chalk.bold('\nProceed with consultation? (y/N): '), resolve);
+      });
+      
+      rl.close();
+      
+      if (answer.toLowerCase() !== 'yes' && answer.toLowerCase() !== 'y') {
+        console.log(chalk.gray('\nCancelled.'));
+        process.exit(0);
+      }
+    }
 
     // Prepare the prompt
     const fullPrompt =

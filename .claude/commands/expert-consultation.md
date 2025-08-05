@@ -28,6 +28,16 @@ Instructions:
    promptcode expert "YOUR_CLEAR_QUESTION" --model <model>
    ```
    
+   The CLI will show estimated cost and ask for confirmation if:
+   - Cost exceeds $0.50
+   - Using a "pro" model
+   
+   IMPORTANT: If you see "Non-interactive environment detected":
+   - DO NOT automatically add --yes or --no-confirm
+   - STOP and inform the user about the cost
+   - Ask: "This will cost approximately $X.XX. Do you want to proceed?"
+   - Only proceed with --yes after user explicitly approves
+   
    Model options:
    - `o3` - Standard O3 model ($2/$8 per million tokens)
    - `o3-pro` - O3 Pro for complex tasks ($20/$80 per million tokens)

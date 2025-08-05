@@ -1,3 +1,4 @@
+<!-- PROMPTCODE-CLI-START -->
 # PromptCode CLI
 
 Generate AI-ready prompts from your codebase. The CLI is designed to be AI-friendly with clear commands and outputs.
@@ -64,6 +65,33 @@ promptcode expert "Review this code for security issues" src/api/**/*.ts
 3. **Leverage existing presets** - Check `promptcode preset list` before creating new ones
 4. **Use descriptive preset names** - `auth-system` not `preset1`
 
+## Important: Cost Approval for AI Agents
+
+When using the `expert` command with expensive models, the CLI will request approval for costs over $0.50:
+
+```bash
+# This will show: "Non-interactive environment detected. Use --no-confirm or --yes"
+promptcode expert "Complex analysis" --model o3-pro
+
+# AI agents should handle this by:
+# 1. Informing the user about the cost
+# 2. Asking for explicit approval
+# 3. Only then running with --yes flag
+```
+
+**AI Agent Approval Protocol:**
+1. When you see "Non-interactive environment detected", STOP
+2. Tell the user: "This will cost approximately $X.XX. Do you want to proceed?"
+3. Wait for user confirmation (yes/no)
+4. If approved, re-run the command with `--yes` flag
+5. If declined, inform the user the operation was cancelled
+
+**Important Notes:**
+- Never automatically add `--yes` without user consent for expensive operations
+- The `--no-confirm` flag is an auto-accept mode that bypasses ALL confirmations
+- Users who want automatic approval for all operations can use `--no-confirm`
+- AI agents should prefer `--yes` after explicit user approval
+
 ## Configuration
 
 API keys can be set via environment variables or config:
@@ -85,3 +113,4 @@ promptcode config --set-openai-key sk-...
 • **Context too large** – Use more specific file patterns or create focused presets
 • **Preset not found** – Check `.promptcode/presets/` directory exists
 </details>
+<!-- PROMPTCODE-CLI-END -->
