@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { extractCodeBlocksByLine, type CodeBlock } from '@promptcode/core';
 
 /**
  * Sanitize a filename coming from un-trusted input.
@@ -22,18 +23,11 @@ interface ExtractOptions {
   stdout?: boolean;
 }
 
-interface CodeBlock {
-  content: string;
-  language?: string;
-  filename?: string;
-  startLine: number;
-  endLine: number;
-}
 
 export async function extractCommand(responseFile: string, options: ExtractOptions) {
   try {
     const content = await fs.readFile(responseFile, 'utf-8');
-    const blocks = extractCodeBlocks(content);
+    const blocks = extractCodeBlocksByLine(content);
     
     if (blocks.length === 0) {
       console.log(chalk.yellow('No code blocks found'));
@@ -114,59 +108,6 @@ export async function extractCommand(responseFile: string, options: ExtractOptio
   }
 }
 
-function extractCodeBlocks(content: string): CodeBlock[] {
-  const blocks: CodeBlock[] = [];
-  const lines = content.split('\n');
-  
-  let inCodeBlock = false;
-  let currentBlock: Partial<CodeBlock> | null = null;
-  let blockStartLine = 0;
-  
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const codeBlockMatch = line.match(/^```(\w+)?(?:\s+(.+))?$/);
-    
-    if (codeBlockMatch && !inCodeBlock) {
-      // Start of code block
-      inCodeBlock = true;
-      blockStartLine = i + 1;
-      currentBlock = {
-        content: '',
-        language: codeBlockMatch[1],
-        filename: codeBlockMatch[2],
-        startLine: i + 1
-      };
-    } else if (line.trim() === '```' && inCodeBlock && currentBlock) {
-      // End of code block
-      inCodeBlock = false;
-      currentBlock.endLine = i + 1;
-      
-      // Check for filename in first line if not in header
-      if (!currentBlock.filename && currentBlock.content) {
-        const firstLine = currentBlock.content.split('\n')[0];
-        const fileMatch = firstLine.match(/^(?:\/\/|#|--|\/\*)\s*(?:file:|filename:)?\s*(.+?)(?:\s*\*\/)?$/);
-        if (fileMatch) {
-          currentBlock.filename = fileMatch[1].trim();
-          // Remove the filename comment from content
-          currentBlock.content = currentBlock.content.split('\n').slice(1).join('\n');
-        }
-      }
-      
-      if (currentBlock.content!.trim()) {
-        blocks.push(currentBlock as CodeBlock);
-      }
-      currentBlock = null;
-    } else if (inCodeBlock && currentBlock) {
-      // Inside code block
-      if (currentBlock.content) {
-        currentBlock.content += '\n';
-      }
-      currentBlock.content += line;
-    }
-  }
-  
-  return blocks;
-}
 
 function getExtensionForLanguage(language?: string): string {
   const extensions: Record<string, string> = {

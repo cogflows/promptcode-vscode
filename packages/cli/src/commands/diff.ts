@@ -2,17 +2,24 @@ import chalk from 'chalk';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { diffLines } from 'diff';
+import { extractCodeBlocks, type CodeBlock } from '@promptcode/core';
 
 interface DiffOptions {
   path: string;
   apply?: boolean;
   preview?: boolean;
+  json?: boolean;
 }
 
-interface CodeBlock {
-  filename: string;
-  content: string;
-  language?: string;
+
+interface DiffResult {
+  filePath: string;
+  status: 'modified' | 'added' | 'unchanged' | 'error';
+  diff?: string;
+  content?: string;
+  error?: string;
+  linesAdded?: number;
+  linesRemoved?: number;
 }
 
 export async function diffCommand(promptFile: string, options: DiffOptions) {
@@ -25,39 +32,94 @@ export async function diffCommand(promptFile: string, options: DiffOptions) {
       promptData = JSON.parse(promptContent);
     } catch {
       // If not JSON, try to extract code blocks from markdown
-      promptData = { codeBlocks: extractCodeBlocks(promptContent) };
+      promptData = { codeBlocks: extractCodeBlocks(promptContent).filter(b => b.filename) };
     }
     
-    const codeBlocks: CodeBlock[] = promptData.codeBlocks || extractCodeBlocks(promptData.response || promptData.content || promptContent);
+    const codeBlocks: CodeBlock[] = promptData.codeBlocks || extractCodeBlocks(promptData.response || promptData.content || promptContent).filter(b => b.filename);
     
     if (codeBlocks.length === 0) {
-      console.log(chalk.yellow('No code blocks found in the prompt file'));
+      if (options.json) {
+        console.log(JSON.stringify({ error: 'No code blocks found in the prompt file' }, null, 2));
+      } else {
+        console.log(chalk.yellow('No code blocks found in the prompt file'));
+      }
       return;
     }
     
-    console.log(chalk.bold(`Found ${codeBlocks.length} code blocks\n`));
+    if (!options.json) {
+      console.log(chalk.bold(`Found ${codeBlocks.length} code blocks\n`));
+    }
+    
+    const results: DiffResult[] = [];
     
     for (const block of codeBlocks) {
       if (!block.filename) {
-        console.log(chalk.gray('Skipping code block without filename'));
+        if (!options.json) {
+          console.log(chalk.gray('Skipping code block without filename'));
+        }
         continue;
       }
       
       const filePath = path.resolve(options.path, block.filename);
-      console.log(chalk.bold(`\n--- ${block.filename} ---`));
+      
+      // Security check: ensure path is within project root
+      const projectRoot = path.resolve(options.path) + path.sep;
+      if (!filePath.startsWith(projectRoot)) {
+        const error = `Path traversal attempt blocked: ${block.filename}`;
+        if (options.json) {
+          results.push({
+            filePath: block.filename!,
+            status: 'error',
+            error
+          });
+          continue;
+        } else {
+          console.error(chalk.red(`Error: ${error}`));
+          continue;
+        }
+      }
+      
+      if (!options.json) {
+        console.log(chalk.bold(`\n--- ${block.filename} ---`));
+      }
+      
+      const result: DiffResult = {
+        filePath: block.filename!,
+        status: 'unchanged'
+      };
       
       try {
         const existingContent = await fs.readFile(filePath, 'utf-8');
         const diff = diffLines(existingContent, block.content);
         
         let hasChanges = false;
+        let linesAdded = 0;
+        let linesRemoved = 0;
+        let diffString = '';
+        
         diff.forEach((part) => {
           if (part.added || part.removed) {
             hasChanges = true;
-            const color = part.added ? chalk.green : chalk.red;
-            const prefix = part.added ? '+' : '-';
-            console.log(color(part.value.split('\n').filter(line => line).map(line => `${prefix} ${line}`).join('\n')));
-          } else if (options.preview) {
+            const lines = part.value.split('\n').filter(line => line);
+            
+            if (part.added) {
+              linesAdded += lines.length;
+              lines.forEach(line => {
+                diffString += `+ ${line}\n`;
+                if (!options.json) {
+                  console.log(chalk.green(`+ ${line}`));
+                }
+              });
+            } else {
+              linesRemoved += lines.length;
+              lines.forEach(line => {
+                diffString += `- ${line}\n`;
+                if (!options.json) {
+                  console.log(chalk.red(`- ${line}`));
+                }
+              });
+            }
+          } else if (options.preview && !options.json) {
             // Show context lines in preview mode
             const lines = part.value.split('\n').filter(line => line);
             if (lines.length <= 6) {
@@ -72,69 +134,67 @@ export async function diffCommand(promptFile: string, options: DiffOptions) {
           }
         });
         
-        if (!hasChanges) {
+        if (hasChanges) {
+          result.status = 'modified';
+          result.linesAdded = linesAdded;
+          result.linesRemoved = linesRemoved;
+          result.diff = diffString.trim();
+        }
+        
+        if (!hasChanges && !options.json) {
           console.log(chalk.gray('No changes detected'));
-        } else if (options.apply) {
+        } else if (hasChanges && options.apply) {
           await fs.writeFile(filePath, block.content, 'utf-8');
-          console.log(chalk.green('✓ Changes applied'));
+          if (!options.json) {
+            console.log(chalk.green('✓ Changes applied'));
+          }
         }
         
       } catch (error) {
         if ((error as any).code === 'ENOENT') {
-          console.log(chalk.yellow('File does not exist (would be created)'));
-          if (options.preview) {
-            console.log(chalk.green(block.content.split('\n').map(line => `+ ${line}`).join('\n')));
+          result.status = 'added';
+          result.content = block.content;
+          
+          if (!options.json) {
+            console.log(chalk.yellow('File does not exist (would be created)'));
+            if (options.preview) {
+              console.log(chalk.green(block.content.split('\n').map(line => `+ ${line}`).join('\n')));
+            }
           }
+          
           if (options.apply) {
             const dir = path.dirname(filePath);
             await fs.mkdir(dir, { recursive: true });
             await fs.writeFile(filePath, block.content, 'utf-8');
-            console.log(chalk.green('✓ File created'));
+            if (!options.json) {
+              console.log(chalk.green('✓ File created'));
+            }
           }
         } else {
-          console.log(chalk.red(`Error: ${(error as Error).message}`));
+          result.status = 'error';
+          result.error = (error as Error).message;
+          if (!options.json) {
+            console.log(chalk.red(`Error: ${(error as Error).message}`));
+          }
         }
       }
+      
+      results.push(result);
     }
     
-    if (!options.apply && !options.preview) {
+    if (options.json) {
+      console.log(JSON.stringify(results, null, 2));
+    } else if (!options.apply && !options.preview) {
       console.log(chalk.gray('\nUse --preview to see full diff or --apply to apply changes'));
     }
     
   } catch (error) {
-    console.error(chalk.red(`Error: ${(error as Error).message}`));
+    if (options.json) {
+      console.log(JSON.stringify({ error: (error as Error).message }, null, 2));
+    } else {
+      console.error(chalk.red(`Error: ${(error as Error).message}`));
+    }
     process.exit(1);
   }
 }
 
-function extractCodeBlocks(content: string): CodeBlock[] {
-  const blocks: CodeBlock[] = [];
-  const codeBlockRegex = /```(\w+)?\s*(?:\/\/\s*(.+?)|#\s*(.+?)|--\s*(.+?))?\n([\s\S]*?)```/g;
-  const fileCommentRegex = /^(?:\/\/|#|--)\s*(.+?)$/m;
-  
-  let match;
-  while ((match = codeBlockRegex.exec(content)) !== null) {
-    const language = match[1];
-    const inlineFilename = match[2] || match[3] || match[4];
-    const codeContent = match[5];
-    
-    // Try to extract filename from first line comment if not in header
-    let filename = inlineFilename;
-    if (!filename) {
-      const fileMatch = fileCommentRegex.exec(codeContent);
-      if (fileMatch) {
-        filename = fileMatch[1].trim();
-      }
-    }
-    
-    if (filename || language) {
-      blocks.push({
-        filename: filename || '',
-        content: codeContent.replace(fileCommentRegex, '').trim(),
-        language
-      });
-    }
-  }
-  
-  return blocks;
-}

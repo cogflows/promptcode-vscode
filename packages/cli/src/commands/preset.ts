@@ -11,6 +11,7 @@ interface PresetOptions {
   info?: string;
   delete?: string;
   edit?: string;
+  search?: string;
 }
 
 /**
@@ -182,6 +183,92 @@ async function deletePreset(presetName: string, projectPath: string): Promise<vo
 }
 
 /**
+ * Search presets by query string
+ */
+async function searchPresets(query: string, projectPath: string): Promise<void> {
+  const presetsDir = getPresetsDir(projectPath);
+  
+  try {
+    const files = await fs.promises.readdir(presetsDir);
+    const presets = files.filter(f => f.endsWith('.patterns'));
+    
+    if (presets.length === 0) {
+      console.log(chalk.yellow('No presets found to search'));
+      return;
+    }
+    
+    const queryLower = query.toLowerCase();
+    const results: Array<{ name: string; score: number; matches: string[] }> = [];
+    
+    for (const preset of presets) {
+      const presetName = preset.replace('.patterns', '');
+      const presetPath = path.join(presetsDir, preset);
+      const content = await fs.promises.readFile(presetPath, 'utf8');
+      const lines = content.split('\n');
+      
+      let score = 0;
+      const matches: string[] = [];
+      
+      // Check preset name
+      if (presetName.toLowerCase().includes(queryLower)) {
+        score += 10;
+        matches.push(`Name: ${presetName}`);
+      }
+      
+      // Check content lines
+      lines.forEach((line, index) => {
+        const lineLower = line.toLowerCase();
+        if (lineLower.includes(queryLower)) {
+          if (line.startsWith('#')) {
+            // Comments are more valuable
+            score += 3;
+            matches.push(`Comment (line ${index + 1}): ${line.trim()}`);
+          } else if (line.trim()) {
+            score += 1;
+            matches.push(`Pattern (line ${index + 1}): ${line.trim()}`);
+          }
+        }
+      });
+      
+      if (score > 0) {
+        results.push({ name: presetName, score, matches });
+      }
+    }
+    
+    if (results.length === 0) {
+      console.log(chalk.yellow(`No presets found matching: "${query}"`));
+      return;
+    }
+    
+    // Sort by score
+    results.sort((a, b) => b.score - a.score);
+    
+    console.log(chalk.bold(`Search results for: "${query}"`));
+    console.log(chalk.gray('─'.repeat(50)));
+    
+    for (const result of results) {
+      console.log(`\n${chalk.cyan(result.name)} ${chalk.gray(`(score: ${result.score})`)}`);
+      // Show first 3 matches
+      result.matches.slice(0, 3).forEach(match => {
+        console.log(chalk.gray(`  ${match}`));
+      });
+      if (result.matches.length > 3) {
+        console.log(chalk.gray(`  ... and ${result.matches.length - 3} more matches`));
+      }
+    }
+    
+    console.log(chalk.gray('\nUse: promptcode preset info <name> to see full details'));
+    
+  } catch (error) {
+    if ((error as any).code === 'ENOENT') {
+      console.log(chalk.yellow('No presets directory found'));
+    } else {
+      throw error;
+    }
+  }
+}
+
+/**
  * Edit a preset (open in editor)
  */
 async function editPreset(presetName: string, projectPath: string): Promise<void> {
@@ -240,7 +327,7 @@ export async function presetCommand(options: PresetOptions): Promise<void> {
   const presetsDir = getPresetsDir(projectPath);
   
   try {
-    if (options.list || (!options.create && !options.info && !options.delete && !options.edit)) {
+    if (options.list || (!options.create && !options.info && !options.delete && !options.edit && !options.search)) {
       await listPresets(presetsDir);
     } else if (options.create) {
       await createPreset(options.create, projectPath);
@@ -250,6 +337,8 @@ export async function presetCommand(options: PresetOptions): Promise<void> {
       await deletePreset(options.delete, projectPath);
     } else if (options.edit) {
       await editPreset(options.edit, projectPath);
+    } else if (options.search) {
+      await searchPresets(options.search, projectPath);
     }
   } catch (error) {
     console.error(chalk.red(`Error: ${(error as Error).message}`));

@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { extractCodeContent } from '@promptcode/core';
 
 interface ValidateOptions {
   rules?: string;
@@ -53,7 +54,7 @@ const DEFAULT_RULES: ValidationRule[] = [
   },
   {
     name: 'no-private-keys',
-    pattern: /-----BEGIN\s+(?:RSA\s+)?PRIVATE\s+KEY-----/,
+    pattern: /-----BEGIN\s+(?:RSA\s+)?PRIVATE\s+KEY-----/g,
     message: 'Private key detected',
     severity: 'error'
   }
@@ -76,7 +77,8 @@ export async function validateCommand(file: string, options: ValidateOptions) {
     }
     
     // Extract code blocks if the file appears to be an AI response
-    const codeBlocks = extractCodeBlocks(content);
+    const codeContents = extractCodeContent(content);
+    const codeBlocks = codeContents.map(content => ({ content }));
     const contentToValidate = codeBlocks.length > 0 
       ? codeBlocks.map(b => b.content).join('\n\n')
       : content;
@@ -137,7 +139,8 @@ export async function validateCommand(file: string, options: ValidateOptions) {
     
     // Apply fixes if requested
     if (options.fix && fixedContent !== contentToValidate) {
-      const outputFile = file.replace(/\.(txt|md)$/, '.fixed$1');
+      const { dir, name, ext } = path.parse(file);
+      const outputFile = path.join(dir, `${name}.fixed${ext || '.txt'}`);
       await fs.writeFile(outputFile, fixedContent, 'utf-8');
       console.log(chalk.green(`\n✓ Fixed content written to: ${outputFile}`));
     }
@@ -209,14 +212,3 @@ function getLineNumber(content: string, index: number): number {
   return content.substring(0, index).split('\n').length;
 }
 
-function extractCodeBlocks(content: string): Array<{content: string}> {
-  const blocks: Array<{content: string}> = [];
-  const codeBlockRegex = /```[\w]*\n([\s\S]*?)```/g;
-  
-  let match;
-  while ((match = codeBlockRegex.exec(content)) !== null) {
-    blocks.push({ content: match[1] });
-  }
-  
-  return blocks;
-}

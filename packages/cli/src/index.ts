@@ -9,6 +9,7 @@ import { listTemplates } from './commands/templates';
 import { presetCommand } from './commands/preset';
 import { expertCommand } from './commands/expert';
 import { configCommand } from './commands/config';
+import { ccCommand } from './commands/cc';
 import { BUILD_VERSION } from './version';
 
 /**
@@ -143,6 +144,9 @@ Examples:
   .option('--no-gitignore', 'ignore .gitignore rules')
   .option('--path <dir>', 'project directory', process.cwd())
   .option('--save-preset <name>', 'save file patterns as a preset')
+  .option('--dry-run', 'show what would be included without generating')
+  .option('--token-warning <n>', 'token threshold for warning (default: 50000)')
+  .option('-y, --yes', 'skip confirmation prompts')
   .action(async (options) => {
     // Handle preset shorthand
     if (options.preset && !options.list) {
@@ -167,27 +171,51 @@ program
 
 // Preset command - manage pattern presets
 program
-  .command('preset')
+  .command('preset [action] [name]')
   .description('Manage file pattern presets for quick context switching')
   .addHelpText('after', `
 Actions:
-  --list           List all presets (default)
-  --create <name>  Create a new preset
-  --info <name>    Show preset details and token count
-  --edit <name>    Edit preset in your editor
-  --delete <name>  Delete a preset
+  list              List all presets (default)
+  create <name>     Create a new preset
+  info <name>       Show preset details and token count
+  search <query>    Search presets by name or content
+  edit <name>       Edit preset in your editor
+  delete <name>     Delete a preset
 
 Examples:
+  $ promptcode preset list
+  $ promptcode preset create backend
+  $ promptcode preset info backend
+  $ promptcode preset search "auth"
+  $ promptcode generate -l backend
+
+Legacy flags (still supported):
   $ promptcode preset --create backend
-  $ promptcode preset --info backend
-  $ promptcode generate -l backend`)
+  $ promptcode preset --info backend`)
   .option('-p, --path <dir>', 'project root directory', process.cwd())
-  .option('--list', 'list all presets (default action)')
-  .option('--create <name>', 'create a new preset')
-  .option('--info <name>', 'show preset info with token count')
-  .option('--edit <name>', 'edit preset in editor')
-  .option('--delete <name>', 'delete a preset')
-  .action(async (options) => {
+  .option('--list', 'list all presets (legacy)')
+  .option('--create <name>', 'create a new preset (legacy)')
+  .option('--info <name>', 'show preset info (legacy)')
+  .option('--edit <name>', 'edit preset (legacy)')
+  .option('--delete <name>', 'delete a preset (legacy)')
+  .option('--search <query>', 'search presets (legacy)')
+  .action(async (action, name, options) => {
+    // Handle direct subcommand syntax
+    if (action && ['list', 'create', 'info', 'edit', 'delete', 'search'].includes(action)) {
+      if (action === 'list') {
+        options.list = true;
+      } else if (name) {
+        options[action] = name;
+      } else {
+        console.error(chalk.red(`Error: ${action} requires a ${action === 'search' ? 'query' : 'preset name'}`));
+        process.exit(1);
+      }
+    }
+    // If no recognized action, treat first arg as legacy usage
+    else if (action) {
+      // Could be a preset name with --info flag, etc.
+    }
+    
     await presetCommand(options);
   });
 
@@ -232,6 +260,30 @@ program
   .option('--reset', 'reset all configuration')
   .action(async (options) => {
     await configCommand(options);
+  });
+
+// CC command - Claude integration setup
+program
+  .command('cc')
+  .description('Set up or remove Claude AI integration (.claude folder)')
+  .addHelpText('after', `
+This command creates a .claude folder with:
+  - CLAUDE.md: Instructions for AI agents using promptcode
+  - .env.example: Template for API keys
+  - commands/: Directory for Claude-specific commands
+
+The .claude folder is automatically detected in current or parent directory (for monorepos).
+
+Examples:
+  $ promptcode cc              # Set up Claude integration
+  $ promptcode cc --force      # Recreate/update existing setup
+  $ promptcode cc --uninstall  # Remove Claude integration`)
+  .option('-p, --path <dir>', 'project root directory', process.cwd())
+  .option('--force', 'update existing structure / skip confirmation prompts')
+  .option('-y, --yes', 'alias for --force (CI-friendly)')
+  .option('--uninstall', 'remove Claude integration (asks for confirmation)')
+  .action(async (options) => {
+    await ccCommand(options);
   });
 
 // Stats command (quick stats about current directory)
@@ -325,7 +377,6 @@ program
 program
   .command('diff <prompt-file>')
   .description('Compare AI-suggested changes with actual files')
-  .argument('<prompt-file>', 'path to AI response file (markdown/JSON)')
   .addHelpText('after', `
 This command extracts code blocks from AI responses and shows diffs.
 
@@ -342,6 +393,7 @@ Code blocks should include filename in header or first comment:
   .option('-p, --path <dir>', 'project root directory', process.cwd())
   .option('--apply', 'apply the changes to files')
   .option('--preview', 'show preview of changes without applying')
+  .option('--json', 'output diff as JSON for programmatic use')
   .action(async (promptFile, options) => {
     const { diffCommand } = await import('./commands/diff');
     await diffCommand(promptFile, options);
@@ -462,7 +514,7 @@ program
 const args = process.argv.slice(2);
 const hasSubcommand = args.length > 0 && [
   'generate', 'cache', 'templates', 'list-templates', 'preset', 
-  'expert', 'config', 'stats', 'diff', 'watch', 'validate', 
+  'expert', 'config', 'cc', 'stats', 'diff', 'watch', 'validate', 
   'extract', 'version-info', 'history', '--help', '-h', '--version', '-V'
 ].includes(args[0]);
 

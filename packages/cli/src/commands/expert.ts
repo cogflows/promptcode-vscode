@@ -205,6 +205,17 @@ export async function expertCommand(question: string | undefined, options: Exper
       );
     }
 
+    // Show estimated cost
+    const estimatedInputCost = (result.tokenCount / 1_000_000) * modelConfig.pricing.input;
+    const estimatedOutputCost = (Math.min(availableTokens, 4000) / 1_000_000) * modelConfig.pricing.output; // Assume ~4K output
+    const estimatedTotalCost = estimatedInputCost + estimatedOutputCost;
+    
+    spinner?.info(
+      `📊 Estimated cost: ~$${estimatedTotalCost.toFixed(4)} ` +
+      `(${result.tokenCount.toLocaleString()} input tokens @ $${modelConfig.pricing.input}/M, ` +
+      `~4K output @ $${modelConfig.pricing.output}/M)`
+    );
+
     // Prepare the prompt
     const fullPrompt =
       `Here is the codebase context:\n\n${result.prompt}\n\n${question}`;
