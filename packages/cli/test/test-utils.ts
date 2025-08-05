@@ -62,7 +62,7 @@ export async function runCLI(
         ...options.env,
       },
       stdio: ['ignore', 'pipe', 'pipe'], // no stdin to prevent hanging
-      detached: true                     // own process group for proper cleanup
+      detached: process.platform !== 'win32' // own process group for proper cleanup (not on Windows)
     });
     
     let stdout = '';
@@ -99,6 +99,17 @@ export async function runCLI(
     });
     
     child.on('close', (code) => {
+      clearTimeout(timer);
+      if (!timedOut) {
+        resolve({
+          stdout,
+          stderr,
+          exitCode: code || 0
+        });
+      }
+    });
+    
+    child.on('exit', (code) => {
       clearTimeout(timer);
       if (!timedOut) {
         resolve({

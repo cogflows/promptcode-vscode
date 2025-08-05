@@ -62,8 +62,8 @@ jobs:
       - name: Run tests
         run: |
           cd packages/cli
-          # Now that we've fixed the hanging issues, run all tests
-          bun test
+          # Run tests with a hard timeout to prevent hanging
+          timeout --preserve-status 300 bun test || (echo "Tests timed out after 5 minutes" && exit 1)
           
       - name: Smoke test
         run: |
