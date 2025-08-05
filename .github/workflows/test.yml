@@ -62,7 +62,7 @@ jobs:
       - name: Run tests
         run: |
           cd packages/cli
-          bun test
+          ./test/run-ci-tests.sh
           
       - name: Smoke test
         run: |
