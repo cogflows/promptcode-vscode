@@ -44,15 +44,15 @@ jobs:
           cd packages/cli
           bun install
           
+      - name: Build CLI first
+        run: |
+          cd packages/cli
+          bun run build
+          
       - name: Run tests
         run: |
           cd packages/cli
           bun test
-          
-      - name: Build CLI
-        run: |
-          cd packages/cli
-          bun run build
           
       - name: Smoke test
         run: |

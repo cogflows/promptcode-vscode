@@ -39,9 +39,6 @@ jobs:
             target: linux-x64
             binary-name: promptcode-linux-x64
           - os: macos-latest
-            target: darwin-x64
-            binary-name: promptcode-darwin-x64
-          - os: macos-latest
             target: darwin-arm64
             binary-name: promptcode-darwin-arm64
           - os: windows-latest
