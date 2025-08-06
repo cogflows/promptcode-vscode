@@ -76,6 +76,7 @@ jobs:
           npm version $VERSION --no-git-tag-version --allow-same-version
           # Build with production flag
           bun run build:prod
+        shell: bash
           
       - name: Rename binary
         run: |
