@@ -1378,8 +1378,6 @@ export function activate(context: vscode.ExtensionContext) {
 		'promptcode.checkTelemetryStatus': () => {
 			const status = TelemetryService.getInstance().getTelemetryStatus();
 			vscode.window.showInformationMessage('Telemetry Status', { modal: true, detail: status });
-			console.log('[DEBUG] Telemetry status report:');
-			console.log(status);
 			return status;
 		},
         // --- ADDED ---

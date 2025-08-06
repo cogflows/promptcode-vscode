@@ -259,7 +259,6 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
 
   // Set the search term and refresh the tree
   async setSearchTerm(term: string): Promise<void> {
-    console.log(`[Debug] setSearchTerm called with: "${term}"`); // DEBUG LOG
     console.log(`FileExplorer: Setting search term to "${term}"`);
 
     const previousTerm = this.searchTerm;
@@ -270,7 +269,6 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
       await this.rebuildSearchPaths(); // Wait for this to complete
 
       // Then refresh the tree to show matching items
-      console.log(`[Debug] setSearchTerm: Refreshing tree after search.`); // DEBUG LOG
       this.refresh();
 
       // After refreshing, expand all matching directories
@@ -287,7 +285,6 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
       this.includedPaths.clear();
 
       // Full refresh when clearing search
-      console.log(`[Debug] setSearchTerm: Refreshing tree after clearing search.`); // DEBUG LOG
       this.refresh();
     }
   }
@@ -692,7 +689,6 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
   }
 
   private async processDirectoryEntries(directoryPath: string, entries: fs.Dirent[]): Promise<FileItem[]> {
-    console.log(`[Debug] processDirectoryEntries: Processing "${directoryPath}"`); // DEBUG LOG
     // Filter entries using ignore helper
     let filteredEntries = entries;
 
@@ -730,15 +726,12 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
 
     // Apply search filtering
     if (this.searchTerm.trim()) {
-      console.log(`[Debug] processDirectoryEntries: Applying search filter for "${directoryPath}"`); // DEBUG LOG
       // Check if we should include this directory's children based on the inclusion set
       const matchingEntries = filteredEntries.filter(entry => {
           const fullPath = path.join(directoryPath, entry.name);
           const include = this.shouldIncludeInSearch(fullPath, entry.isDirectory());
-          console.log(`[Debug] processDirectoryEntries:  - Filter check for "${entry.name}": ${include}`); // DEBUG LOG
           return include;
       });
-      console.log(`[Debug] processDirectoryEntries:  - Found ${matchingEntries.length} matching entries in "${directoryPath}"`); // DEBUG LOG
 
       return matchingEntries.map(entry => {
         const fullPath = path.join(directoryPath, entry.name);
@@ -762,7 +755,6 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
 
 
     // No search term, return all filtered entries
-    console.log(`[Debug] processDirectoryEntries: No search term, returning ${filteredEntries.length} entries for "${directoryPath}"`); // DEBUG LOG
     return filteredEntries.map(entry => {
       const fullPath = path.join(directoryPath, entry.name);
       const fileItem = this.createFileItem(
