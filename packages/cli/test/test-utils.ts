@@ -69,17 +69,26 @@ export async function runCLI(
     let stderr = '';
     let timedOut = false;
     
-    // Set timeout if provided
-    const timeout = options.timeout || 30000; // Default 30s timeout
+    // Set timeout if provided (shorter default for CI)
+    const timeout = options.timeout || 10000; // Default 10s timeout (reduced from 30s)
     const timer = setTimeout(() => {
       timedOut = true;
-      // Kill the entire process group to clean up any child processes
+      // Try different kill strategies for better CI compatibility
       if (child.pid) {
         try {
-          process.kill(-child.pid, 'SIGTERM'); // negative pid = kill process group
-        } catch (e) {
-          // Fallback to regular kill if group kill fails
+          // First try SIGTERM on the child directly
           child.kill('SIGTERM');
+          // Give it 100ms to die gracefully
+          setTimeout(() => {
+            try {
+              // Then try SIGKILL if still alive
+              child.kill('SIGKILL');
+            } catch (e) {
+              // Process already dead, ignore
+            }
+          }, 100);
+        } catch (e) {
+          // Process already dead or can't be killed
         }
       }
       reject(new Error(`Command timed out after ${timeout}ms: ${args.join(' ')}`));
@@ -98,27 +107,21 @@ export async function runCLI(
       reject(error);
     });
     
-    child.on('close', (code) => {
-      clearTimeout(timer);
-      if (!timedOut) {
-        resolve({
-          stdout,
-          stderr,
-          exitCode: code || 0
-        });
-      }
-    });
+    let resolved = false;
     
-    child.on('exit', (code) => {
+    const handleExit = (code: number | null) => {
+      if (resolved || timedOut) return;
+      resolved = true;
       clearTimeout(timer);
-      if (!timedOut) {
-        resolve({
-          stdout,
-          stderr,
-          exitCode: code || 0
-        });
-      }
-    });
+      resolve({
+        stdout,
+        stderr,
+        exitCode: code || 0
+      });
+    };
+    
+    child.on('close', handleExit);
+    child.on('exit', handleExit);
   });
 }
 

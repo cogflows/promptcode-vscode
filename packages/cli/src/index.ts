@@ -301,7 +301,8 @@ program
     const ora = (await import('ora')).default;
     const path = await import('path');
     
-    const spinner = ora('Analyzing project...').start();
+    const useSpinner = process.stdout.isTTY && !process.env.PROMPTCODE_TEST;
+    const spinner = useSpinner ? ora('Analyzing project...').start() : null;
     
     try {
       // Initialize token counter
@@ -321,7 +322,8 @@ program
             .map((line: string) => line.trim())
             .filter((line: string) => line && !line.startsWith('#'));
         } else {
-          spinner.fail(`Preset not found: ${options.preset}`);
+          if (spinner) spinner.fail(`Preset not found: ${options.preset}`);
+          else console.error(chalk.red(`Preset not found: ${options.preset}`));
           return;
         }
       }
@@ -334,7 +336,7 @@ program
         workspaceName: path.basename(projectPath)
       });
       
-      spinner.stop();
+      if (spinner) spinner.stop();
       
       // Calculate statistics
       const totalTokens = files.reduce((sum, f) => sum + f.tokenCount, 0);
@@ -370,8 +372,14 @@ program
         console.log(`  ${ext.padEnd(15)} ${chalk.cyan(stats.count.toString().padStart(5))} files  ${chalk.cyan(stats.tokens.toLocaleString().padStart(10))} tokens  ${chalk.gray(`(${percentage}%)`)}`);
       }
       
+      // Force exit in test mode
+      if (process.env.PROMPTCODE_TEST === '1') {
+        process.exit(0);
+      }
+      
     } catch (error) {
-      spinner.fail(chalk.red(`Error: ${(error as Error).message}`));
+      if (spinner) spinner.fail(chalk.red(`Error: ${(error as Error).message}`));
+      else console.error(chalk.red(`Error: ${(error as Error).message}`));
       process.exit(1);
     }
   });
@@ -534,10 +542,17 @@ if (!hasSubcommand && args.length > 0) {
   }
   
   // Use smart default command for zero-friction usage
-  defaultCommand(filteredArgs, { savePreset }).catch(err => {
-    console.error(chalk.red(`Error: ${err.message}`));
-    process.exit(1);
-  });
+  defaultCommand(filteredArgs, { savePreset })
+    .then(() => {
+      // Exit cleanly after command completes
+      if (process.env.PROMPTCODE_TEST === '1') {
+        process.exit(0);
+      }
+    })
+    .catch(err => {
+      console.error(chalk.red(`Error: ${err.message}`));
+      process.exit(1);
+    });
 } else {
   // Parse normally for traditional commands
   program.parse();

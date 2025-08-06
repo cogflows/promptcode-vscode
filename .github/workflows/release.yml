@@ -8,7 +8,7 @@ on:
 
 jobs:
   build-extension:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       
@@ -90,7 +90,7 @@ jobs:
 
   create-release:
     needs: [build-extension, build-cli]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
       

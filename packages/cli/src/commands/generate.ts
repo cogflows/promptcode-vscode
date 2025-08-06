@@ -34,7 +34,9 @@ export interface GenerateOptions {
 }
 
 export async function generateCommand(options: GenerateOptions): Promise<void> {
-  const spinner = options.json ? null : ora('Initializing...').start();
+  // Don't use spinner in non-TTY environments (tests, CI)
+  const useSpinner = !options.json && process.stdout.isTTY && !process.env.PROMPTCODE_TEST;
+  const spinner = useSpinner ? ora('Initializing...').start() : null;
   
   try {
     // Initialize and validate
@@ -195,6 +197,11 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
     });
     
     await outputResults(result, selectedFiles, options);
+    
+    // Force exit in test mode to prevent hanging
+    if (process.env.PROMPTCODE_TEST === '1') {
+      process.exit(0);
+    }
     
   } catch (error) {
     if (spinner) spinner.fail(chalk.red(`Error: ${(error as Error).message}`));
