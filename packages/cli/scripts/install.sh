@@ -345,8 +345,14 @@ main() {
         fi
         echo ""
         if [[ $REPLY =~ ^[Yy]$ ]] || [ -z "$REPLY" ]; then
-          "$CLI_NAME" self-update --force
-          exit $?
+          # Try to run self-update --force, but if it fails (old version), continue with direct install
+          if ! "$CLI_NAME" self-update --force 2>/dev/null; then
+            print_warning "Current version doesn't support --force flag"
+            print_info "Proceeding with direct installation of $version"
+            # Continue with the installation (don't exit)
+          else
+            exit $?
+          fi
         else
           print_info "You can run the command manually later"
           exit 0
