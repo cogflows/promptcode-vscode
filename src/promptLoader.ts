@@ -104,7 +104,29 @@ async function loadPromptsFromDirectory(dirUri: vscode.Uri, prompts: Prompt[] = 
 }
 
 /**
+ * Find .promptcode folder in current or parent directories
+ */
+function findPromptcodeFolder(startPath: string): string | null {
+    let currentPath = path.resolve(startPath);
+    const root = path.parse(currentPath).root;
+    
+    while (currentPath !== root) {
+        const candidatePath = path.join(currentPath, '.promptcode');
+        if (fs.existsSync(candidatePath)) {
+            return candidatePath;
+        }
+        
+        const parentPath = path.dirname(currentPath);
+        if (parentPath === currentPath) break; // Reached root
+        currentPath = parentPath;
+    }
+    
+    return null;
+}
+
+/**
  * Load user prompts from the .promptcode/prompts directory in the workspace
+ * Now searches for .promptcode in parent directories
  */
 export async function loadUserPrompts(): Promise<Prompt[]> {
     const prompts: Prompt[] = [];
@@ -115,10 +137,18 @@ export async function loadUserPrompts(): Promise<Prompt[]> {
             return prompts; // No workspace open
         }
         
-        const workspaceRoot = workspaceFolders[0].uri;
-        const userPromptsDir = vscode.Uri.joinPath(workspaceRoot, '.promptcode', 'prompts');
+        const workspaceRoot = workspaceFolders[0].uri.fsPath;
         
-        // Check if directory exists
+        // Search for .promptcode in current or parent directories
+        const promptcodeDir = findPromptcodeFolder(workspaceRoot);
+        if (!promptcodeDir) {
+            console.log('No .promptcode directory found in current or parent directories');
+            return prompts;
+        }
+        
+        const userPromptsDir = vscode.Uri.file(path.join(promptcodeDir, 'prompts'));
+        
+        // Check if prompts subdirectory exists
         try {
             await vscode.workspace.fs.stat(userPromptsDir);
         } catch {

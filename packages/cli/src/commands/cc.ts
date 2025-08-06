@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import chalk from 'chalk';
 import ora from 'ora';
 import { generateApprovalHook } from '../hooks/generate-approval-hook';
+import { ensureDirWithApproval } from '../utils/paths';
 
 interface CcOptions {
   path?: string;
@@ -140,7 +141,16 @@ async function setupExpertCommand(projectPath: string): Promise<void> {
   const commandsDir = path.join(claudeDir, 'commands');
   const hooksDir = path.join(claudeDir, 'hooks');
   
-  // Create directories
+  // Create directories with approval
+  if (!existingClaudeDir) {
+    const claudeApproved = await ensureDirWithApproval(claudeDir, '.claude');
+    if (!claudeApproved) {
+      console.log(chalk.red('Cannot setup Claude integration without .claude directory'));
+      return;
+    }
+  }
+  
+  // Create subdirectories (no approval needed since parent was approved)
   await fs.promises.mkdir(commandsDir, { recursive: true });
   await fs.promises.mkdir(hooksDir, { recursive: true });
   

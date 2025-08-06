@@ -1,6 +1,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
+import { findPromptcodeFolder, ensureDirWithApproval } from '../utils/paths';
 
 interface HistoryEntry {
   timestamp: string;
@@ -156,8 +157,17 @@ export async function historyToPreset(
     throw new Error(`History entry ${index} not found`);
   }
   
-  const presetDir = path.join(projectPath, '.promptcode', 'presets');
-  await fs.promises.mkdir(presetDir, { recursive: true });
+  // Find existing .promptcode or use current directory
+  const existingPromptcodeDir = findPromptcodeFolder(projectPath);
+  const presetDir = existingPromptcodeDir 
+    ? path.join(existingPromptcodeDir, 'presets')
+    : path.join(projectPath, '.promptcode', 'presets');
+  
+  // Ensure directory exists with approval
+  const dirCreated = await ensureDirWithApproval(presetDir, '.promptcode/presets');
+  if (!dirCreated) {
+    throw new Error('Cannot create preset without directory approval');
+  }
   
   const presetPath = path.join(presetDir, `${presetName}.patterns`);
   const presetContent = `# ${presetName} preset

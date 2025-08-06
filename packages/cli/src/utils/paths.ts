@@ -1,6 +1,12 @@
 import * as path from 'path';
 import * as fs from 'fs/promises';
+import * as fsSync from 'fs';
 import * as os from 'os';
+import chalk from 'chalk';
+import { isInteractive } from './environment';
+
+// Import readline for interactive prompts
+import * as readline from 'readline';
 
 /**
  * Get the cache directory for promptcode
@@ -21,10 +27,65 @@ export function getConfigDir(): string {
 }
 
 /**
+ * Find .promptcode folder in current or parent directories
+ * Similar to how git finds .git folder
+ */
+export function findPromptcodeFolder(startPath: string): string | null {
+  let currentPath = path.resolve(startPath);
+  const root = path.parse(currentPath).root;
+  
+  while (currentPath !== root) {
+    const candidatePath = path.join(currentPath, '.promptcode');
+    if (fsSync.existsSync(candidatePath)) {
+      return candidatePath;
+    }
+    
+    const parentPath = path.dirname(currentPath);
+    if (parentPath === currentPath) break; // Reached root
+    currentPath = parentPath;
+  }
+  
+  return null;
+}
+
+/**
  * Get the preset directory for a project
+ * Now searches for existing .promptcode in parent directories
  */
 export function getPresetDir(projectPath: string): string {
+  const existingPromptcodeDir = findPromptcodeFolder(projectPath);
+  if (existingPromptcodeDir) {
+    return path.join(existingPromptcodeDir, 'presets');
+  }
+  // Default to creating in current project directory
   return path.join(projectPath, '.promptcode', 'presets');
+}
+
+/**
+ * Request user approval for directory creation
+ */
+async function requestDirectoryCreation(dirPath: string, dirType: string): Promise<boolean> {
+  if (!isInteractive()) {
+    console.error(chalk.red(`Cannot create ${dirType} directory in non-interactive mode.`));
+    console.error(chalk.yellow(`Please create the directory manually: ${dirPath}`));
+    return false;
+  }
+
+  console.log(chalk.yellow(`\n⚠️  The ${dirType} directory does not exist:`));
+  console.log(chalk.gray(`   ${dirPath}`));
+  console.log(chalk.cyan(`\nWould you like to create it? (y/n) `));
+
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  return new Promise((resolve) => {
+    rl.question('', (answer) => {
+      rl.close();
+      resolve(answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes');
+    });
+  });
 }
 
 /**
@@ -32,6 +93,52 @@ export function getPresetDir(projectPath: string): string {
  */
 export async function ensureDir(dirPath: string): Promise<void> {
   await fs.mkdir(dirPath, { recursive: true });
+}
+
+/**
+ * Ensure a directory exists with user approval
+ */
+export async function ensureDirWithApproval(dirPath: string, dirType: string): Promise<boolean> {
+  if (fsSync.existsSync(dirPath)) {
+    return true;
+  }
+
+  // Determine what needs to be created
+  const parentDir = path.dirname(dirPath);
+  const needsParentCreation = !fsSync.existsSync(parentDir);
+  
+  if (needsParentCreation) {
+    // Need to create parent directories too
+    const parts = dirPath.split(path.sep);
+    let firstMissing = '';
+    let currentCheck = '';
+    
+    for (const part of parts) {
+      currentCheck = currentCheck ? path.join(currentCheck, part) : part;
+      if (!fsSync.existsSync(currentCheck) && !firstMissing) {
+        firstMissing = currentCheck;
+        break;
+      }
+    }
+    
+    console.log(chalk.yellow(`\n📁 This will create the following directory structure:`));
+    console.log(chalk.gray(`   ${firstMissing} ${firstMissing !== dirPath ? `(and subdirectories)` : ''}`));
+  }
+
+  const approved = await requestDirectoryCreation(dirPath, dirType);
+  
+  if (approved) {
+    try {
+      await fs.mkdir(dirPath, { recursive: true });
+      console.log(chalk.green(`✓ Created ${dirType} directory: ${dirPath}`));
+      return true;
+    } catch (error) {
+      console.error(chalk.red(`Failed to create directory: ${error}`));
+      return false;
+    }
+  }
+  
+  return false;
 }
 
 /**

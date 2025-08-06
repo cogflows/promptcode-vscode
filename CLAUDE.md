@@ -213,7 +213,11 @@ promptcode expert "Complex analysis" --model o3-pro
 4. If approved, re-run the command with `--yes` flag
 5. If declined, inform the user the operation was cancelled
 
-**Never automatically add --yes without user consent for expensive operations!**
+**Important Notes:**
+- Never automatically add `--yes` without user consent for expensive operations
+- The `--no-confirm` flag is an auto-accept mode that bypasses ALL confirmations
+- Users who want automatic approval for all operations can use `--no-confirm`
+- AI agents should prefer `--yes` after explicit user approval
 
 ## Configuration
 

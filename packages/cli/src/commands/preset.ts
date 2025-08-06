@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import chalk from 'chalk';
 import ora from 'ora';
 import { scanFiles, initializeTokenCounter } from '@promptcode/core';
+import { findPromptcodeFolder, ensureDirWithApproval } from '../utils/paths';
 
 interface PresetOptions {
   path?: string;
@@ -16,16 +17,22 @@ interface PresetOptions {
 
 /**
  * Get the presets directory path
+ * Now searches for existing .promptcode in parent directories
  */
 function getPresetsDir(projectPath: string): string {
+  const existingPromptcodeDir = findPromptcodeFolder(projectPath);
+  if (existingPromptcodeDir) {
+    return path.join(existingPromptcodeDir, 'presets');
+  }
+  // Default to creating in current project directory
   return path.join(projectPath, '.promptcode', 'presets');
 }
 
 /**
- * Ensure presets directory exists
+ * Ensure presets directory exists with user approval
  */
-async function ensurePresetsDir(presetsDir: string): Promise<void> {
-  await fs.promises.mkdir(presetsDir, { recursive: true });
+async function ensurePresetsDir(presetsDir: string): Promise<boolean> {
+  return await ensureDirWithApproval(presetsDir, '.promptcode/presets');
 }
 
 /**
@@ -144,7 +151,12 @@ async function showPresetInfo(presetName: string, projectPath: string): Promise<
  */
 async function createPreset(presetName: string, projectPath: string): Promise<void> {
   const presetsDir = getPresetsDir(projectPath);
-  await ensurePresetsDir(presetsDir);
+  const dirCreated = await ensurePresetsDir(presetsDir);
+  
+  if (!dirCreated) {
+    console.log(chalk.red('Cannot create preset without presets directory'));
+    return;
+  }
   
   const presetPath = path.join(presetsDir, `${presetName}.patterns`);
   
