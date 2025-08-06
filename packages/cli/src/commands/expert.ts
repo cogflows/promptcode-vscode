@@ -6,7 +6,8 @@ import { scanFiles, buildPrompt, initializeTokenCounter } from '@promptcode/core
 import { AIProvider } from '../providers/ai-provider';
 import { MODELS, DEFAULT_MODEL, getAvailableModels } from '../providers/models';
 import { logRun } from '../services/history';
-import { APPROVAL_COST_THRESHOLD } from '../hooks/generate-approval-hook';
+// Cost threshold for requiring approval
+const APPROVAL_COST_THRESHOLD = 0.50;
 import { 
   shouldSkipConfirmation,
   isInteractive
@@ -100,14 +101,9 @@ export async function expertCommand(question: string | undefined, options: Exper
     process.exit(1);
   }
   
-  // Check if approval hook is properly installed (only in Claude Code environment)
-  if (process.env.CLAUDE_PROJECT_DIR) {
-    const hookPath = path.join(process.env.CLAUDE_PROJECT_DIR, '.claude', 'hooks', 'promptcode-cost-approval.sh');
-    const settingsPath = path.join(process.env.CLAUDE_PROJECT_DIR, '.claude', 'settings.json');
-    
-    if (!fs.existsSync(hookPath) || !fs.existsSync(settingsPath)) {
-      console.warn(chalk.yellow('⚠️  Cost approval hook not found. Run "promptcode cc" to install it.'));
-    }
+  // In Claude Code environment, provide additional guidance
+  if (process.env.CLAUDE_PROJECT_DIR && !options.yes && !options.noConfirm) {
+    console.log(chalk.gray('💡 In Claude Code: AI agents will ask for approval before expensive operations'));
   }
   
   const spinner = !options.stream ? ora('Preparing context...').start() : null;
@@ -240,8 +236,15 @@ export async function expertCommand(question: string | undefined, options: Exper
     
     if (!skipConfirm && (isExpensive || modelKey.includes('pro'))) {
       if (!isInteractive()) {
+        console.error(chalk.yellow('\n⚠️  Cost approval required for expensive operation (~$' + estimatedTotalCost.toFixed(2) + ')'));
         console.error(chalk.yellow('\nNon-interactive environment detected.'));
-        console.error(chalk.yellow('Use --no-confirm or --yes to proceed without approval.'));
+        console.error(chalk.yellow('Use --yes to proceed with approval, or --no-confirm for auto-approval mode.'));
+        
+        // Special message for Claude Code environment
+        if (process.env.CLAUDE_PROJECT_DIR) {
+          console.error(chalk.blue('\n💡 Claude Code AI agents: Ask the user for approval before re-running with --yes'));
+        }
+        
         process.exit(1);
       }
       

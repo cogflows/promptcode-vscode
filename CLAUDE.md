@@ -124,6 +124,14 @@ npm run package  # Creates .vsix file
 cd packages/cli
 bun run build    # Creates dist/promptcode binary
 ```
+## Notes for Claude Code
+
+After recent changes:
+- Environment checks are centralized in `packages/cli/src/utils/environment.ts`
+- Use helper functions like `isInteractive()`, `shouldShowSpinner()`, `shouldSkipConfirmation()`
+- Debug logging uses the `debug` npm package with namespace `promptcode:*`
+- All tests pass - run with `cd packages/cli && bun test`
+- To release: Create a tag and push to trigger GitHub Actions
 
 <!-- PROMPTCODE-CLI-START -->
 # PromptCode CLI
@@ -194,30 +202,42 @@ promptcode expert "Review this code for security issues" src/api/**/*.ts
 
 ## Important: Cost Approval for AI Agents
 
-When using the `expert` command with expensive models, the CLI will request approval for costs over $0.50:
+The `expert` command includes built-in cost protection that requires approval for expensive operations (over $0.50 or using premium models). The CLI will automatically handle this in different environments:
 
+**In Interactive Mode (Terminal):**
+- The CLI will prompt the user directly for approval
+- Shows cost breakdown and waits for yes/no response
+
+**In Non-Interactive Mode (Claude Code, CI/CD):**
 ```bash
-# This will show: "Non-interactive environment detected. Use --no-confirm or --yes"
+# Without approval flags, expensive operations will be blocked:
 promptcode expert "Complex analysis" --model o3-pro
-
-# AI agents should handle this by:
-# 1. Informing the user about the cost
-# 2. Asking for explicit approval
-# 3. Only then running with --yes flag
+# Output: "⚠️ Cost approval required for expensive operation (~$X.XX)"
+#         "Non-interactive environment detected."
+#         "Use --yes to proceed with approval..."
 ```
 
 **AI Agent Approval Protocol:**
-1. When you see "Non-interactive environment detected", STOP
-2. Tell the user: "This will cost approximately $X.XX. Do you want to proceed?"
-3. Wait for user confirmation (yes/no)
-4. If approved, re-run the command with `--yes` flag
-5. If declined, inform the user the operation was cancelled
+1. **When you see "Cost approval required"**, STOP immediately
+2. **Inform the user**: "This operation will cost approximately $X.XX. Do you want to proceed?"
+3. **Wait for explicit user confirmation** (yes/no)
+4. **If approved**, re-run the command with `--yes` flag:
+   ```bash
+   promptcode expert "Complex analysis" --model o3-pro --yes
+   ```
+5. **If declined**, inform the user the operation was cancelled
 
-**Important Notes:**
-- Never automatically add `--yes` without user consent for expensive operations
-- The `--no-confirm` flag is an auto-accept mode that bypasses ALL confirmations
-- Users who want automatic approval for all operations can use `--no-confirm`
-- AI agents should prefer `--yes` after explicit user approval
+**Important Guidelines for AI Agents:**
+- **NEVER** automatically add `--yes` without explicit user consent
+- **ALWAYS** show the cost estimate before asking for approval
+- The `--yes` flag means "I have user approval for this specific operation"
+- The `--no-confirm` flag enables auto-approval for ALL operations (use cautiously)
+- Default to conservative behavior - when in doubt, ask for approval
+
+**Cost Information:**
+- Expensive models: o3-pro, opus-4
+- Threshold: Operations over $0.50 require approval
+- The CLI shows detailed cost breakdowns before execution
 
 ## Configuration
 
@@ -241,12 +261,3 @@ promptcode config --set-openai-key sk-...
 • **Preset not found** – Check `.promptcode/presets/` directory exists
 </details>
 <!-- PROMPTCODE-CLI-END -->
-
-## Notes for Claude Code
-
-After recent changes:
-- Environment checks are centralized in `packages/cli/src/utils/environment.ts`
-- Use helper functions like `isInteractive()`, `shouldShowSpinner()`, `shouldSkipConfirmation()`
-- Debug logging uses the `debug` npm package with namespace `promptcode:*`
-- All tests pass - run with `cd packages/cli && bun test`
-- To release: Create a tag and push to trigger GitHub Actions

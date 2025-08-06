@@ -2,7 +2,6 @@ import * as path from 'path';
 import * as fs from 'fs';
 import chalk from 'chalk';
 import ora from 'ora';
-import { generateApprovalHook } from '../hooks/generate-approval-hook';
 import { ensureDirWithApproval } from '../utils/paths';
 
 interface CcOptions {
@@ -132,14 +131,13 @@ async function removeFromClaudeMd(projectPath: string): Promise<boolean> {
 }
 
 /**
- * Set up expert consultation command and hooks
+ * Set up expert consultation command
  */
 async function setupExpertCommand(projectPath: string): Promise<void> {
   // Find or create .claude folder
   const existingClaudeDir = findClaudeFolder(projectPath);
   const claudeDir = existingClaudeDir || path.join(projectPath, '.claude');
   const commandsDir = path.join(claudeDir, 'commands');
-  const hooksDir = path.join(claudeDir, 'hooks');
   
   // Create directories with approval
   if (!existingClaudeDir) {
@@ -152,7 +150,6 @@ async function setupExpertCommand(projectPath: string): Promise<void> {
   
   // Create subdirectories (no approval needed since parent was approved)
   await fs.promises.mkdir(commandsDir, { recursive: true });
-  await fs.promises.mkdir(hooksDir, { recursive: true });
   
   // Copy expert consultation command
   const expertTemplatePath = path.join(__dirname, '..', 'claude-templates', 'expert-consultation.md');
@@ -164,55 +161,54 @@ async function setupExpertCommand(projectPath: string): Promise<void> {
     console.log(chalk.green(`✓ Added expert consultation command to ${commandsDir}`));
   }
   
-  // Generate and write cost approval hook
+  // Clean up any legacy hooks from previous versions
+  const hooksDir = path.join(claudeDir, 'hooks');
   const hookPath = path.join(hooksDir, 'promptcode-cost-approval.sh');
-  const hookContent = generateApprovalHook();
-  await fs.promises.writeFile(hookPath, hookContent);
-  await fs.promises.chmod(hookPath, '755'); // Make executable
-  console.log(chalk.green(`✓ Added cost approval hook to ${hooksDir}`));
-  
-  // Set up or update settings.json
-  const settingsPath = path.join(claudeDir, 'settings.json');
-  let settings: any = {};
-  
-  // Read existing settings if they exist
-  if (fs.existsSync(settingsPath)) {
+  if (fs.existsSync(hookPath)) {
+    await fs.promises.unlink(hookPath);
     try {
-      const existingContent = await fs.promises.readFile(settingsPath, 'utf8');
-      settings = JSON.parse(existingContent);
+      const files = await fs.promises.readdir(hooksDir);
+      if (files.length === 0) {
+        await fs.promises.rmdir(hooksDir);
+      }
     } catch (error) {
-      // Invalid JSON, start fresh
-      settings = {};
+      // Directory might not exist
     }
   }
   
-  // Ensure hooks structure exists
-  if (!settings.hooks) {
-    settings.hooks = {};
+  // Clean up hook from settings.json if it exists
+  const settingsPath = path.join(claudeDir, 'settings.json');
+  if (fs.existsSync(settingsPath)) {
+    try {
+      const content = await fs.promises.readFile(settingsPath, 'utf8');
+      const settings = JSON.parse(content);
+      
+      if (settings.hooks?.PreToolUse) {
+        // Remove our hook entry
+        settings.hooks.PreToolUse = settings.hooks.PreToolUse.filter((hook: any) => 
+          !(hook.matcher === 'Bash' && 
+            hook.hooks?.some((h: any) => h.command?.includes('promptcode-cost-approval.sh')))
+        );
+        
+        // Clean up empty structures
+        if (settings.hooks.PreToolUse.length === 0) {
+          delete settings.hooks.PreToolUse;
+        }
+        if (Object.keys(settings.hooks || {}).length === 0) {
+          delete settings.hooks;
+        }
+        
+        // Write back or remove settings file
+        if (Object.keys(settings).length === 0) {
+          await fs.promises.unlink(settingsPath);
+        } else {
+          await fs.promises.writeFile(settingsPath, JSON.stringify(settings, null, 2));
+        }
+      }
+    } catch (error) {
+      // Invalid JSON or other error, ignore
+    }
   }
-  if (!settings.hooks.PreToolUse) {
-    settings.hooks.PreToolUse = [];
-  }
-  
-  // Check if our hook is already configured
-  const hookExists = settings.hooks.PreToolUse.some((hook: any) => 
-    hook.matcher === 'Bash' && 
-    hook.hooks?.some((h: any) => h.command?.includes('promptcode-cost-approval.sh'))
-  );
-  
-  if (!hookExists) {
-    settings.hooks.PreToolUse.push({
-      matcher: 'Bash',
-      hooks: [{
-        type: 'command',
-        command: '$CLAUDE_PROJECT_DIR/.claude/hooks/promptcode-cost-approval.sh'
-      }]
-    });
-  }
-  
-  // Write updated settings
-  await fs.promises.writeFile(settingsPath, JSON.stringify(settings, null, 2));
-  console.log(chalk.green(`✓ Updated Claude settings with cost approval hook`));
   
   // Add .gitignore if .claude didn't exist
   if (!existingClaudeDir) {
@@ -230,7 +226,7 @@ tmp/
 }
 
 /**
- * Remove expert consultation command and hooks
+ * Remove expert consultation command
  */
 async function removeExpertCommand(projectPath: string): Promise<boolean> {
   const claudeDir = findClaudeFolder(projectPath);
@@ -378,8 +374,6 @@ export async function ccCommand(options: CcOptions & { detect?: boolean }): Prom
     console.log(chalk.gray(`  ${path.relative(projectPath, claudeMdPath)} - PromptCode usage instructions`));
     if (claudeDir) {
       console.log(chalk.gray(`  ${path.relative(projectPath, path.join(claudeDir, 'commands/expert-consultation.md'))} - Expert consultation command`));
-      console.log(chalk.gray(`  ${path.relative(projectPath, path.join(claudeDir, 'hooks/promptcode-cost-approval.sh'))} - Cost approval hook`));
-      console.log(chalk.gray(`  ${path.relative(projectPath, path.join(claudeDir, 'settings.json'))} - Claude settings with hook configuration`));
     }
     
     console.log(chalk.bold('\n🚀 Next steps:'));
