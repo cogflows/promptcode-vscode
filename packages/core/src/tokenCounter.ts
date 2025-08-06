@@ -4,6 +4,10 @@ import { countTokens } from 'gpt-tokenizer/encoding/o200k_base';
 import { LRUCache } from 'lru-cache';
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
+import createDebug from 'debug';
+
+// Create debug namespace for token counter
+const debug = createDebug('promptcode:tokenCounter');
 
 // Interface for cache entries
 interface TokenCacheEntry {
@@ -126,13 +130,13 @@ function loadDiskCache(): void {
         for (const [key, entry] of Object.entries(diskCache.entries)) {
           tokenCache.set(key, entry);
         }
-        console.log(`[TokenCounter] Loaded ${Object.keys(diskCache.entries).length} entries from disk cache`);
+        debug(`Loaded ${Object.keys(diskCache.entries).length} entries from disk cache`);
       } else {
-        console.log('[TokenCounter] Cache version mismatch, starting fresh');
+        debug('Cache version mismatch, starting fresh');
       }
     }
   } catch (error) {
-    console.error('[TokenCounter] Error loading disk cache:', error);
+    debug('Error loading disk cache:', error);
   }
 }
 
@@ -185,9 +189,9 @@ export function saveCacheToDisk(): void {
     fs.writeFileSync(tempPath, JSON.stringify(diskCache, null, 2));
     fs.renameSync(tempPath, diskCachePath);
     
-    console.log(`[TokenCounter] Saved ${Object.keys(entries).length} entries to disk cache`);
+    debug(`Saved ${Object.keys(entries).length} entries to disk cache`);
   } catch (error) {
-    console.error('[TokenCounter] Error saving disk cache:', error);
+    debug('Error saving disk cache:', error);
   }
 }
 
@@ -203,7 +207,7 @@ export async function countTokensInFile(filePath: string): Promise<number> {
     // Check if file is binary
     const isBinary = await checkIfBinary(filePath);
     if (isBinary) {
-      console.log(`[TokenCounter] Skipping binary file: ${filePath}`);
+      debug(`Skipping binary file: ${filePath}`);
       return 0; // Binary files don't contribute tokens
     }
     
@@ -215,7 +219,7 @@ export async function countTokensInFile(filePath: string): Promise<number> {
       if (currentHash === cached.sha256) {
         return cached.count;
       }
-      console.log(`[TokenCounter] Hash mismatch for ${filePath}, recalculating...`);
+      debug(`Hash mismatch for ${filePath}, recalculating...`);
     }
     
     // Read file and count tokens
@@ -239,7 +243,7 @@ export async function countTokensInFile(filePath: string): Promise<number> {
     
     return tokenCount;
   } catch (error) {
-    console.error(`[TokenCounter] Error counting tokens in ${filePath}:`, error);
+    debug(`Error counting tokens in ${filePath}:`, error);
     return 0;
   }
 }
@@ -290,7 +294,7 @@ export async function countTokensWithCacheDetailed(filePath: string): Promise<{ 
     
     return { count: tokenCount, cacheHit: false };
   } catch (error) {
-    console.error(`[TokenCounter] Error counting tokens in ${filePath}:`, error);
+    debug(`Error counting tokens in ${filePath}:`, error);
     return { count: 0, cacheHit: false };
   }
 }
@@ -310,15 +314,15 @@ export async function countTokensWithCache(filePath: string): Promise<number> {
  */
 export function clearTokenCache(): void {
   tokenCache.clear();
-  console.log('[TokenCounter] Cache cleared');
+  debug('Cache cleared');
   
   // Also clear disk cache
   if (diskCachePath && fs.existsSync(diskCachePath)) {
     try {
       fs.unlinkSync(diskCachePath);
-      console.log('[TokenCounter] Disk cache cleared');
+      debug('Disk cache cleared');
     } catch (error) {
-      console.error('[TokenCounter] Error clearing disk cache:', error);
+      debug('Error clearing disk cache:', error);
     }
   }
 }

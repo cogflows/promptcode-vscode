@@ -63,6 +63,7 @@ jobs:
         env:
           PROMPTCODE_TEST: '1'  # Ensure non-interactive mode
           PROMPTCODE_TOKEN_WARNING: '999999'  # Disable token warnings in tests
+          DEBUG: ''  # Ensure debug output is OFF (would break JSON tests)
         run: |
           cd packages/cli
           echo "Running basic tests..."

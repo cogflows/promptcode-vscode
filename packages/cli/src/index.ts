@@ -301,8 +301,8 @@ program
     const ora = (await import('ora')).default;
     const path = await import('path');
     
-    const useSpinner = process.stdout.isTTY && !process.env.PROMPTCODE_TEST;
-    const spinner = useSpinner ? ora('Analyzing project...').start() : null;
+    const { shouldShowSpinner, exitInTestMode } = await import('./utils/environment');
+    const spinner = shouldShowSpinner() ? ora('Analyzing project...').start() : null;
     
     try {
       // Initialize token counter
@@ -373,9 +373,7 @@ program
       }
       
       // Force exit in test mode
-      if (process.env.PROMPTCODE_TEST === '1') {
-        process.exit(0);
-      }
+      exitInTestMode(0);
       
     } catch (error) {
       if (spinner) spinner.fail(chalk.red(`Error: ${(error as Error).message}`));
@@ -543,11 +541,10 @@ if (!hasSubcommand && args.length > 0) {
   
   // Use smart default command for zero-friction usage
   defaultCommand(filteredArgs, { savePreset })
-    .then(() => {
+    .then(async () => {
       // Exit cleanly after command completes
-      if (process.env.PROMPTCODE_TEST === '1') {
-        process.exit(0);
-      }
+      const { exitInTestMode } = await import('./utils/environment');
+      exitInTestMode(0);
     })
     .catch(err => {
       console.error(chalk.red(`Error: ${err.message}`));

@@ -7,6 +7,10 @@ import { AIProvider } from '../providers/ai-provider';
 import { MODELS, DEFAULT_MODEL, getAvailableModels } from '../providers/models';
 import { logRun } from '../services/history';
 import { APPROVAL_COST_THRESHOLD } from '../hooks/generate-approval-hook';
+import { 
+  shouldSkipConfirmation,
+  isInteractive
+} from '../utils/environment';
 
 interface ExpertOptions {
   path?: string;
@@ -149,8 +153,8 @@ export async function expertCommand(question: string | undefined, options: Exper
       
       // Check if preset exists
       if (fs.existsSync(presetPath)) {
-        // In non-TTY environments, fail to avoid accidental overwrites
-        if (!process.stdout.isTTY) {
+        // In non-interactive environments, fail to avoid accidental overwrites
+        if (!isInteractive()) {
           throw new Error(`Preset '${options.savePreset}' already exists. Remove it first or choose a different name.`);
         }
         // In TTY, we could ask for confirmation, but for now just notify
@@ -231,12 +235,11 @@ export async function expertCommand(question: string | undefined, options: Exper
     console.error(chalk.bold(`  Total:  ~$${estimatedTotalCost.toFixed(4)}`));
 
     // Check if approval is needed
-    const skipConfirm = options.noConfirm || options.yes || process.env.PROMPTCODE_TEST === '1';
+    const skipConfirm = shouldSkipConfirmation(options);
     const isExpensive = estimatedTotalCost > APPROVAL_COST_THRESHOLD;
-    const isInteractive = process.stdout.isTTY && process.stdin.isTTY && !process.env.PROMPTCODE_TEST;
     
     if (!skipConfirm && (isExpensive || modelKey.includes('pro'))) {
-      if (!isInteractive) {
+      if (!isInteractive()) {
         console.error(chalk.yellow('\nNon-interactive environment detected.'));
         console.error(chalk.yellow('Use --no-confirm or --yes to proceed without approval.'));
         process.exit(1);

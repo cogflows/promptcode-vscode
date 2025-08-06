@@ -14,6 +14,13 @@ import {
   handlePresetSave,
   outputResults
 } from '../utils';
+import { 
+  shouldShowSpinner,
+  getTokenThreshold,
+  shouldSkipConfirmation,
+  isInteractive,
+  exitInTestMode
+} from '../utils/environment';
 
 export interface GenerateOptions {
   path?: string;
@@ -35,8 +42,7 @@ export interface GenerateOptions {
 
 export async function generateCommand(options: GenerateOptions): Promise<void> {
   // Don't use spinner in non-TTY environments (tests, CI)
-  const useSpinner = !options.json && process.stdout.isTTY && !process.env.PROMPTCODE_TEST;
-  const spinner = useSpinner ? ora('Initializing...').start() : null;
+  const spinner = shouldShowSpinner(options) ? ora('Initializing...').start() : null;
   
   try {
     // Initialize and validate
@@ -138,9 +144,9 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
     }
     
     // Token warning threshold check
-    const threshold = options.tokenWarning || (process.env.PROMPTCODE_TOKEN_WARNING ? parseInt(process.env.PROMPTCODE_TOKEN_WARNING) : 50000);
+    const threshold = getTokenThreshold(options);
     
-    if (totalTokens > threshold && !options.yes && !options.json && !process.env.PROMPTCODE_TEST) {
+    if (totalTokens > threshold && !shouldSkipConfirmation(options)) {
       if (spinner) spinner.stop();
       
       // Estimate cost (rough approximation)
@@ -152,9 +158,7 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
       console.log(`   Estimated cost: ~$${estimatedCost.toFixed(2)}`);
       
       // Check if interactive
-      const isInteractive = process.stdout.isTTY && process.stdin.isTTY && !process.env.PROMPTCODE_TEST;
-      
-      if (!isInteractive) {
+      if (!isInteractive()) {
         console.log(chalk.yellow('\nNon-interactive environment. Use --yes to proceed without confirmation.'));
         process.exit(1);
       }
@@ -199,9 +203,7 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
     await outputResults(result, selectedFiles, options);
     
     // Force exit in test mode to prevent hanging
-    if (process.env.PROMPTCODE_TEST === '1') {
-      process.exit(0);
-    }
+    exitInTestMode(0);
     
   } catch (error) {
     if (spinner) spinner.fail(chalk.red(`Error: ${(error as Error).message}`));
