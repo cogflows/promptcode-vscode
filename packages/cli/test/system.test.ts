@@ -66,6 +66,10 @@ describe('system tests - core CLI functionality', () => {
 
   describe('preset command', () => {
     it('should create preset', async () => {
+      // Pre-create the .promptcode/presets directory to avoid approval prompt
+      const presetsDir = path.join(fixture.dir, '.promptcode/presets');
+      fs.mkdirSync(presetsDir, { recursive: true });
+      
       const result = await runCLI(['preset', 'create', 'test'], { 
         cwd: fixture.dir,
         timeout: 5000 
