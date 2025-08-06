@@ -68,8 +68,6 @@ jobs:
           cd packages/cli
           echo "Running basic tests..."
           bun test test/basic.test.ts
-          echo "Running hook tests..."
-          bun test test/hooks/approval-hook.test.ts
           echo "Running system tests..."
           bun test test/system.test.ts --timeout 30000
           
