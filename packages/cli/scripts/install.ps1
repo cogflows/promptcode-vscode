@@ -200,19 +200,44 @@ function Install-PromptCode {
     $arch = Get-Architecture
     Write-Info "Detected architecture: $arch"
     
+    # Get latest version first
+    $version = Get-LatestVersion
+    
     # Check if already installed
     $existingPath = Get-Command $CLI_NAME -ErrorAction SilentlyContinue
     if ($existingPath) {
-        Write-Warning "$CLI_NAME is already installed"
-        $response = Read-Host "Reinstall/update? [Y/n]"
-        if ($response -eq 'n' -or $response -eq 'N') {
-            Write-Info "Installation cancelled"
-            exit 0
+        try {
+            $currentVersion = & $CLI_NAME --version 2>$null
+            Write-Info "$CLI_NAME is already installed (version: $currentVersion)"
+        } catch {
+            Write-Info "$CLI_NAME is already installed"
+        }
+        Write-Info "Latest version available: $version"
+        
+        # Check if it's a development version
+        if ($currentVersion -like "*-dev.*") {
+            Write-Warning "You're running a development version"
+        }
+        
+        # Check if self-update command exists
+        try {
+            & $CLI_NAME self-update --help 2>$null | Out-Null
+            Write-Info "Using built-in self-update to upgrade..."
+            Write-Host ""
+            # Run self-update directly
+            & $CLI_NAME self-update
+            exit $LASTEXITCODE
+        } catch {
+            # Older version without self-update
+            Write-Warning "This version doesn't support self-update. Manual reinstall required."
+            $response = Read-Host "Proceed with manual reinstall? [Y/n]"
+            if ($response -eq 'n' -or $response -eq 'N') {
+                Write-Info "Installation cancelled"
+                Write-Info "To update manually later, run: promptcode self-update"
+                exit 0
+            }
         }
     }
-    
-    # Get latest version
-    $version = Get-LatestVersion
     
     # Download binary
     $tempBinary = Download-Binary $version $arch

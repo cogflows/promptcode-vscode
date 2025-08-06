@@ -313,12 +313,31 @@ main() {
   # Check if already installed
   if command -v "$CLI_NAME" >/dev/null 2>&1; then
     local current_version=$("$CLI_NAME" --version 2>/dev/null || echo "unknown")
-    print_warning "${CLI_NAME} is already installed (version: $current_version)"
-    read -p "Reinstall/update? [Y/n] " -n 1 -r
-    echo ""
-    if [[ ! $REPLY =~ ^[Yy]$ ]] && [ -n "$REPLY" ]; then
-      print_info "Installation cancelled"
-      exit 0
+    print_info "${CLI_NAME} is already installed (version: $current_version)"
+    print_info "Latest version available: $version"
+    
+    # Check if it's a development version or if update is available
+    if [[ "$current_version" == *"-dev."* ]]; then
+      print_warning "You're running a development version"
+    fi
+    
+    # Check if self-update command exists (newer versions have it)
+    if "$CLI_NAME" self-update --help >/dev/null 2>&1; then
+      print_info "Using built-in self-update to upgrade..."
+      echo ""
+      # Run self-update directly
+      "$CLI_NAME" self-update
+      exit $?
+    else
+      # Older version without self-update, proceed with reinstall
+      print_warning "This version doesn't support self-update. Manual reinstall required."
+      read -p "Proceed with manual reinstall? [Y/n] " -n 1 -r
+      echo ""
+      if [[ ! $REPLY =~ ^[Yy]$ ]] && [ -n "$REPLY" ]; then
+        print_info "Installation cancelled"
+        print_info "To update manually later, run: promptcode self-update"
+        exit 0
+      fi
     fi
   fi
 
