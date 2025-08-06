@@ -245,12 +245,22 @@ function Install-PromptCode {
             }
         } catch {
             # Older version without self-update
-            Write-Warning "This version doesn't support self-update. Manual reinstall required."
-            $response = Read-Host "Proceed with manual reinstall? [Y/n]"
-            if ($response -eq 'n' -or $response -eq 'N') {
-                Write-Info "Installation cancelled"
-                Write-Info "To update manually later, run: promptcode self-update"
-                exit 0
+            if ($currentVersion -like "*-dev.*") {
+                Write-Warning "This development version doesn't support self-update."
+                Write-Info "Will force reinstall with latest release version ($version)"
+                $response = Read-Host "Proceed with force reinstall? [Y/n]"
+                if ($response -eq 'n' -or $response -eq 'N') {
+                    Write-Info "Installation cancelled"
+                    exit 0
+                }
+                # Continue with installation - will overwrite the dev version
+            } else {
+                Write-Warning "This version doesn't support self-update. Manual reinstall required."
+                $response = Read-Host "Proceed with manual reinstall? [Y/n]"
+                if ($response -eq 'n' -or $response -eq 'N') {
+                    Write-Info "Installation cancelled"
+                    exit 0
+                }
             }
         }
     }

@@ -345,14 +345,25 @@ main() {
         exit $?
       fi
     else
-      # Older version without self-update, proceed with reinstall
-      print_warning "This version doesn't support self-update. Manual reinstall required."
-      read -p "Proceed with manual reinstall? [Y/n] " -n 1 -r
-      echo ""
-      if [[ ! $REPLY =~ ^[Yy]$ ]] && [ -n "$REPLY" ]; then
-        print_info "Installation cancelled"
-        print_info "To update manually later, run: promptcode self-update"
-        exit 0
+      # Older version without self-update
+      if [[ "$current_version" == *"-dev."* ]]; then
+        print_warning "This development version doesn't support self-update."
+        print_info "Will force reinstall with latest release version ($version)"
+        read -p "Proceed with force reinstall? [Y/n] " -n 1 -r
+        echo ""
+        if [[ ! $REPLY =~ ^[Yy]$ ]] && [ -n "$REPLY" ]; then
+          print_info "Installation cancelled"
+          exit 0
+        fi
+        # Continue with installation - will overwrite the dev version
+      else
+        print_warning "This version doesn't support self-update. Manual reinstall required."
+        read -p "Proceed with manual reinstall? [Y/n] " -n 1 -r
+        echo ""
+        if [[ ! $REPLY =~ ^[Yy]$ ]] && [ -n "$REPLY" ]; then
+          print_info "Installation cancelled"
+          exit 0
+        fi
       fi
     fi
   fi
