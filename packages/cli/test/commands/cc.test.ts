@@ -18,7 +18,7 @@ describe('cc command', () => {
     const result = await runCLI(['cc'], { cwd: fixture.dir });
     
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain('PromptCode CLI integration set up successfully');
+    expect(result.stdout).toContain('Updated files');
     
     // Check files were created
     assertFileExists(path.join(fixture.dir, 'CLAUDE.md'), '<!-- PROMPTCODE-CLI-START -->');

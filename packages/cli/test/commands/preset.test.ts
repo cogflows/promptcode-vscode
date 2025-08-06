@@ -89,8 +89,9 @@ describe('preset command', () => {
   it('should handle missing preset gracefully', async () => {
     const result = await runCLI(['preset', 'info', 'nonexistent'], { cwd: fixture.dir });
     
+    // Exit code is 0 even for missing preset (graceful handling)
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain('Preset not found: nonexistent');
+    expect(result.stderr).toContain('Preset not found: nonexistent');
   });
   
   it('should edit preset in non-interactive mode', async () => {

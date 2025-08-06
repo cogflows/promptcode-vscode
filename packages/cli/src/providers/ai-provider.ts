@@ -120,6 +120,11 @@ export class AIProvider {
 
   
   private getModel(modelKey: string): LanguageModel {
+    // Skip model initialization in mock mode
+    if (process.env.PROMPTCODE_MOCK_LLM === '1') {
+      return {} as LanguageModel; // Return dummy model object
+    }
+    
     const config = MODELS[modelKey];
     if (!config) throw new Error(`Unknown model: ${modelKey}`);
 
@@ -149,6 +154,19 @@ export class AIProvider {
       systemPrompt?: string;
     } = {}
   ): Promise<AIResponse> {
+    // Mock mode for testing
+    if (process.env.PROMPTCODE_MOCK_LLM === '1') {
+      await new Promise(resolve => setTimeout(resolve, 100)); // Simulate delay
+      return {
+        text: 'Mock LLM response: This is a test response from the mock LLM. The code looks good and follows best practices.',
+        usage: {
+          promptTokens: 100,
+          completionTokens: 50,
+          totalTokens: 150
+        }
+      };
+    }
+    
     const model = this.getModel(modelKey);
     
     const messages: any[] = [];
@@ -182,6 +200,28 @@ export class AIProvider {
       onChunk?: (chunk: string) => void;
     } = {}
   ): Promise<AIResponse> {
+    // Mock mode for testing
+    if (process.env.PROMPTCODE_MOCK_LLM === '1') {
+      const mockResponse = 'Mock LLM response: This is a streaming test response. The code has been analyzed successfully.';
+      
+      // Simulate streaming by chunking the response
+      for (const word of mockResponse.split(' ')) {
+        await new Promise(resolve => setTimeout(resolve, 10));
+        if (options.onChunk) {
+          options.onChunk(word + ' ');
+        }
+      }
+      
+      return {
+        text: mockResponse,
+        usage: {
+          promptTokens: 100,
+          completionTokens: 50,
+          totalTokens: 150
+        }
+      };
+    }
+    
     const model = this.getModel(modelKey);
     
     const messages: any[] = [];
