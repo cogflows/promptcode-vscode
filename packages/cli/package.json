@@ -19,11 +19,13 @@
     "@ai-sdk/openai": "^2.0.0",
     "@ai-sdk/xai": "^2.0.0",
     "@promptcode/core": "file:../core",
+    "@types/inquirer": "^9.0.9",
     "ai": "^5.0.0",
     "chalk": "^5.3.0",
     "chokidar": "^3.6.0",
     "commander": "^11.1.0",
     "diff": "^5.2.0",
+    "inquirer": "^12.9.0",
     "minimatch": "^9.0.3",
     "ora": "^8.0.1",
     "zod": "^4.0.14"

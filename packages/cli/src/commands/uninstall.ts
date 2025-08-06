@@ -2,7 +2,7 @@ import { program } from 'commander';
 import chalk from 'chalk';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { getCacheDir, getConfigPath } from '../utils/paths';
+import { getCacheDir, getConfigDir } from '../utils/paths';
 import inquirer from 'inquirer';
 
 async function removeDirectory(dir: string, description: string): Promise<boolean> {
@@ -105,7 +105,7 @@ export const uninstallCommand = program
         
         if (removeData) {
           removedSomething = await removeDirectory(getCacheDir(), 'cache') || removedSomething;
-          removedSomething = await removeDirectory(path.dirname(getConfigPath()), 'config') || removedSomething;
+          removedSomething = await removeDirectory(getConfigDir(), 'config') || removedSomething;
           
           // Also check for .promptcode directories in home and current directory
           const homePromptcode = path.join(require('os').homedir(), '.promptcode');
@@ -130,7 +130,7 @@ export const uninstallCommand = program
       } else {
         // With --yes flag, remove all data without prompting
         removedSomething = await removeDirectory(getCacheDir(), 'cache') || removedSomething;
-        removedSomething = await removeDirectory(path.dirname(getConfigPath()), 'config') || removedSomething;
+        removedSomething = await removeDirectory(getConfigDir(), 'config') || removedSomething;
         
         const homePromptcode = path.join(require('os').homedir(), '.promptcode');
         removedSomething = await removeDirectory(homePromptcode, 'user data') || removedSomething;
