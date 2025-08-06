@@ -49,10 +49,15 @@ promptocode-vscode/
 ## Architecture
 
 ### VS Code Extension
-- **Entry Point**: `src/extension.ts`
-- **Webview UI**: Multi-tab interface for file selection and prompt generation
-- **File Explorer**: Custom tree view respecting .gitignore
-- **Token Counting**: Real-time counting with caching
+- **Entry Point**: `src/extension.ts` - Handles activation, command registration, and orchestrates all components
+- **Webview System**: Multi-tab interface managed by `webviewProvider.ts`:
+  - Select Files tab - File tree with checkbox selection
+  - Instructions tab - Custom prompt builder with template support  
+  - Generate Prompt tab - Final prompt generation with token counting
+  - Apply & Review tab - AI response parsing and code diff visualization
+- **File Selection**: `src/fileExplorer.ts` - Custom tree view provider that respects .gitignore and custom ignore patterns
+- **Prompt Generation**: `src/promptGenerator.ts` - Generates structured prompts with XML-like tags for file contents and instructions
+- **Token Counting**: `src/tokenCounter.ts` - Uses GPT tokenizer with caching for real-time token counts
 
 ### CLI Tool
 - **Entry Point**: `packages/cli/src/index.ts`
@@ -64,6 +69,25 @@ promptocode-vscode/
 - **Shared Logic**: Token counting, file scanning, prompt building
 - **No Dependencies**: Pure TypeScript utilities
 - **Used By**: Both extension and CLI
+
+### Build System
+- Uses esbuild for fast bundling
+- Separate builds for extension code (Node.js) and webview code (browser IIFE)
+- CSS files are copied directly during build
+- Source maps in dev, minified in production
+
+### Key Design Patterns
+- The webview communicates with the extension via message passing
+- File selection state is managed in the extension and synced to webview
+- Templates are loaded from both built-in locations and workspace `.promptcode/prompts` directory
+- Token counting is cached for performance
+
+### CSS Organization
+Per the Cursor rules in `.cursor/rules/css-rules.md`:
+- All CSS must be in separate `.css` files under `src/webview/styles/`
+- No inline styles in JavaScript/TypeScript files
+- CSS is organized by component (buttons.css, layout.css, tabs.css, etc.)
+- All CSS imports go through `index.css`
 
 ## Environment Variables
 
@@ -101,31 +125,118 @@ cd packages/cli
 bun run build    # Creates dist/promptcode binary
 ```
 
-## CLI Usage
+<!-- PROMPTCODE-CLI-START -->
+# PromptCode CLI
 
-### Quick Commands
+Generate AI-ready prompts from your codebase. The CLI is designed to be AI-friendly with clear commands and outputs.
+
+## Quick Start
+
 ```bash
-# Zero-friction syntax
-promptcode "Why is this slow?" src/**/*.ts
+# Generate a prompt with specific files
+promptcode generate src/api/handler.ts src/utils/*.ts
 
-# Traditional commands
-promptcode generate -f "src/**/*.ts"
-promptcode preset create backend
-promptcode expert "Optimize this" -p backend
+# Ask AI experts questions with code context
+promptcode expert "Why is this slow?" src/api/handler.ts
+
+# Use presets for common file patterns
+promptcode preset list                    # See available presets
+promptcode preset info <name>             # Show preset details & token count
+promptcode generate -l <preset-name>      # Generate using preset
 ```
 
-### Important for Claude Code
+## Working with Presets
 
-1. **Cost Approval**: When expert mode shows "Non-interactive environment detected":
-   - STOP and ask user for approval
-   - Show estimated cost
-   - Only use `--yes` after explicit approval
+Presets are reusable file patterns stored in `.promptcode/presets/*.patterns`:
 
-2. **Token Limits**: Always check with `promptcode preset info` before generating
+```bash
+# Create a new preset
+promptcode preset create api-endpoints
 
-3. **Test Mode**: Tests use `PROMPTCODE_TEST=1` and run with Bun
+# Edit the preset file to add patterns
+# Then use it:
+promptcode generate -l api-endpoints
+```
 
-4. **Debug Mode**: Enable with `DEBUG='promptcode:*'` for troubleshooting
+## Common Workflows for AI Agents
+
+### 1. Discovering Code Structure
+```bash
+# List all presets to understand project organization
+promptcode preset list
+
+# Inspect a preset to see what files it includes
+promptcode preset info functional-utils
+```
+
+### 2. Creating Focused Presets
+When asked to analyze specific features:
+1. Create a descriptive preset: `promptcode preset create feature-name`
+2. Edit `.promptcode/presets/feature-name.patterns` with relevant patterns
+3. Use `promptcode preset info feature-name` to verify file selection
+4. Generate output: `promptcode generate -l feature-name`
+
+### 3. Analyzing Code
+```bash
+# Generate prompt with specific concern
+promptcode generate src/**/*.ts --instructions "Find performance bottlenecks"
+
+# Or use expert mode for direct AI analysis
+promptcode expert "Review this code for security issues" src/api/**/*.ts
+```
+
+## Tips for AI Agents
+
+1. **Always check token counts** - Use `promptcode preset info` to see total tokens before generating
+2. **Be specific with patterns** - Use `src/api/*.ts` not `**/*.ts` to avoid huge contexts
+3. **Leverage existing presets** - Check `promptcode preset list` before creating new ones
+4. **Use descriptive preset names** - `auth-system` not `preset1`
+
+## Important: Cost Approval for AI Agents
+
+When using the `expert` command with expensive models, the CLI will request approval for costs over $0.50:
+
+```bash
+# This will show: "Non-interactive environment detected. Use --no-confirm or --yes"
+promptcode expert "Complex analysis" --model o3-pro
+
+# AI agents should handle this by:
+# 1. Informing the user about the cost
+# 2. Asking for explicit approval
+# 3. Only then running with --yes flag
+```
+
+**AI Agent Approval Protocol:**
+1. When you see "Non-interactive environment detected", STOP
+2. Tell the user: "This will cost approximately $X.XX. Do you want to proceed?"
+3. Wait for user confirmation (yes/no)
+4. If approved, re-run the command with `--yes` flag
+5. If declined, inform the user the operation was cancelled
+
+**Never automatically add --yes without user consent for expensive operations!**
+
+## Configuration
+
+API keys can be set via environment variables or config:
+```bash
+export OPENAI_API_KEY=sk-...
+export ANTHROPIC_API_KEY=sk-ant-...
+export GEMINI_API_KEY=...
+export GROK_API_KEY=xai-...
+
+# Or use config command
+promptcode config --set-openai-key sk-...
+```
+
+<details>
+<summary>⚠️ Troubleshooting</summary>
+
+• **Command not found** – The CLI auto-installs to `~/.local/bin`. Ensure it's in PATH  
+• **Missing API key** – Set via environment variable or `promptcode config`  
+• **Context too large** – Use more specific file patterns or create focused presets
+• **Preset not found** – Check `.promptcode/presets/` directory exists
+</details>
+<!-- PROMPTCODE-CLI-END -->
 
 ## Notes for Claude Code
 
