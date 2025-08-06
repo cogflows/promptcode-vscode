@@ -222,11 +222,27 @@ function Install-PromptCode {
         # Check if self-update command exists
         try {
             & $CLI_NAME self-update --help 2>$null | Out-Null
-            Write-Info "Using built-in self-update to upgrade..."
-            Write-Host ""
-            # Run self-update directly
-            & $CLI_NAME self-update
-            exit $LASTEXITCODE
+            
+            # For dev versions, inform about --force option
+            if ($currentVersion -like "*-dev.*") {
+                Write-Info "Development version detected. To force update to $version:"
+                Write-Host ""
+                Write-Host "  $CLI_NAME self-update --force" -ForegroundColor Cyan
+                Write-Host ""
+                $response = Read-Host "Run this command now? [Y/n]"
+                if ($response -ne 'n' -and $response -ne 'N') {
+                    & $CLI_NAME self-update --force
+                    exit $LASTEXITCODE
+                } else {
+                    Write-Info "You can run the command manually later"
+                    exit 0
+                }
+            } else {
+                Write-Info "Using built-in self-update to upgrade..."
+                Write-Host ""
+                & $CLI_NAME self-update
+                exit $LASTEXITCODE
+            }
         } catch {
             # Older version without self-update
             Write-Warning "This version doesn't support self-update. Manual reinstall required."

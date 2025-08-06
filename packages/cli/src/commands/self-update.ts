@@ -229,11 +229,11 @@ export const selfUpdateCommand = program
     const spin = spinner();
     
     try {
-      // Check if running from npm/development
-      if (BUILD_VERSION.includes('-dev') || BUILD_VERSION === '0.0.0-dev') {
+      // Check if running from npm/development - but allow with --force
+      if ((BUILD_VERSION.includes('-dev') || BUILD_VERSION === '0.0.0-dev') && !options.force) {
         console.log(chalk.yellow('⚠ Cannot self-update development version'));
-        console.log('Install the production version using:');
-        console.log(chalk.cyan('  curl -fsSL https://raw.githubusercontent.com/cogflows/promptcode-vscode/main/packages/cli/scripts/install.sh | bash'));
+        console.log('Use --force flag to override:');
+        console.log(chalk.cyan('  promptcode self-update --force'));
         process.exit(1);
       }
       

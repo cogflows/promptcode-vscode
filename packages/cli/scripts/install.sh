@@ -307,8 +307,8 @@ main() {
   print_info "Detected platform: $platform"
 
   # Get latest version
+  print_info "Fetching latest version..."
   local version=$(fetch_latest_version)
-  print_info "Latest version: $version"
 
   # Check if already installed
   if command -v "$CLI_NAME" >/dev/null 2>&1; then
@@ -323,11 +323,27 @@ main() {
     
     # Check if self-update command exists (newer versions have it)
     if "$CLI_NAME" self-update --help >/dev/null 2>&1; then
-      print_info "Using built-in self-update to upgrade..."
-      echo ""
-      # Run self-update directly
-      "$CLI_NAME" self-update
-      exit $?
+      # For dev versions, inform about --force option
+      if [[ "$current_version" == *"-dev."* ]]; then
+        print_info "Development version detected. To force update to $version:"
+        echo ""
+        echo "  ${CLI_NAME} self-update --force"
+        echo ""
+        read -p "Run this command now? [Y/n] " -n 1 -r
+        echo ""
+        if [[ $REPLY =~ ^[Yy]$ ]] || [ -z "$REPLY" ]; then
+          "$CLI_NAME" self-update --force
+          exit $?
+        else
+          print_info "You can run the command manually later"
+          exit 0
+        fi
+      else
+        print_info "Using built-in self-update to upgrade..."
+        echo ""
+        "$CLI_NAME" self-update
+        exit $?
+      fi
     else
       # Older version without self-update, proceed with reinstall
       print_warning "This version doesn't support self-update. Manual reinstall required."
