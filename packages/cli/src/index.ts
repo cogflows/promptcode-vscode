@@ -10,7 +10,10 @@ import { presetCommand } from './commands/preset';
 import { expertCommand } from './commands/expert';
 import { configCommand } from './commands/config';
 import { ccCommand } from './commands/cc';
+import { selfUpdateCommand } from './commands/self-update';
+import { uninstallCommand } from './commands/uninstall';
 import { BUILD_VERSION } from './version';
+import { startUpdateCheck } from './utils/update-checker';
 
 /**
  * Parse positional arguments to detect question and file patterns
@@ -285,6 +288,7 @@ Examples:
   .option('--force', 'update existing structure / skip confirmation prompts')
   .option('-y, --yes', 'alias for --force (CI-friendly)')
   .option('--uninstall', 'remove Claude integration (asks for confirmation)')
+  .option('--detect', 'detect Claude Code environment (exit 0 if found)', false)
   .action(async (options) => {
     await ccCommand(options);
   });
@@ -490,6 +494,12 @@ Examples:
     await historyCommand(options);
   });
 
+// Self-update command
+program.addCommand(selfUpdateCommand);
+
+// Uninstall command
+program.addCommand(uninstallCommand);
+
 // Version info command - show detailed version information
 program
   .command('version-info')
@@ -524,10 +534,14 @@ const args = process.argv.slice(2);
 const hasSubcommand = args.length > 0 && [
   'generate', 'cache', 'templates', 'list-templates', 'preset', 
   'expert', 'config', 'cc', 'stats', 'diff', 'watch', 'validate', 
-  'extract', 'version-info', 'history', '--help', '-h', '--version', '-V'
+  'extract', 'version-info', 'history', 'self-update', 'uninstall',
+  '--help', '-h', '--version', '-V'
 ].includes(args[0]);
 
 if (!hasSubcommand && args.length > 0) {
+  // Start async update check - will show message at exit if update available
+  startUpdateCheck();
+  
   // Parse options for default command
   const savePresetIndex = args.indexOf('--save-preset');
   let savePreset;
@@ -551,6 +565,9 @@ if (!hasSubcommand && args.length > 0) {
       process.exit(1);
     });
 } else {
+  // Start async update check - will show message at exit if update available
+  startUpdateCheck();
+  
   // Parse normally for traditional commands
   program.parse();
 }

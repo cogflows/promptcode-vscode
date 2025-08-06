@@ -318,7 +318,12 @@ async function removeExpertCommand(projectPath: string): Promise<boolean> {
 /**
  * CC command - Set up or remove PromptCode CLI integration
  */
-export async function ccCommand(options: CcOptions): Promise<void> {
+export async function ccCommand(options: CcOptions & { detect?: boolean }): Promise<void> {
+  // Special detection mode for installer
+  if (options.detect) {
+    const claudeDir = findClaudeFolder(options.path || process.cwd());
+    process.exit(claudeDir ? 0 : 1);
+  }
   const projectPath = path.resolve(options.path || process.cwd());
   
   // Handle --yes as alias for --force

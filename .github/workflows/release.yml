@@ -67,9 +67,14 @@ jobs:
           cd packages/cli
           bun install
           
-      - name: Build CLI binary
+      - name: Inject version and build CLI binary
         run: |
           cd packages/cli
+          # Update version in package.json to match tag
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"  # Remove 'v' prefix if present
+          npm version $VERSION --no-git-tag-version --allow-same-version
+          # Build with production flag
           bun run build:prod
           
       - name: Rename binary
@@ -82,11 +87,23 @@ jobs:
           fi
         shell: bash
         
+      - name: Generate checksum
+        run: |
+          cd packages/cli
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            certutil -hashfile ${{ matrix.binary-name }} SHA256 > ${{ matrix.binary-name }}.sha256
+          else
+            shasum -a 256 ${{ matrix.binary-name }} > ${{ matrix.binary-name }}.sha256
+          fi
+        shell: bash
+        
       - name: Upload CLI artifact
         uses: actions/upload-artifact@v4
         with:
           name: cli-${{ matrix.target }}
-          path: packages/cli/${{ matrix.binary-name }}
+          path: |
+            packages/cli/${{ matrix.binary-name }}
+            packages/cli/${{ matrix.binary-name }}.sha256
 
   create-release:
     needs: [build-extension, build-cli]
@@ -118,9 +135,27 @@ jobs:
             3. Or via CLI: `code --install-extension promptcode-${{ github.ref_name }}.vsix`
 
             ### CLI Tool
-            1. Download the appropriate binary for your platform
+
+            #### Quick Install (Recommended)
+            **macOS/Linux:**
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/cogflows/promptcode-vscode/main/packages/cli/scripts/install.sh | bash
+            ```
+
+            **Windows (PowerShell):**
+            ```powershell
+            irm https://raw.githubusercontent.com/cogflows/promptcode-vscode/main/packages/cli/scripts/install.ps1 | iex
+            ```
+
+            #### Manual Installation
+            1. Download the appropriate binary for your platform from the assets below
             2. Make it executable: `chmod +x promptcode-*` (Mac/Linux)
             3. Move to PATH: `sudo mv promptcode-* /usr/local/bin/promptcode`
             4. Run: `promptcode --help`
+
+            ### Features
+            - ✨ **Self-updating**: Run `promptcode self-update` to get the latest version
+            - 🤖 **Claude Code Integration**: Auto-detects and configures for Claude projects
+            - 🗑️ **Clean uninstall**: Run `promptcode uninstall` to remove completely
 
             See [README](https://github.com/cogflows/promptcode-vscode) for detailed documentation.

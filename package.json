@@ -173,7 +173,8 @@
     "build:prod": "node ./scripts/build.js --minify --publish",
     "build:dev": "node ./scripts/build.js",
     "build:cli": "cd packages/cli && bun run build",
-    "build:core": "cd packages/core && npm run build"
+    "build:core": "cd packages/core && npm run build",
+    "package": "vsce package"
   },
   "devDependencies": {
     "@playwright/test": "^1.52.0",
@@ -186,6 +187,7 @@
     "@vscode/codicons": "^0.0.36",
     "@vscode/test-cli": "^0.0.10",
     "@vscode/test-electron": "^2.4.1",
+    "@vscode/vsce": "^3.6.0",
     "esbuild": "^0.25.1",
     "eslint": "^9.21.0",
     "glob": "^11.0.3",
