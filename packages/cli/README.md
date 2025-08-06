@@ -165,8 +165,10 @@ Environment variables (first match wins):
 - **Anthropic**: `ANTHROPIC_API_KEY`, `CLAUDE_API_KEY`
 - **Google**: `GOOGLE_API_KEY`, `GOOGLE_CLOUD_API_KEY`, `GOOGLE_AI_API_KEY`, `GEMINI_API_KEY`
 - **xAI**: `XAI_API_KEY`, `GROK_API_KEY`
-- `XDG_CONFIG_HOME` - Config directory
-- `XDG_CACHE_HOME` - Cache directory
+- `XDG_CONFIG_HOME` - Config directory (defaults to ~/.config)
+- `XDG_CACHE_HOME` - Cache directory (defaults to ~/.cache)
+- `DEBUG='promptcode:*'` - Enable debug logging
+- `PROMPTCODE_TOKEN_WARNING` - Token threshold for warnings (default: 50000)
 
 ## Examples
 
@@ -216,4 +218,4 @@ promptcode diff suggestions.md --apply
 
 - **Command not found**: Ensure `~/.local/bin` is in your PATH
 - **Token counts wrong**: Clear cache with `promptcode cache clear`
-- **API errors**: Check your OpenAI API key with `promptcode config --show`
+- **API errors**: Check your API keys with `promptcode config --show`

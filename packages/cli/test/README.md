@@ -4,16 +4,10 @@ This directory contains comprehensive tests for the PromptCode CLI.
 
 ## Structure
 
-- `test-utils.ts` - Shared utilities for tests (fixtures, CLI runner, assertions)
-- `commands/` - Unit tests for each command
-  - `generate.test.ts` - Tests for generate command
-  - `preset.test.ts` - Tests for preset management
-  - `cc.test.ts` - Tests for Claude integration
-  - `expert.test.ts` - Tests for expert consultation
-- `integration.test.ts` - End-to-end integration tests
-- `cli-parsing.test.ts` - Tests for zero-friction argument parsing
-- `smoke-test.sh` - Quick smoke tests for manual verification
-- `run-tests.sh` - Main test runner with build and cleanup
+- `test-utils.ts` - Shared utilities for tests
+- `system.test.ts` - System-level tests
+- `basic.test.ts` - Basic functionality tests
+- `hooks/` - Hook-related tests
 
 ## Running Tests
 
@@ -84,11 +78,7 @@ describe('my command', () => {
 
 ## CI/CD Integration
 
-The tests are designed to work in CI environments:
-- Non-interactive mode detection
-- No TTY required
-- Automatic cleanup
-- Exit codes for success/failure
+Tests work in CI environments with proper cleanup and exit codes.
 
 ## Coverage
 
