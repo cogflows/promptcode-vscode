@@ -67,8 +67,6 @@ detect_platform() {
 fetch_latest_version() {
   local url="https://api.github.com/repos/${REPO}/releases/latest"
   local version
-
-  print_info "Fetching latest version..."
   
   # Try GitHub API first
   version=$(curl -fsSL "$url" 2>/dev/null | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/') || true
@@ -195,7 +193,12 @@ check_path() {
       # Check if PATH export already exists (idempotent)
       if ! grep -q "# PromptCode CLI PATH" "$shell_config" 2>/dev/null; then
         echo "Would you like to add ${INSTALL_DIR} to your PATH automatically? [Y/n]"
-        read -r response
+        # Use /dev/tty for read when piping through bash
+        if [ -t 0 ]; then
+          read -r response
+        else
+          read -r response < /dev/tty
+        fi
         if [[ ! "$response" =~ ^[Nn]$ ]]; then
           if [[ "$SHELL" == */fish ]]; then
             echo "# PromptCode CLI PATH" >> "$shell_config"
@@ -271,7 +274,12 @@ uninstall() {
 
   # Ask about cache and config
   echo ""
-  read -p "Remove configuration and cache files? [y/N] " -n 1 -r
+  # Use /dev/tty for read when piping through bash
+  if [ -t 0 ]; then
+    read -p "Remove configuration and cache files? [y/N] " -n 1 -r
+  else
+    read -p "Remove configuration and cache files? [y/N] " -n 1 -r < /dev/tty
+  fi
   echo ""
   if [[ $REPLY =~ ^[Yy]$ ]]; then
     if [ -d "$CONFIG_DIR" ]; then
@@ -329,7 +337,12 @@ main() {
         echo ""
         echo "  ${CLI_NAME} self-update --force"
         echo ""
-        read -p "Run this command now? [Y/n] " -n 1 -r
+        # Use /dev/tty for read when piping through bash
+        if [ -t 0 ]; then
+          read -p "Run this command now? [Y/n] " -n 1 -r
+        else
+          read -p "Run this command now? [Y/n] " -n 1 -r < /dev/tty
+        fi
         echo ""
         if [[ $REPLY =~ ^[Yy]$ ]] || [ -z "$REPLY" ]; then
           "$CLI_NAME" self-update --force
@@ -349,7 +362,12 @@ main() {
       if [[ "$current_version" == *"-dev."* ]]; then
         print_warning "This development version doesn't support self-update."
         print_info "Will force reinstall with latest release version ($version)"
-        read -p "Proceed with force reinstall? [Y/n] " -n 1 -r
+        # Use /dev/tty for read when piping through bash
+        if [ -t 0 ]; then
+          read -p "Proceed with force reinstall? [Y/n] " -n 1 -r
+        else
+          read -p "Proceed with force reinstall? [Y/n] " -n 1 -r < /dev/tty
+        fi
         echo ""
         if [[ ! $REPLY =~ ^[Yy]$ ]] && [ -n "$REPLY" ]; then
           print_info "Installation cancelled"
@@ -358,7 +376,12 @@ main() {
         # Continue with installation - will overwrite the dev version
       else
         print_warning "This version doesn't support self-update. Manual reinstall required."
-        read -p "Proceed with manual reinstall? [Y/n] " -n 1 -r
+        # Use /dev/tty for read when piping through bash
+        if [ -t 0 ]; then
+          read -p "Proceed with manual reinstall? [Y/n] " -n 1 -r
+        else
+          read -p "Proceed with manual reinstall? [Y/n] " -n 1 -r < /dev/tty
+        fi
         echo ""
         if [[ ! $REPLY =~ ^[Yy]$ ]] && [ -n "$REPLY" ]; then
           print_info "Installation cancelled"
