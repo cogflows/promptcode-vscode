@@ -1,9 +1,9 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import chalk from 'chalk';
-import ora from 'ora';
 import { scanFiles, initializeTokenCounter } from '@promptcode/core';
 import { findPromptcodeFolder, ensureDirWithApproval } from '../utils/paths';
+import { spinner } from '../utils/spinner';
 
 interface PresetOptions {
   path?: string;
@@ -74,7 +74,8 @@ async function listPresets(presetsDir: string): Promise<void> {
  * Show preset info with token count
  */
 async function showPresetInfo(presetName: string, projectPath: string): Promise<void> {
-  const spinner = ora('Analyzing preset...').start();
+  const spin = spinner();
+  spin.start('Analyzing preset...');
   
   try {
     // Initialize token counter
@@ -85,7 +86,8 @@ async function showPresetInfo(presetName: string, projectPath: string): Promise<
     const presetPath = path.join(presetsDir, `${presetName}.patterns`);
     
     if (!fs.existsSync(presetPath)) {
-      spinner.fail(`Preset not found: ${presetName}`);
+      spin.fail(`Preset not found: ${presetName}`);
+      spin.stop(); // Ensure cleanup
       return;
     }
     
@@ -103,7 +105,7 @@ async function showPresetInfo(presetName: string, projectPath: string): Promise<
       workspaceName: path.basename(projectPath)
     });
     
-    spinner.stop();
+    spin.stop();
     
     const totalTokens = files.reduce((sum, f) => sum + f.tokenCount, 0);
     
@@ -142,7 +144,8 @@ async function showPresetInfo(presetName: string, projectPath: string): Promise<
     console.log(`  ${chalk.cyan(`promptcode generate --preset ${presetName} --output /tmp/${presetName}-${new Date().toISOString().split('T')[0]}.txt`)}`);
     
   } catch (error) {
-    spinner.fail(chalk.red(`Error: ${(error as Error).message}`));
+    spin.fail(chalk.red(`Error: ${(error as Error).message}`));
+    spin.stop(); // Ensure cleanup
   }
 }
 

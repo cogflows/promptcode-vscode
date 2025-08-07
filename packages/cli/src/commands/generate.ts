@@ -2,7 +2,6 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { scanFiles, buildPrompt, initializeTokenCounter } from '@promptcode/core';
 import chalk from 'chalk';
-import ora from 'ora';
 import { logRun } from '../services/history';
 import { 
   getCacheDir,
@@ -15,12 +14,12 @@ import {
   outputResults
 } from '../utils';
 import { 
-  shouldShowSpinner,
   getTokenThreshold,
   shouldSkipConfirmation,
   isInteractive,
   exitInTestMode
 } from '../utils/environment';
+import { spinner } from '../utils/spinner';
 
 export interface GenerateOptions {
   path?: string;
@@ -41,8 +40,9 @@ export interface GenerateOptions {
 }
 
 export async function generateCommand(options: GenerateOptions): Promise<void> {
-  // Don't use spinner in non-TTY environments (tests, CI)
-  const spinner = shouldShowSpinner(options) ? ora('Initializing...').start() : null;
+  // Use our wrapped spinner that handles cleanup
+  const spin = spinner();
+  spin.start('Initializing...');
   
   try {
     // Initialize and validate
@@ -54,7 +54,7 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
     }
     
     // Load configuration
-    if (spinner) spinner.text = 'Loading configuration...';
+    spin.text = 'Loading configuration...';
     
     const instructions = await loadInstructionsFromOptions(options);
     
@@ -91,7 +91,7 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
     }
     
     // Scan files
-    if (spinner) spinner.text = 'Scanning files...';
+    spin.text = 'Scanning files...';
     
     const selectedFiles = await scanFiles({
       cwd: projectPath,
@@ -110,35 +110,50 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
     
     // Dry run mode - just show what would be included
     if (options.dryRun) {
-      if (spinner) spinner.stop();
+      spin.stop();
       
-      console.log(chalk.bold('Dry run - files that would be included:'));
-      console.log(chalk.gray('─'.repeat(50)));
-      console.log(`Files: ${chalk.cyan(selectedFiles.length)}`);
-      console.log(`Total tokens: ${chalk.cyan(totalTokens.toLocaleString())}`);
-      
-      // Group by extension
-      const byExt: Record<string, number> = {};
-      selectedFiles.forEach(f => {
-        const ext = path.extname(f.path) || '(no extension)';
-        byExt[ext] = (byExt[ext] || 0) + 1;
-      });
-      
-      console.log('\nFile types:');
-      Object.entries(byExt)
-        .sort((a, b) => b[1] - a[1])
-        .forEach(([ext, count]) => {
-          console.log(`  ${ext.padEnd(15)} ${chalk.gray(count + ' files')}`);
+      if (options.json) {
+        // Output JSON format for dry run
+        const output = {
+          dryRun: true,
+          fileCount: selectedFiles.length,
+          tokenCount: totalTokens,
+          files: selectedFiles.map(f => ({
+            path: path.relative(projectPath, f.path),
+            tokens: f.tokenCount
+          }))
+        };
+        console.log(JSON.stringify(output, null, 2));
+      } else {
+        // Regular human-readable output
+        console.log(chalk.bold('Dry run - files that would be included:'));
+        console.log(chalk.gray('─'.repeat(50)));
+        console.log(`Files: ${chalk.cyan(selectedFiles.length)}`);
+        console.log(`Total tokens: ${chalk.cyan(totalTokens.toLocaleString())}`);
+        
+        // Group by extension
+        const byExt: Record<string, number> = {};
+        selectedFiles.forEach(f => {
+          const ext = path.extname(f.path) || '(no extension)';
+          byExt[ext] = (byExt[ext] || 0) + 1;
         });
-      
-      console.log('\nTop 10 files by tokens:');
-      selectedFiles
-        .sort((a, b) => b.tokenCount - a.tokenCount)
-        .slice(0, 10)
-        .forEach(f => {
-          const relPath = path.relative(projectPath, f.path);
-          console.log(`  ${relPath.padEnd(50)} ${chalk.gray(f.tokenCount.toLocaleString() + ' tokens')}`);
-        });
+        
+        console.log('\nFile types:');
+        Object.entries(byExt)
+          .sort((a, b) => b[1] - a[1])
+          .forEach(([ext, count]) => {
+            console.log(`  ${ext.padEnd(15)} ${chalk.gray(count + ' files')}`);
+          });
+        
+        console.log('\nTop 10 files by tokens:');
+        selectedFiles
+          .sort((a, b) => b.tokenCount - a.tokenCount)
+          .slice(0, 10)
+          .forEach(f => {
+            const relPath = path.relative(projectPath, f.path);
+            console.log(`  ${relPath.padEnd(50)} ${chalk.gray(f.tokenCount.toLocaleString() + ' tokens')}`);
+          });
+      }
       
       return;
     }
@@ -147,7 +162,7 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
     const threshold = getTokenThreshold(options);
     
     if (totalTokens > threshold && !shouldSkipConfirmation(options)) {
-      if (spinner) spinner.stop();
+      spin.stop();
       
       // Estimate cost (rough approximation)
       const estimatedCost = (totalTokens / 1000000) * 5; // Assuming ~$5 per million tokens
@@ -180,11 +195,11 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
         process.exit(0);
       }
       
-      if (spinner) spinner.start('Building prompt...');
+      spin.start('Building prompt...');
     }
     
     // Build prompt
-    if (spinner) spinner.text = `Building prompt for ${selectedFiles.length} files...`;
+    spin.text = `Building prompt for ${selectedFiles.length} files...`;
     
     const result = await buildPrompt(selectedFiles, instructions, {
       includeFiles: true,
@@ -192,7 +207,11 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
       includeFileContents: true
     });
     
-    if (spinner) spinner.succeed(`Generated prompt with ${result.tokenCount} tokens`);
+    if (!options.json) {
+      spin.succeed(`Generated prompt with ${result.tokenCount} tokens`);
+    } else {
+      spin.stop(); // Just stop silently in JSON mode
+    }
     
     // Log and output
     await logRun('generate', patterns, projectPath, {
@@ -206,8 +225,9 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
     exitInTestMode(0);
     
   } catch (error) {
-    if (spinner) spinner.fail(chalk.red(`Error: ${(error as Error).message}`));
-    else if (!options.json) console.error(chalk.red(`Error: ${(error as Error).message}`));
+    spin.fail(chalk.red(`Error: ${(error as Error).message}`));
+    spin.stop(); // Ensure cleanup
+    if (!options.json) console.error(chalk.red(`Error: ${(error as Error).message}`));
     process.exit(1);
   }
 }

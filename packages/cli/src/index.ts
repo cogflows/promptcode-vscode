@@ -297,11 +297,12 @@ program
   .addHelpText('after', '\nShows file count, total tokens, and breakdown by file type.')
   .action(async (options) => {
     const { scanFiles, initializeTokenCounter } = await import('@promptcode/core');
-    const ora = (await import('ora')).default;
     const path = await import('path');
     
-    const { shouldShowSpinner, exitInTestMode } = await import('./utils/environment');
-    const spinner = shouldShowSpinner() ? ora('Analyzing project...').start() : null;
+    const { exitInTestMode } = await import('./utils/environment');
+    const { spinner } = await import('./utils/spinner');
+    const spin = spinner();
+    spin.start('Analyzing project...');
     
     try {
       // Initialize token counter
@@ -321,8 +322,8 @@ program
             .map((line: string) => line.trim())
             .filter((line: string) => line && !line.startsWith('#'));
         } else {
-          if (spinner) spinner.fail(`Preset not found: ${options.preset}`);
-          else console.error(chalk.red(`Preset not found: ${options.preset}`));
+          spin.fail(`Preset not found: ${options.preset}`);
+          spin.stop(); // Ensure cleanup
           return;
         }
       }
@@ -335,7 +336,7 @@ program
         workspaceName: path.basename(projectPath)
       });
       
-      if (spinner) spinner.stop();
+      spin.stop();
       
       // Calculate statistics
       const totalTokens = files.reduce((sum, f) => sum + f.tokenCount, 0);
@@ -375,8 +376,8 @@ program
       exitInTestMode(0);
       
     } catch (error) {
-      if (spinner) spinner.fail(chalk.red(`Error: ${(error as Error).message}`));
-      else console.error(chalk.red(`Error: ${(error as Error).message}`));
+      spin.fail(chalk.red(`Error: ${(error as Error).message}`));
+      spin.stop(); // Ensure cleanup
       process.exit(1);
     }
   });

@@ -254,6 +254,7 @@ export const updateCommand = program
       const release = await fetchLatestRelease();
       if (!release) {
         spin.fail('Could not fetch latest release information');
+        spin.stop(); // Ensure spinner is stopped
         process.exit(1);
       }
       
@@ -261,6 +262,7 @@ export const updateCommand = program
       
       if (!options.force && !isNewerVersion(latestVersion, BUILD_VERSION)) {
         spin.succeed(`Already on the latest version (${BUILD_VERSION})`);
+        spin.stop(); // Ensure spinner is stopped
         return;
       }
       
@@ -272,6 +274,7 @@ export const updateCommand = program
       
       if (!asset) {
         spin.fail(`No binary found for platform: ${binaryName}`);
+        spin.stop(); // Ensure spinner is stopped
         process.exit(1);
       }
       
@@ -288,6 +291,7 @@ export const updateCommand = program
       
       if (!isValid) {
         spin.fail('Checksum verification failed');
+        spin.stop(); // Ensure spinner is stopped
         await fs.rm(tempDir, { recursive: true });
         process.exit(1);
       }
@@ -300,10 +304,12 @@ export const updateCommand = program
       await fs.rm(tempDir, { recursive: true });
       
       spin.succeed(`Successfully updated to version ${latestVersion}`);
+      spin.stop(); // Ensure spinner is stopped
       console.log(chalk.green('\n✨ Update complete! The new version will be used on the next run.'));
       
     } catch (error) {
       spin.fail(`Update failed: ${error instanceof Error ? error.message : String(error)}`);
+      spin.stop(); // Ensure spinner is stopped
       process.exit(1);
     }
   });

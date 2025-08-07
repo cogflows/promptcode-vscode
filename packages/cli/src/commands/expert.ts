@@ -1,11 +1,11 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import chalk from 'chalk';
-import ora from 'ora';
 import { scanFiles, buildPrompt, initializeTokenCounter } from '@promptcode/core';
 import { AIProvider } from '../providers/ai-provider';
 import { MODELS, DEFAULT_MODEL, getAvailableModels } from '../providers/models';
 import { logRun } from '../services/history';
+import { spinner } from '../utils/spinner';
 // Cost threshold for requiring approval
 const APPROVAL_COST_THRESHOLD = 0.50;
 import { 
@@ -105,7 +105,8 @@ export async function expertCommand(question: string | undefined, options: Exper
     console.log(chalk.gray('💡 In Claude Code: AI agents will ask for approval before expensive operations'));
   }
   
-  const spinner = !options.stream ? ora('Preparing context...').start() : null;
+  const spin = !options.stream ? spinner() : null;
+  if (spin) spin.start('Preparing context...');
   
   try {
     // Initialize AI provider
@@ -171,7 +172,10 @@ export async function expertCommand(question: string | undefined, options: Exper
     });
     
     if (files.length === 0) {
-      spinner?.fail('No files found matching patterns');
+      if (spin) {
+        spin.fail('No files found matching patterns');
+        spin.stop(); // Ensure cleanup
+      }
       console.error(chalk.yellow('\nTips:'));
       console.error(chalk.gray('  - Check if the path exists: ' + patterns.join(', ')));
       console.error(chalk.gray('  - Try using absolute paths or glob patterns'));
@@ -192,7 +196,10 @@ export async function expertCommand(question: string | undefined, options: Exper
     
     if (!modelConfig) {
       const available = getAvailableModels();
-      spinner?.fail(`Unknown model: ${modelKey}. Available models: ${available.join(', ')}`);
+      if (spin) {
+        spin.fail(`Unknown model: ${modelKey}. Available models: ${available.join(', ')}`);
+        spin.stop(); // Ensure cleanup
+      }
       return;
     }
     
@@ -204,18 +211,23 @@ export async function expertCommand(question: string | undefined, options: Exper
       modelConfig.contextWindow - result.tokenCount - SAFETY_MARGIN;
 
     if (availableTokens <= 0) {
-      spinner?.fail(
-        `Prompt size (${result.tokenCount.toLocaleString()} tokens) exceeds the ${modelConfig.contextWindow.toLocaleString()}-token window of "${modelConfig.name}".\n` +
-          'Reduce the number of files or switch to a larger-context model.',
-      );
+      if (spin) {
+        spin.fail(
+          `Prompt size (${result.tokenCount.toLocaleString()} tokens) exceeds the ${modelConfig.contextWindow.toLocaleString()}-token window of "${modelConfig.name}".\n` +
+            'Reduce the number of files or switch to a larger-context model.',
+        );
+        spin.stop(); // Ensure cleanup
+      }
       return;
     }
 
     if (availableTokens < modelConfig.contextWindow * 0.2) {
-      spinner?.warn(
-        `Large context: ${result.tokenCount.toLocaleString()} tokens. ` +
-          `${availableTokens.toLocaleString()} tokens remain for the response.`,
-      );
+      if (spin) {
+        spin.warn(
+          `Large context: ${result.tokenCount.toLocaleString()} tokens. ` +
+            `${availableTokens.toLocaleString()} tokens remain for the response.`,
+        );
+      }
     }
 
     // Calculate estimated costs
@@ -274,8 +286,8 @@ export async function expertCommand(question: string | undefined, options: Exper
     const fullPrompt =
       `Here is the codebase context:\n\n${result.prompt}\n\n${question}`;
     
-    if (spinner) {
-      spinner.text = `Consulting ${modelConfig.name}...`;
+    if (spin) {
+      spin.text = `Consulting ${modelConfig.name}...`;
     } else if (options.stream) {
       console.log(chalk.blue(`\n🤖 Consulting ${modelConfig.name}...`));
       console.log(chalk.gray(`📊 ${modelConfig.description}`));
@@ -303,7 +315,10 @@ export async function expertCommand(question: string | undefined, options: Exper
     const responseTime = (Date.now() - startTime) / 1000;
     
     if (!options.stream) {
-      spinner?.succeed('Expert consultation complete');
+      if (spin) {
+        spin.succeed('Expert consultation complete');
+        spin.stop(); // Ensure cleanup
+      }
       console.log('\n' + response.text);
     }
     
@@ -332,7 +347,10 @@ export async function expertCommand(question: string | undefined, options: Exper
     });
     
   } catch (error) {
-    spinner?.fail(chalk.red(`Error: ${(error as Error).message}`));
+    if (spin) {
+      spin.fail(chalk.red(`Error: ${(error as Error).message}`));
+      spin.stop(); // Ensure cleanup
+    }
 
     // Helpful message for context-length overflows
     const msg = (error as Error).message.toLowerCase();
