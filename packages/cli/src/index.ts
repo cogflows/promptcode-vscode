@@ -569,9 +569,4 @@ if (!hasSubcommand && args.length > 0) {
   
   // Parse normally for traditional commands
   program.parse();
-  
-  // If no arguments were provided, we showed help - exit with 0
-  if (args.length === 0) {
-    process.exit(0);
-  }
 }
