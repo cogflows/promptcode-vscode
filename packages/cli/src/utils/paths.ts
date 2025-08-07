@@ -65,6 +65,11 @@ export function getPresetDir(projectPath: string): string {
  * Request user approval for directory creation
  */
 async function requestDirectoryCreation(dirPath: string, dirType: string): Promise<boolean> {
+  // In test mode, auto-approve directory creation
+  if (process.env.PROMPTCODE_TEST === '1') {
+    return true;
+  }
+  
   if (!isInteractive()) {
     console.error(chalk.red(`Cannot create ${dirType} directory in non-interactive mode.`));
     console.error(chalk.yellow(`Please create the directory manually: ${dirPath}`));
