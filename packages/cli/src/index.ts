@@ -527,15 +527,45 @@ program
 program
   .option('--save-preset <name>', 'save file patterns as a preset for later use');
 
+// Set up signal handlers early for graceful shutdown
+process.on('SIGINT', () => {
+  console.log('\n\nInterrupted by user');
+  process.exit(130); // Standard exit code for SIGINT
+});
+
+process.on('SIGTERM', () => {
+  process.exit(143); // Standard exit code for SIGTERM
+});
+
 // Handle smart routing for zero-friction usage
 // Check if we should use the default command handler
 const args = process.argv.slice(2);
-const hasSubcommand = args.length > 0 && [
+const knownCommands = [
   'generate', 'cache', 'templates', 'list-templates', 'preset', 
   'expert', 'config', 'cc', 'stats', 'diff', 'watch', 'validate', 
   'extract', 'history', 'update', 'uninstall',
   '--help', '-h', '--version', '-V', '--detailed'
-].includes(args[0]);
+];
+
+// Check if first arg looks like a command (starts with letters, not a path)
+const firstArg = args[0];
+const looksLikeCommand = firstArg && /^[a-z]+$/i.test(firstArg) && !firstArg.includes('/') && !firstArg.includes('.');
+
+// If it looks like a command but isn't known, show error
+if (looksLikeCommand && !knownCommands.includes(firstArg)) {
+  console.error(chalk.red(`Error: Unknown command '${firstArg}'`));
+  console.error(chalk.yellow('\nDid you mean one of these?'));
+  
+  // Suggest similar commands
+  if (firstArg === 'init') {
+    console.error(chalk.gray('  cc        # Set up .promptcode folder and Claude integration'));
+  }
+  
+  console.error(chalk.gray('\nFor available commands: promptcode --help'));
+  process.exit(1);
+}
+
+const hasSubcommand = args.length > 0 && knownCommands.includes(args[0]);
 
 if (!hasSubcommand && args.length > 0) {
   // Start async update check - will show message at exit if update available
