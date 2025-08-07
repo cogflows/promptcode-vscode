@@ -108,6 +108,28 @@ async function downloadFile(url: string, dest: string): Promise<void> {
   await fs.writeFile(dest, Buffer.from(buffer));
 }
 
+async function getChecksumCommand(filePath: string): Promise<string> {
+  if (process.platform === 'win32') {
+    // Try certutil first, fallback to PowerShell
+    try {
+      await execAsync('certutil /?');
+      return `certutil -hashfile "${filePath}" SHA256`;
+    } catch {
+      // Use PowerShell as fallback
+      return `powershell -Command "Get-FileHash -Algorithm SHA256 -Path '${filePath}' | Select-Object -ExpandProperty Hash"`;
+    }
+  } else {
+    // Unix-like systems: try sha256sum first, then shasum
+    try {
+      await execAsync('which sha256sum');
+      return `sha256sum "${filePath}"`;
+    } catch {
+      // macOS typically has shasum
+      return `shasum -a 256 "${filePath}"`;
+    }
+  }
+}
+
 async function verifyChecksum(filePath: string, checksumUrl: string): Promise<boolean> {
   try {
     const controller = new AbortController();
@@ -131,16 +153,19 @@ async function verifyChecksum(filePath: string, checksumUrl: string): Promise<bo
     
     const expectedChecksum = (await response.text()).trim().split(/\s+/)[0];
     
-    // Calculate actual checksum
-    const { stdout } = await execAsync(
-      process.platform === 'win32' 
-        ? `certutil -hashfile "${filePath}" SHA256`
-        : `shasum -a 256 "${filePath}"`
-    );
+    // Calculate actual checksum using detected command
+    const checksumCmd = await getChecksumCommand(filePath);
+    const { stdout } = await execAsync(checksumCmd);
     
-    const actualChecksum = stdout.trim().split(/\s+/)[0];
+    // Extract hash from output (handles different formats)
+    let actualChecksum = stdout.trim();
+    if (actualChecksum.includes(' ')) {
+      actualChecksum = actualChecksum.split(/\s+/)[0];
+    }
+    // PowerShell outputs uppercase, normalize to lowercase
+    actualChecksum = actualChecksum.toLowerCase();
     
-    const isValid = actualChecksum.toLowerCase() === expectedChecksum.toLowerCase();
+    const isValid = actualChecksum === expectedChecksum.toLowerCase();
     if (!isValid) {
       throw new Error(`Checksum mismatch: expected ${expectedChecksum}, got ${actualChecksum}`);
     }
@@ -254,7 +279,6 @@ export const updateCommand = program
       const release = await fetchLatestRelease();
       if (!release) {
         spin.fail('Could not fetch latest release information');
-        spin.stop(); // Ensure spinner is stopped
         process.exit(1);
       }
       
@@ -262,7 +286,6 @@ export const updateCommand = program
       
       if (!options.force && !isNewerVersion(latestVersion, BUILD_VERSION)) {
         spin.succeed(`Already on the latest version (${BUILD_VERSION})`);
-        spin.stop(); // Ensure spinner is stopped
         return;
       }
       
@@ -274,7 +297,6 @@ export const updateCommand = program
       
       if (!asset) {
         spin.fail(`No binary found for platform: ${binaryName}`);
-        spin.stop(); // Ensure spinner is stopped
         process.exit(1);
       }
       
@@ -291,7 +313,6 @@ export const updateCommand = program
       
       if (!isValid) {
         spin.fail('Checksum verification failed');
-        spin.stop(); // Ensure spinner is stopped
         await fs.rm(tempDir, { recursive: true });
         process.exit(1);
       }
@@ -304,12 +325,10 @@ export const updateCommand = program
       await fs.rm(tempDir, { recursive: true });
       
       spin.succeed(`Successfully updated to version ${latestVersion}`);
-      spin.stop(); // Ensure spinner is stopped
       console.log(chalk.green('\n✨ Update complete! The new version will be used on the next run.'));
       
     } catch (error) {
       spin.fail(`Update failed: ${error instanceof Error ? error.message : String(error)}`);
-      spin.stop(); // Ensure spinner is stopped
       process.exit(1);
     }
   });

@@ -1,15 +1,16 @@
 import { program } from 'commander';
 import chalk from 'chalk';
-import * as fs from 'fs/promises';
+import * as fsp from 'fs/promises';
+import * as fs from 'fs';
 import * as path from 'path';
 import { getCacheDir, getConfigDir } from '../utils/paths';
-import { removeFromClaudeMd, removeExpertCommand, findClaudeFolder } from '../utils/claude-integration';
+import { removeFromClaudeMd, removeExpertCommand, findClaudeFolder, findClaudeMd, hasPromptCodeSection } from '../utils/claude-integration';
 import inquirer from 'inquirer';
 
 async function removeDirectory(dir: string, description: string): Promise<boolean> {
   try {
-    await fs.access(dir);
-    await fs.rm(dir, { recursive: true, force: true });
+    await fsp.access(dir);
+    await fsp.rm(dir, { recursive: true, force: true });
     console.log(chalk.green(`✓ Removed ${description}: ${dir}`));
     return true;
   } catch {
@@ -25,9 +26,9 @@ async function removeClaudeIntegration(projectPath: string, skipPrompts: boolean
   
   // Check if Claude integration exists
   const claudeDir = findClaudeFolder(projectPath);
-  const claudeMdPath = claudeDir ? findClaudeMd(claudeDir) : path.join(projectPath, 'CLAUDE.md');
+  const claudeMdPath = findClaudeMd(claudeDir || projectPath);
   const hasClaudeMdSection = fs.existsSync(claudeMdPath) && 
-    fs.readFileSync(claudeMdPath, 'utf8').includes('<!-- PROMPTCODE-CLI-START -->');
+    hasPromptCodeSection(fs.readFileSync(claudeMdPath, 'utf8'));
   
   // If no integration found, return early
   if (!claudeDir && !hasClaudeMdSection) {
@@ -112,7 +113,7 @@ async function removeBinary(): Promise<void> {
   
   // Check if we have write permissions
   try {
-    await fs.access(binaryPath, fs.constants.W_OK);
+    await fsp.access(binaryPath, fsp.constants.W_OK);
   } catch {
     console.log(chalk.red(`✗ Cannot remove binary at ${binaryPath}`));
     console.log(chalk.yellow('  You may need to run with sudo or remove it manually'));
@@ -143,15 +144,32 @@ if exist "${binaryPath}" (
 del "%~f0"
 `;
     
-    await fs.writeFile(batchFile, batchContent);
+    await fsp.writeFile(batchFile, batchContent);
     console.log(chalk.yellow('✓ Created uninstall script'));
     console.log(chalk.yellow('  The binary will be removed after this process exits'));
     console.log(chalk.cyan(`  Run: ${batchFile}`));
   } else {
-    // Unix-like systems: schedule deletion
-    console.log(chalk.yellow('✓ The binary will be removed after this process exits'));
-    console.log(chalk.yellow(`  Location: ${binaryPath}`));
-    console.log(chalk.cyan(`  To remove manually: rm "${binaryPath}"`));
+    // Unix-like systems: try to rename first, then schedule deletion
+    const backupPath = `${binaryPath}.old`;
+    try {
+      // Try to rename the binary (this usually works even for running executables)
+      await fsp.rename(binaryPath, backupPath);
+      console.log(chalk.yellow('✓ Binary moved to backup location'));
+      
+      // Schedule deletion of backup on exit
+      process.on('exit', () => {
+        try {
+          fs.unlinkSync(backupPath);
+        } catch {
+          // Ignore errors - user can manually delete
+        }
+      });
+    } catch {
+      // If rename fails, just inform the user
+      console.log(chalk.yellow('✓ The binary needs to be removed manually'));
+      console.log(chalk.yellow(`  Location: ${binaryPath}`));
+      console.log(chalk.cyan(`  To remove: rm "${binaryPath}"`));
+    }
   }
 }
 
@@ -207,7 +225,7 @@ export const uninstallCommand = program
           removedSomething = await removeDirectory(homePromptcode, 'user data') || removedSomething;
           
           const currentPromptcode = path.join(process.cwd(), '.promptcode');
-          if (await fs.access(currentPromptcode).then(() => true).catch(() => false)) {
+          if (await fsp.access(currentPromptcode).then(() => true).catch(() => false)) {
             const { removeProject } = await inquirer.prompt([
               {
                 type: 'confirm',
@@ -232,7 +250,7 @@ export const uninstallCommand = program
         
         // Also remove project directory if it exists (with --yes, remove everything)
         const currentPromptcode = path.join(process.cwd(), '.promptcode');
-        if (await fs.access(currentPromptcode).then(() => true).catch(() => false)) {
+        if (await fsp.access(currentPromptcode).then(() => true).catch(() => false)) {
           removedSomething = await removeDirectory(currentPromptcode, 'project data') || removedSomething;
         }
       }

@@ -33,22 +33,30 @@ export function findClaudeFolder(startPath: string): string | null {
 /**
  * Find CLAUDE.md file in the project root (where .claude folder is or should be)
  */
-export function findClaudeMd(claudeDir: string): string {
-  // CLAUDE.md should be at the same level as .claude folder
-  const projectRoot = path.dirname(claudeDir);
-  return path.join(projectRoot, 'CLAUDE.md');
+export function findClaudeMd(claudeDirOrProjectPath: string): string {
+  // If it's a .claude directory, go up one level
+  if (path.basename(claudeDirOrProjectPath) === '.claude') {
+    return path.join(path.dirname(claudeDirOrProjectPath), 'CLAUDE.md');
+  }
+  // Otherwise assume it's the project path
+  return path.join(claudeDirOrProjectPath, 'CLAUDE.md');
+}
+
+/**
+ * Check if a markdown string has PromptCode section
+ */
+export function hasPromptCodeSection(content: string): boolean {
+  return content.includes('<!-- PROMPTCODE-CLI-START -->');
 }
 
 /**
  * Remove PromptCode section from CLAUDE.md
  */
 export async function removeFromClaudeMd(projectPath: string): Promise<boolean> {
+  // Try to find existing .claude folder, but don't require it
   const existingClaudeDir = findClaudeFolder(projectPath);
-  if (!existingClaudeDir) {
-    return false;
-  }
+  const claudeMdPath = findClaudeMd(existingClaudeDir || projectPath);
   
-  const claudeMdPath = findClaudeMd(existingClaudeDir);
   if (!fs.existsSync(claudeMdPath)) {
     return false;
   }
@@ -60,9 +68,9 @@ export async function removeFromClaudeMd(projectPath: string): Promise<boolean> 
     return false;
   }
   
-  // Remove PromptCode section
+  // Remove PromptCode section (handle both Unix and Windows line endings)
   const updatedContent = content.replace(
-    /\n*<!-- PROMPTCODE-CLI-START -->[\s\S]*<!-- PROMPTCODE-CLI-END -->\n*/,
+    /\r?\n*<!-- PROMPTCODE-CLI-START -->[\s\S]*?<!-- PROMPTCODE-CLI-END -->\r?\n*/,
     '\n'
   );
   

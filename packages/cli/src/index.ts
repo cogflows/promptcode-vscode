@@ -528,16 +528,6 @@ program
 program
   .option('--save-preset <name>', 'save file patterns as a preset for later use');
 
-// Set up signal handlers early for graceful shutdown
-process.on('SIGINT', () => {
-  console.log('\n\nInterrupted by user');
-  process.exit(130); // Standard exit code for SIGINT
-});
-
-process.on('SIGTERM', () => {
-  process.exit(143); // Standard exit code for SIGTERM
-});
-
 // Handle smart routing for zero-friction usage
 // Check if we should use the default command handler
 const args = process.argv.slice(2);
