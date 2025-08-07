@@ -191,7 +191,7 @@ function showPendingUpdateMessage(): void {
     );
     console.error('');
     console.error('Update with:');
-    console.error(chalk.cyan('  promptcode self-update'));
+    console.error(chalk.cyan('  promptcode update'));
     console.error('');
     
     // Clear the message so it doesn't show twice

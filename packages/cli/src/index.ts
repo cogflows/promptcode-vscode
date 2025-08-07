@@ -10,7 +10,7 @@ import { presetCommand } from './commands/preset';
 import { expertCommand } from './commands/expert';
 import { configCommand } from './commands/config';
 import { ccCommand } from './commands/cc';
-import { selfUpdateCommand } from './commands/self-update';
+import { updateCommand } from './commands/update';
 import { uninstallCommand } from './commands/uninstall';
 import { BUILD_VERSION } from './version';
 import { startUpdateCheck } from './utils/update-checker';
@@ -145,7 +145,7 @@ Examples:
   .option('-o, --out <file>', 'output file (default: stdout)')
   .option('--output <file>', 'output file (alias for --out)')
   .option('--json', 'output JSON with metadata')
-  .option('--no-gitignore', 'ignore .gitignore rules')
+  .option('--ignore-gitignore', 'ignore .gitignore rules')
   .option('--path <dir>', 'project directory', process.cwd())
   .option('--save-preset <name>', 'save file patterns as a preset')
   .option('--dry-run', 'show what would be included without generating')
@@ -228,28 +228,27 @@ program
   .command('expert [question]')
   .description('Ask AI expert questions with full codebase context')
   .addHelpText('after', `
-Requires API key for chosen provider. Configure with:
-  $ promptcode config --set-openai-key <key>     # For O3, O3 Pro
-  $ promptcode config --set-anthropic-key <key>  # For Opus 4, Sonnet 4
-  $ promptcode config --set-google-key <key>     # For Gemini 2.5 Pro
-  $ promptcode config --set-xai-key <key>        # For Grok 4
+Requires API key for chosen provider. Set via environment variables:
+  $ export OPENAI_API_KEY=<key>     # For O3, O3 Pro
+  $ export ANTHROPIC_API_KEY=<key>  # For Opus 4, Sonnet 4  
+  $ export GOOGLE_API_KEY=<key>     # For Gemini 2.5 Pro
+  $ export GROK_API_KEY=<key>       # For Grok 4
 
 Examples:
   $ promptcode expert "How can I optimize the API performance?"
   $ promptcode expert "Explain the authentication flow" --preset auth
   $ promptcode expert "Find potential security issues" -f "src/api/**/*.ts"
   $ promptcode expert "Review this code" --model opus-4 --stream
-  $ promptcode expert --list-models  # See all available models`)
+  $ promptcode expert --models  # See all available models`)
   .option('-p, --path <dir>', 'project root directory', process.cwd())
   .option('--preset <name>', 'use a preset for context')
   .option('-f, --files <patterns...>', 'file patterns to include')
-  .option('--model <model>', 'AI model to use (use --list-models to see available options)')
-  .option('--list-models', 'List available AI models')
+  .option('--model <model>', 'AI model to use (use --models to see available options)')
+  .option('--models', 'List available AI models')
   .option('-o, --output <file>', 'save response to file')
   .option('--stream', 'stream response in real-time')
   .option('--save-preset <name>', 'save file patterns as a preset')
-  .option('--no-confirm', 'skip cost confirmation prompt')
-  .option('-y, --yes', 'automatically confirm (alias for --no-confirm)')
+  .option('-y, --yes', 'automatically confirm prompts')
   .action(async (question, options) => {
     await expertCommand(question, options);
   });
@@ -257,12 +256,8 @@ Examples:
 // Config command - manage configuration
 program
   .command('config')
-  .description('Manage PromptCode configuration')
-  .option('--show', 'show current configuration')
-  .option('--set-openai-key <key>', 'set OpenAI API key')
-  .option('--set-anthropic-key <key>', 'set Anthropic API key')
-  .option('--set-google-key <key>', 'set Google API key')
-  .option('--set-xai-key <key>', 'set xAI API key')
+  .description('Show PromptCode configuration and environment variables')
+  .option('--show', 'show current configuration (default action)')
   .option('--reset', 'reset all configuration')
   .action(async (options) => {
     await configCommand(options);
@@ -464,10 +459,10 @@ program
 Examples:
   $ promptcode extract response.md                         # List code blocks
   $ promptcode extract response.md --lang typescript       # Filter by language
-  $ promptcode extract response.md --save-dir ./generated  # Save to files
+  $ promptcode extract response.md --output-dir ./generated  # Save to files
   $ promptcode extract response.md --stdout > code.ts      # Output to stdout`)
   .option('--lang <language>', 'filter by language (e.g., typescript, python)')
-  .option('--save-dir <dir>', 'directory to save extracted files')
+  .option('--output-dir <dir>', 'directory to save extracted files')
   .option('--stdout', 'output to stdout instead of files')
   .action(async (responseFile, options) => {
     const { extractCommand } = await import('./commands/extract');
@@ -495,33 +490,37 @@ Examples:
   });
 
 // Self-update command
-program.addCommand(selfUpdateCommand);
+program.addCommand(updateCommand);
 
 // Uninstall command
 program.addCommand(uninstallCommand);
 
-// Version info command - show detailed version information
+// Custom version display with --detailed option
 program
-  .command('version-info')
-  .description('Show detailed version and build information')
-  .action(() => {
-    console.log(chalk.bold('PromptCode CLI'));
-    console.log(chalk.gray('─'.repeat(50)));
-    console.log(`Version: ${chalk.cyan(BUILD_VERSION)}`);
-    
-    // Parse version to show build info
-    if (BUILD_VERSION.includes('-dev.')) {
-      const parts = BUILD_VERSION.split('-dev.');
-      const [date, hash] = parts[1].split('.');
-      console.log(`Build type: ${chalk.yellow('Development')}`);
-      console.log(`Build date: ${chalk.gray(date.slice(0, 4) + '-' + date.slice(4, 6) + '-' + date.slice(6, 8))}`);
-      console.log(`Git commit: ${chalk.gray(hash)}`);
-    } else {
-      console.log(`Build type: ${chalk.green('Production')}`);
+  .option('--detailed', 'Show detailed version and build information')
+  .hook('preAction', (thisCommand) => {
+    // Check if --detailed flag is present without any command
+    const opts = thisCommand.opts();
+    if (opts.detailed && process.argv.length === 3) {
+      console.log(chalk.bold('PromptCode CLI'));
+      console.log(chalk.gray('─'.repeat(50)));
+      console.log(`Version: ${chalk.cyan(BUILD_VERSION)}`);
+      
+      // Parse version to show build info
+      if (BUILD_VERSION.includes('-dev.')) {
+        const parts = BUILD_VERSION.split('-dev.');
+        const [date, hash] = parts[1].split('.');
+        console.log(`Build type: ${chalk.yellow('Development')}`);
+        console.log(`Build date: ${chalk.gray(date.slice(0, 4) + '-' + date.slice(4, 6) + '-' + date.slice(6, 8))}`);
+        console.log(`Git commit: ${chalk.gray(hash)}`);
+      } else {
+        console.log(`Build type: ${chalk.green('Production')}`);
+      }
+      
+      console.log(`Node.js: ${chalk.gray(process.version)}`);
+      console.log(`Platform: ${chalk.gray(process.platform + ' ' + process.arch)}`);
+      process.exit(0);
     }
-    
-    console.log(`Node.js: ${chalk.gray(process.version)}`);
-    console.log(`Platform: ${chalk.gray(process.platform + ' ' + process.arch)}`);
   });
 
 // Add global options that work with the default command
@@ -534,8 +533,8 @@ const args = process.argv.slice(2);
 const hasSubcommand = args.length > 0 && [
   'generate', 'cache', 'templates', 'list-templates', 'preset', 
   'expert', 'config', 'cc', 'stats', 'diff', 'watch', 'validate', 
-  'extract', 'version-info', 'history', 'self-update', 'uninstall',
-  '--help', '-h', '--version', '-V'
+  'extract', 'history', 'update', 'uninstall',
+  '--help', '-h', '--version', '-V', '--detailed'
 ].includes(args[0]);
 
 if (!hasSubcommand && args.length > 0) {

@@ -49,6 +49,35 @@ export function findPromptcodeFolder(startPath: string): string | null {
 }
 
 /**
+ * Get the templates directory for Claude integration.
+ * Works correctly for both development and compiled Bun binaries.
+ */
+export function getClaudeTemplatesDir(): string {
+  // For compiled Bun binaries, templates are in dist/claude-templates
+  const execDir = path.dirname(process.execPath);
+  const compiledPath = path.join(execDir, 'claude-templates');
+  
+  if (fsSync.existsSync(compiledPath)) {
+    return compiledPath;
+  }
+  
+  // For development mode, use __dirname relative path
+  // This will be resolved at compile time
+  const devPath = path.join(__dirname, '..', 'claude-templates');
+  if (fsSync.existsSync(devPath)) {
+    return devPath;
+  }
+  
+  // Fallback: check if we're running from packages/cli/dist
+  const distPath = path.join(process.cwd(), 'packages', 'cli', 'dist', 'claude-templates');
+  if (fsSync.existsSync(distPath)) {
+    return distPath;
+  }
+  
+  throw new Error('Claude templates directory not found. Please rebuild the CLI.');
+}
+
+/**
  * Get the preset directory for a project
  * Now searches for existing .promptcode in parent directories
  */

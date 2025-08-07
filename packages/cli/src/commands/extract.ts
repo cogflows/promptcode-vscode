@@ -19,7 +19,7 @@ function sanitizeFilename(raw: string): string {
 
 interface ExtractOptions {
   lang?: string;
-  saveDir?: string;
+  outputDir?: string;
   stdout?: boolean;
 }
 
@@ -54,9 +54,9 @@ export async function extractCommand(responseFile: string, options: ExtractOptio
         }
         console.log(block.content);
       }
-    } else if (options.saveDir) {
+    } else if (options.outputDir) {
       // Save to files
-      await fs.mkdir(options.saveDir, { recursive: true });
+      await fs.mkdir(options.outputDir, { recursive: true });
       
       for (const [index, block] of filteredBlocks.entries()) {
         let filename = block.filename;
@@ -69,10 +69,10 @@ export async function extractCommand(responseFile: string, options: ExtractOptio
         
         // ─── security: sanitize & verify ──────────────────────────────
         filename = sanitizeFilename(filename);
-        const filePath = path.join(options.saveDir, filename);
+        const filePath = path.join(options.outputDir, filename);
         
-        // Ensure the resolved path is still inside saveDir (defence-in-depth)
-        const resolvedDir = path.resolve(options.saveDir);
+        // Ensure the resolved path is still inside outputDir (defence-in-depth)
+        const resolvedDir = path.resolve(options.outputDir);
         const resolvedFile = path.resolve(filePath);
         if (!resolvedFile.startsWith(resolvedDir + path.sep)) {
           throw new Error(`Invalid filename detected: ${block.filename}`);
@@ -99,7 +99,7 @@ export async function extractCommand(responseFile: string, options: ExtractOptio
         console.log();
       }
       
-      console.log(chalk.gray('\nUse --stdout to output code or --save-dir to save to files'));
+      console.log(chalk.gray('\nUse --stdout to output code or --output-dir to save to files'));
     }
     
   } catch (error) {

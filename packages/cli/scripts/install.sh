@@ -329,13 +329,13 @@ main() {
       print_warning "You're running a development version"
     fi
     
-    # Check if self-update command exists (newer versions have it)
-    if "$CLI_NAME" self-update --help >/dev/null 2>&1; then
+    # Check if update command exists (newer versions have it)
+    if "$CLI_NAME" update --help >/dev/null 2>&1; then
       # For dev versions, inform about --force option
       if [[ "$current_version" == *"-dev."* ]]; then
         print_info "Development version detected. To force update to $version:"
         echo ""
-        echo "  ${CLI_NAME} self-update --force"
+        echo "  ${CLI_NAME} update --force"
         echo ""
         # Use /dev/tty for read when piping through bash
         if [ -t 0 ]; then
@@ -345,8 +345,8 @@ main() {
         fi
         echo ""
         if [[ $REPLY =~ ^[Yy]$ ]] || [ -z "$REPLY" ]; then
-          # Try to run self-update --force, but if it fails (old version), continue with direct install
-          if ! "$CLI_NAME" self-update --force 2>/dev/null; then
+          # Try to run update --force, but if it fails (old version), continue with direct install
+          if ! "$CLI_NAME" update --force 2>/dev/null; then
             print_warning "Current version doesn't support --force flag"
             print_info "Proceeding with direct installation of $version"
             # Continue with the installation (don't exit)
@@ -358,15 +358,15 @@ main() {
           exit 0
         fi
       else
-        print_info "Using built-in self-update to upgrade..."
+        print_info "Using built-in update to upgrade..."
         echo ""
-        "$CLI_NAME" self-update
+        "$CLI_NAME" update
         exit $?
       fi
     else
-      # Older version without self-update
+      # Older version without update
       if [[ "$current_version" == *"-dev."* ]]; then
-        print_warning "This development version doesn't support self-update."
+        print_warning "This development version doesn't support update."
         print_info "Will force reinstall with latest release version ($version)"
         # Use /dev/tty for read when piping through bash
         if [ -t 0 ]; then
@@ -381,7 +381,7 @@ main() {
         fi
         # Continue with installation - will overwrite the dev version
       else
-        print_warning "This version doesn't support self-update. Manual reinstall required."
+        print_warning "This version doesn't support update. Manual reinstall required."
         # Use /dev/tty for read when piping through bash
         if [ -t 0 ]; then
           read -p "Proceed with manual reinstall? [Y/n] " -n 1 -r

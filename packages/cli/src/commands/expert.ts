@@ -20,9 +20,8 @@ interface ExpertOptions {
   model?: string;
   output?: string;
   stream?: boolean;
-  listModels?: boolean;
+  models?: boolean;
   savePreset?: string;
-  noConfirm?: boolean;
   yes?: boolean;
 }
 
@@ -84,8 +83,8 @@ function listAvailableModels() {
 }
 
 export async function expertCommand(question: string | undefined, options: ExpertOptions): Promise<void> {
-  // Handle --list-models flag
-  if (options.listModels) {
+  // Handle --models flag
+  if (options.models) {
     listAvailableModels();
     return;
   }
@@ -97,12 +96,12 @@ export async function expertCommand(question: string | undefined, options: Exper
     console.error(chalk.gray('  promptcode "Why is this slow?" src/**/*.ts'));
     console.error(chalk.gray('  promptcode "Explain the auth flow" @backend/'));
     console.error(chalk.gray('  promptcode expert "What are the security risks?" --preset api\n'));
-    console.error(chalk.gray('To list available models: promptcode expert --list-models'));
+    console.error(chalk.gray('To list available models: promptcode expert --models'));
     process.exit(1);
   }
   
   // In Claude Code environment, provide additional guidance
-  if (process.env.CLAUDE_PROJECT_DIR && !options.yes && !options.noConfirm) {
+  if (process.env.CLAUDE_PROJECT_DIR && !options.yes) {
     console.log(chalk.gray('💡 In Claude Code: AI agents will ask for approval before expensive operations'));
   }
   
@@ -238,7 +237,7 @@ export async function expertCommand(question: string | undefined, options: Exper
       if (!isInteractive()) {
         console.error(chalk.yellow('\n⚠️  Cost approval required for expensive operation (~$' + estimatedTotalCost.toFixed(2) + ')'));
         console.error(chalk.yellow('\nNon-interactive environment detected.'));
-        console.error(chalk.yellow('Use --yes to proceed with approval, or --no-confirm for auto-approval mode.'));
+        console.error(chalk.yellow('Use --yes to proceed with approval.'));
         
         // Special message for Claude Code environment
         if (process.env.CLAUDE_PROJECT_DIR) {

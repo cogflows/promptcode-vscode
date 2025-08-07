@@ -96,7 +96,7 @@ promptcode expert "Complex analysis" --model o3-pro
 - **NEVER** automatically add `--yes` without explicit user consent
 - **ALWAYS** show the cost estimate before asking for approval
 - The `--yes` flag means "I have user approval for this specific operation"
-- The `--no-confirm` flag enables auto-approval for ALL operations (use cautiously)
+- The `--yes` flag can be used to auto-approve operations after user consent
 - Default to conservative behavior - when in doubt, ask for approval
 
 **Cost Information:**
@@ -113,8 +113,8 @@ export ANTHROPIC_API_KEY=sk-ant-...
 export GEMINI_API_KEY=...
 export GROK_API_KEY=xai-...
 
-# Or use config command
-promptcode config --set-openai-key sk-...
+# Set via environment variables
+export OPENAI_API_KEY=sk-...
 ```
 
 <details>

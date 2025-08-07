@@ -20,7 +20,19 @@ interface GitHubRelease {
 
 async function fetchLatestRelease(): Promise<GitHubRelease | null> {
   try {
-    const response = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    
+    const response = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': `promptcode-cli/${BUILD_VERSION}`,
+        'Accept': 'application/vnd.github.v3+json'
+      }
+    });
+    
+    clearTimeout(timeout);
+    
     if (!response.ok) {
       return null;
     }
@@ -221,9 +233,9 @@ function isNewerVersion(latest: string, current: string): boolean {
   return false;
 }
 
-export const selfUpdateCommand = program
-  .command('self-update')
-  .description('Update PromptCode CLI to the latest version (checks automatically on each run)')
+export const updateCommand = program
+  .command('update')
+  .description('Update PromptCode CLI to the latest version')
   .option('--force', 'Force update even if already on latest version')
   .action(async (options) => {
     const spin = spinner();
@@ -231,9 +243,9 @@ export const selfUpdateCommand = program
     try {
       // Check if running from npm/development - but allow with --force
       if ((BUILD_VERSION.includes('-dev') || BUILD_VERSION === '0.0.0-dev') && !options.force) {
-        console.log(chalk.yellow('⚠ Cannot self-update development version'));
+        console.log(chalk.yellow('⚠ Cannot update development version'));
         console.log('Use --force flag to override:');
-        console.log(chalk.cyan('  promptcode self-update --force'));
+        console.log(chalk.cyan('  promptcode update --force'));
         process.exit(1);
       }
       

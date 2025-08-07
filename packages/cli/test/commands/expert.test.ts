@@ -14,7 +14,7 @@ describe('expert command', () => {
   });
   
   it('should list available models', async () => {
-    const result = await runCLI(['expert', '--list-models'], { cwd: fixture.dir });
+    const result = await runCLI(['expert', '--models'], { cwd: fixture.dir });
     
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain('Available Models');
@@ -73,13 +73,13 @@ describe('expert command', () => {
   
   
   
-  it('should skip confirmation with --no-confirm', async () => {
+  it('should skip confirmation with --yes', async () => {
     createTestFiles(fixture.dir, {
       'src/index.ts': 'console.log("Test");'
     });
     
     // This will still fail without API key, but won't ask for confirmation
-    const result = await runCLI(['expert', 'Analyze this', '--model', 'o3-pro', '--no-confirm'], { 
+    const result = await runCLI(['expert', 'Analyze this', '--model', 'o3-pro', '--yes'], { 
       cwd: fixture.dir,
       env: {
         ...process.env,
@@ -97,7 +97,7 @@ describe('expert command', () => {
       'src/index.ts': 'console.log("Test");'
     });
     
-    // Should accept --yes as alias for --no-confirm
+    // --yes flag should skip confirmation
     const result = await runCLI(['expert', 'Analyze this', '--yes'], { 
       cwd: fixture.dir,
       env: {

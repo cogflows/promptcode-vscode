@@ -58,7 +58,7 @@ promptcode preset --create backend
 promptcode generate -p backend -o prompt.md
 
 # Ask AI expert for help (requires API key)
-promptcode config --set-openai-key sk-...
+export OPENAI_API_KEY=sk-...
 promptcode expert "How can I optimize this API?" -p backend
 ```
 
@@ -87,7 +87,7 @@ promptcode preset --delete api-routes    # Delete preset
 Ask questions with full codebase context:
 ```bash
 # Set up OpenAI API key first
-promptcode config --set-openai-key sk-...
+export OPENAI_API_KEY=sk-...
 
 # Ask questions
 promptcode expert "Explain the auth flow" --preset auth
@@ -112,7 +112,7 @@ promptcode diff response.md --apply      # Apply changes
 **Extract** - Extract code from AI responses:
 ```bash
 promptcode extract response.md           # List code blocks
-promptcode extract response.md --save-dir ./generated
+promptcode extract response.md --output-dir ./generated
 ```
 
 **Validate** - Check generated code:
@@ -156,7 +156,7 @@ Configuration is stored in `~/.config/promptcode/config.json`:
 
 ```bash
 promptcode config --show                 # View config
-promptcode config --set-openai-key KEY   # Set API key
+export OPENAI_API_KEY=KEY                # Set API key (use env vars)
 promptcode config --reset                # Reset all
 ```
 

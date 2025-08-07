@@ -25,7 +25,7 @@ import {
 export interface GenerateOptions {
   path?: string;
   files?: string[];
-  noGitignore?: boolean;
+  ignoreGitignore?: boolean;
   instructions?: string;
   template?: string;
   out?: string;
@@ -96,7 +96,7 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
     const selectedFiles = await scanFiles({
       cwd: projectPath,
       patterns,
-      respectGitignore: !options.noGitignore,
+      respectGitignore: !options.ignoreGitignore,
       customIgnoreFile: options.ignoreFile || path.join(projectPath, IGNORE_FILE_NAME),
       workspaceName: path.basename(projectPath)
     });

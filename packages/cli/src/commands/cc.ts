@@ -2,7 +2,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import chalk from 'chalk';
 import ora from 'ora';
-import { ensureDirWithApproval } from '../utils/paths';
+import { ensureDirWithApproval, getClaudeTemplatesDir } from '../utils/paths';
 
 interface CcOptions {
   path?: string;
@@ -58,9 +58,10 @@ async function updateClaudeMd(projectPath: string): Promise<void> {
   const claudeMdPath = findClaudeMd(claudeDir);
   
   // Read template
-  const templatePath = path.join(__dirname, '..', 'claude-templates', 'CLAUDE.md.template');
+  const templatesDir = getClaudeTemplatesDir();
+  const templatePath = path.join(templatesDir, 'CLAUDE.md.template');
   if (!fs.existsSync(templatePath)) {
-    throw new Error('CLAUDE.md.template not found');
+    throw new Error(`CLAUDE.md.template not found at ${templatePath}`);
   }
   
   const templateContent = await fs.promises.readFile(templatePath, 'utf8');
@@ -152,7 +153,8 @@ async function setupExpertCommand(projectPath: string): Promise<void> {
   await fs.promises.mkdir(commandsDir, { recursive: true });
   
   // Copy expert consultation command
-  const expertTemplatePath = path.join(__dirname, '..', 'claude-templates', 'expert-consultation.md');
+  const templatesDir = getClaudeTemplatesDir();
+  const expertTemplatePath = path.join(templatesDir, 'expert-consultation.md');
   const expertCommandPath = path.join(commandsDir, 'expert-consultation.md');
   
   if (fs.existsSync(expertTemplatePath)) {
