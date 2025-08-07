@@ -4,13 +4,10 @@ Command-line interface for PromptCode - generate AI-ready prompts from your code
 
 ## Installation
 
-### Quick Install (Bun-based)
+### Quick Install
 ```bash
-# Clone the repo or navigate to the CLI package
-cd packages/cli
-
-# Run the installation script (installs Bun if needed)
-./install.sh
+# Install from current branch (feature/cli-integration)
+curl -fsSL https://raw.githubusercontent.com/cogflows/promptcode-vscode/feature/cli-integration/packages/cli/scripts/install.sh | bash
 ```
 
 The installation script will:
@@ -35,6 +32,8 @@ bun link
 ```bash
 npm install -g promptcode-cli
 ```
+
+> Note: Installation URLs use feature/cli-integration branch until merged to main
 
 ## Quick Start
 
