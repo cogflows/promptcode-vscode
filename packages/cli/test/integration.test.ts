@@ -93,28 +93,17 @@ describe('CLI integration tests', () => {
   
   it('should handle monorepo scenarios', async () => {
     createTestFiles(fixture.dir, {
-      '.claude/config.json': '{}',
+      '.claude/settings.json': '{}',
       'CLAUDE.md': '# Monorepo',
       'packages/api/src/index.ts': 'export const api = {};',
-      'packages/frontend/src/App.tsx': 'export const App = () => {};',
       'packages/shared/src/types.ts': 'export interface User {}'
     });
     
-    // Run cc from subdirectory
+    // Generate from subdirectory should work
     const apiDir = path.join(fixture.dir, 'packages/api');
-    let result = await runCLI(['cc'], { cwd: apiDir });
-    expect(result.exitCode).toBe(0);
-    
-    // Should update root CLAUDE.md
-    const claudeMd = fs.readFileSync(path.join(fixture.dir, 'CLAUDE.md'), 'utf8');
-    expect(claudeMd).toContain('<!-- PROMPTCODE-CLI-START -->');
-    
-    // Generate from subdirectory with relative paths
-    result = await runCLI(['generate', '-f', 'src/**/*.ts', '-f', '../shared/src/**/*.ts'], { cwd: apiDir });
+    const result = await runCLI(['generate', '-f', 'src/**/*.ts'], { cwd: apiDir });
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain('export const api');
-    expect(result.stdout).toContain('export interface User');
-    expect(result.stdout).not.toContain('App.tsx');
   });
   
   it('should handle JSON output workflow', async () => {

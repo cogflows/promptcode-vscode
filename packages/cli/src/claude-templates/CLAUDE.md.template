@@ -100,7 +100,7 @@ promptcode expert "Complex analysis" --model o3-pro
 - Default to conservative behavior - when in doubt, ask for approval
 
 **Cost Information:**
-- Expensive models: o3-pro, opus-4
+- Expensive models: o3-pro
 - Threshold: Operations over $0.50 require approval
 - The CLI shows detailed cost breakdowns before execution
 
