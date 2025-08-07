@@ -380,7 +380,7 @@ export async function ccCommand(options: CcOptions & { detect?: boolean }): Prom
     
     console.log(chalk.bold('\n🚀 Next steps:'));
     console.log(chalk.gray('1. Review the PromptCode section in CLAUDE.md'));
-    console.log(chalk.gray('2. Set up API keys with: promptcode config --set-<provider>-key'));
+    console.log(chalk.gray('2. Set up API keys via environment variables (e.g., export OPENAI_API_KEY=...)'));
     console.log(chalk.gray('3. Create presets with: promptcode preset create <name>'));
     
     console.log(chalk.bold('\n💡 Quick start:'));
