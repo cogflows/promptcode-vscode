@@ -132,6 +132,7 @@ After recent changes:
 - Debug logging uses the `debug` npm package with namespace `promptcode:*`
 - All tests pass - run with `cd packages/cli && bun test`
 - To release: Create a tag and push to trigger GitHub Actions
+- DO NOT make shortcuts, always use the most idiomatic and generic solution
 
 <!-- PROMPTCODE-CLI-START -->
 # PromptCode CLI
@@ -146,6 +147,12 @@ promptcode generate src/api/handler.ts src/utils/*.ts
 
 # Ask AI experts questions with code context
 promptcode expert "Why is this slow?" src/api/handler.ts
+
+# Web search is enabled by default for supported models (O3, Gemini, Claude, Grok)
+promptcode expert "What are the latest React 19 features?" src/components/*.tsx
+
+# Explicitly disable web search if needed
+promptcode expert "Review this code" src/api/*.ts --no-web-search
 
 # Use presets for common file patterns
 promptcode preset list                    # See available presets
@@ -193,12 +200,41 @@ promptcode generate src/**/*.ts --instructions "Find performance bottlenecks"
 promptcode expert "Review this code for security issues" src/api/**/*.ts
 ```
 
+## Web Search Support
+
+The expert command now includes built-in web search capabilities for supported models:
+
+**Models with Web Search:**
+- **OpenAI**: O3, O3 Pro, O3 Mini - Uses web_search_preview tool
+- **Google**: Gemini 2.5 Pro/Flash - Uses Google Search grounding
+- **Anthropic**: Claude Opus 4, Sonnet 4 - Uses web_search tool
+- **xAI**: Grok 4 - Has built-in real-time web access
+
+**Usage:**
+```bash
+# Web search is enabled by default for supported models
+promptcode expert "What are the breaking changes in TypeScript 5.8?"
+
+# Explicitly enable web search
+promptcode expert "Latest best practices for React Server Components" --web-search
+
+# Disable web search when you don't need current information
+promptcode expert "Review this code for bugs" src/**/*.ts --no-web-search
+```
+
+**Benefits:**
+- Access to current documentation and recent updates
+- Real-time information for rapidly evolving technologies
+- Grounded responses with source citations
+- Better accuracy for questions about recent events or releases
+
 ## Tips for AI Agents
 
 1. **Always check token counts** - Use `promptcode preset info` to see total tokens before generating
 2. **Be specific with patterns** - Use `src/api/*.ts` not `**/*.ts` to avoid huge contexts
 3. **Leverage existing presets** - Check `promptcode preset list` before creating new ones
 4. **Use descriptive preset names** - `auth-system` not `preset1`
+5. **Use web search for current info** - Enabled by default for questions about latest features, docs, or best practices
 
 ## Important: Cost Approval for AI Agents
 

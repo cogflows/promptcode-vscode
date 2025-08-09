@@ -28,6 +28,7 @@ const ModelSchema = z.object({
     input: z.number().nonnegative(),
     output: z.number().nonnegative(),
   }),
+  supportsWebSearch: z.boolean().optional().default(false),
 });
 
 // Type derives from schema so TS & runtime always match
@@ -41,7 +42,8 @@ export const MODELS: Record<string, ModelConfig> = {
     name: 'O3',
     description: 'Advanced reasoning model with deep thinking capabilities',
     contextWindow: 200000,
-    pricing: { input: 2, output: 8 }
+    pricing: { input: 2, output: 8 },
+    supportsWebSearch: true
   },
   'o3-pro': {
     provider: 'openai',
@@ -49,7 +51,8 @@ export const MODELS: Record<string, ModelConfig> = {
     name: 'O3 Pro',
     description: 'Most advanced reasoning model with extended thinking',
     contextWindow: 200000,
-    pricing: { input: 20, output: 80 }
+    pricing: { input: 20, output: 80 },
+    supportsWebSearch: true
   },
   'o3-mini': {
     provider: 'openai',
@@ -57,25 +60,28 @@ export const MODELS: Record<string, ModelConfig> = {
     name: 'O3 Mini',
     description: 'Fast reasoning model for quick tasks',
     contextWindow: 200000,
-    pricing: { input: 0.5, output: 2 }
+    pricing: { input: 0.5, output: 2 },
+    supportsWebSearch: true
   },
   
   // Anthropic models (2025 SOTA)
   'opus-4': {
     provider: 'anthropic',
-    modelId: 'claude-opus-4-20250101',
+    modelId: 'claude-opus-4-20250514',
     name: 'Claude Opus 4',
     description: 'Most advanced Claude model with breakthrough capabilities',
     contextWindow: 500000,
-    pricing: { input: 25, output: 100 }
+    pricing: { input: 25, output: 100 },
+    supportsWebSearch: true
   },
   'sonnet-4': {
     provider: 'anthropic',
-    modelId: 'claude-sonnet-4-20250101',
+    modelId: 'claude-sonnet-4-20250514',
     name: 'Claude Sonnet 4',
     description: 'Balanced power and efficiency for production use',
     contextWindow: 500000,
-    pricing: { input: 5, output: 20 }
+    pricing: { input: 5, output: 20 },
+    supportsWebSearch: true
   },
   
   // Google models (2025 SOTA)
@@ -85,7 +91,8 @@ export const MODELS: Record<string, ModelConfig> = {
     name: 'Gemini 2.5 Pro',
     description: 'Latest Gemini with enhanced multimodal understanding',
     contextWindow: 3000000,
-    pricing: { input: 3, output: 12 }
+    pricing: { input: 3, output: 12 },
+    supportsWebSearch: true
   },
   'gemini-2.5-flash': {
     provider: 'google',
@@ -93,7 +100,8 @@ export const MODELS: Record<string, ModelConfig> = {
     name: 'Gemini 2.5 Flash',
     description: 'Ultra-fast model for real-time applications',
     contextWindow: 1000000,
-    pricing: { input: 0.3, output: 1.2 }
+    pricing: { input: 0.3, output: 1.2 },
+    supportsWebSearch: true
   },
   
   // xAI models (2025 SOTA)
@@ -103,7 +111,8 @@ export const MODELS: Record<string, ModelConfig> = {
     name: 'Grok 4',
     description: 'xAI\'s most advanced model with real-time web access',
     contextWindow: 200000,
-    pricing: { input: 5, output: 15 }
+    pricing: { input: 5, output: 15 },
+    supportsWebSearch: true
   }
 };
 

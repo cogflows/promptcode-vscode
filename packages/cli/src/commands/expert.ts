@@ -23,6 +23,7 @@ interface ExpertOptions {
   models?: boolean;
   savePreset?: string;
   yes?: boolean;
+  webSearch?: boolean;
 }
 
 const SYSTEM_PROMPT = `You are an expert software engineer helping analyze and improve code. Provide constructive, actionable feedback.
@@ -294,6 +295,19 @@ export async function expertCommand(question: string | undefined, options: Exper
       console.log(chalk.gray('⏳ This may take a moment...\n'));
     }
     
+    // Determine web search setting
+    // Commander.js sets webSearch to false when --no-web-search is used
+    // undefined means use default (enabled for supported models)
+    const webSearchEnabled = options.webSearch;
+    
+    // Show web search status and warnings
+    if (modelConfig.supportsWebSearch && webSearchEnabled !== false) {
+      console.log(chalk.cyan('🔍 Web search enabled for current information\n'));
+    } else if (webSearchEnabled === true && !modelConfig.supportsWebSearch) {
+      // User explicitly requested web search but model doesn't support it
+      console.log(chalk.yellow(`⚠️  ${modelConfig.name} does not support web search. Proceeding without web search.\n`));
+    }
+    
     // Call AI
     const startTime = Date.now();
     let response: { text: string; usage?: any };
@@ -303,12 +317,14 @@ export async function expertCommand(question: string | undefined, options: Exper
         systemPrompt: SYSTEM_PROMPT,
         maxTokens: availableTokens,
         onChunk: (chunk) => process.stdout.write(chunk),
+        webSearch: webSearchEnabled,
       });
       console.log(); // Add newline after streaming
     } else {
       response = await aiProvider.generateText(modelKey, fullPrompt, {
         systemPrompt: SYSTEM_PROMPT,
         maxTokens: availableTokens,
+        webSearch: webSearchEnabled,
       });
     }
     

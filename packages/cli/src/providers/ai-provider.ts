@@ -4,9 +4,9 @@
  * Now powered by ConfigService (no process.env mutation side-effects).
  */
 
-import { createOpenAI } from '@ai-sdk/openai';
-import { createAnthropic } from '@ai-sdk/anthropic';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { createOpenAI, openai } from '@ai-sdk/openai';
+import { createAnthropic, anthropic } from '@ai-sdk/anthropic';
+import { createGoogleGenerativeAI, google } from '@ai-sdk/google';
 import { createXai } from '@ai-sdk/xai';
 import { generateText, streamText, LanguageModel } from 'ai';
 import { MODELS, ModelConfig } from './models';
@@ -118,8 +118,41 @@ export class AIProvider {
    * Helpers
    * ──────────────────────────── */
 
+  private getWebSearchTools(modelKey: string): Record<string, any> | undefined {
+    const config = MODELS[modelKey];
+    if (!config || !config.supportsWebSearch) return undefined;
+
+    switch (config.provider) {
+      case 'openai':
+        // OpenAI requires using the responses API for web search
+        // This is handled in getModel method with a special case
+        return {
+          web_search_preview: openai.tools.webSearchPreview({})
+        };
+      
+      case 'google':
+        return {
+          google_search: google.tools.googleSearch({})
+        };
+      
+      case 'anthropic':
+        // Anthropic web search tool - using the provider-defined tool
+        return {
+          web_search: anthropic.tools.webSearch_20250305({
+            maxUses: 5
+          })
+        };
+      
+      case 'xai':
+        // xAI Grok has built-in web access, no explicit tool needed
+        return undefined;
+      
+      default:
+        return undefined;
+    }
+  }
   
-  private getModel(modelKey: string): LanguageModel {
+  private getModel(modelKey: string, useWebSearch: boolean = false): LanguageModel {
     // Skip model initialization in mock mode
     if (process.env.PROMPTCODE_MOCK_LLM === '1') {
       return {} as LanguageModel; // Return dummy model object
@@ -127,6 +160,21 @@ export class AIProvider {
     
     const config = MODELS[modelKey];
     if (!config) throw new Error(`Unknown model: ${modelKey}`);
+
+    // Special handling for OpenAI with web search
+    if (config.provider === 'openai' && useWebSearch && config.supportsWebSearch) {
+      const keys = this.config.getAllKeys();
+      if (!keys.openai) {
+        throw new Error(
+          `API key not configured for openai. ` +
+          `Set via "promptcode config --set-openai-key <key>" ` +
+          `or export OPENAI_API_KEY=...`
+        );
+      }
+      // Use responses API for web search support
+      const openaiProvider = createOpenAI({ apiKey: keys.openai });
+      return openaiProvider.responses(config.modelId);
+    }
 
     const providerInstance = this.providers[config.provider];
     if (!providerInstance) {
@@ -152,6 +200,7 @@ export class AIProvider {
       maxTokens?: number;
       temperature?: number;
       systemPrompt?: string;
+      webSearch?: boolean;
     } = {}
   ): Promise<AIResponse> {
     // Mock mode for testing
@@ -167,7 +216,9 @@ export class AIProvider {
       };
     }
     
-    const model = this.getModel(modelKey);
+    const modelConfig = MODELS[modelKey];
+    const enableWebSearch = options.webSearch !== false && modelConfig?.supportsWebSearch;
+    const model = this.getModel(modelKey, enableWebSearch);
     
     const messages: any[] = [];
     
@@ -177,12 +228,23 @@ export class AIProvider {
     
     messages.push({ role: 'user', content: prompt });
     
-    const result = await generateText({
+    // Prepare the request configuration
+    const requestConfig: any = {
       model,
       messages,
       maxCompletionTokens: options.maxTokens || 4096,
       temperature: options.temperature || 0.7,
-    });
+    };
+    
+    // Add web search tools if enabled
+    if (enableWebSearch) {
+      const tools = this.getWebSearchTools(modelKey);
+      if (tools) {
+        requestConfig.tools = tools;
+      }
+    }
+    
+    const result = await generateText(requestConfig);
     
     return {
       text: result.text,
@@ -198,6 +260,7 @@ export class AIProvider {
       temperature?: number;
       systemPrompt?: string;
       onChunk?: (chunk: string) => void;
+      webSearch?: boolean;
     } = {}
   ): Promise<AIResponse> {
     // Mock mode for testing
@@ -222,7 +285,9 @@ export class AIProvider {
       };
     }
     
-    const model = this.getModel(modelKey);
+    const modelConfig = MODELS[modelKey];
+    const enableWebSearch = options.webSearch !== false && modelConfig?.supportsWebSearch;
+    const model = this.getModel(modelKey, enableWebSearch);
     
     const messages: any[] = [];
     
@@ -232,12 +297,23 @@ export class AIProvider {
     
     messages.push({ role: 'user', content: prompt });
     
-    const result = await streamText({
+    // Prepare the request configuration
+    const requestConfig: any = {
       model,
       messages,
       maxCompletionTokens: options.maxTokens || 4096,
       temperature: options.temperature || 0.7,
-    });
+    };
+    
+    // Add web search tools if enabled
+    if (enableWebSearch) {
+      const tools = this.getWebSearchTools(modelKey);
+      if (tools) {
+        requestConfig.tools = tools;
+      }
+    }
+    
+    const result = await streamText(requestConfig);
     
     let fullText = '';
     for await (const chunk of result.textStream) {

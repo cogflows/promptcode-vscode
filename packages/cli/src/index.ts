@@ -249,6 +249,8 @@ Examples:
   .option('--stream', 'stream response in real-time')
   .option('--save-preset <name>', 'save file patterns as a preset')
   .option('-y, --yes', 'automatically confirm prompts')
+  .option('--web-search', 'enable web search for current information (enabled by default for supported models)')
+  .option('--no-web-search', 'disable web search even for supported models')
   .action(async (question, options) => {
     await expertCommand(question, options);
   });
