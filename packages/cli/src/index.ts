@@ -564,6 +564,13 @@ if (looksLikeCommand && !knownCommands.includes(firstArg)) {
   process.exit(1);
 }
 
+// Check for common mistakes
+if (args.includes('--update')) {
+  console.error(chalk.yellow('Did you mean: promptcode update'));
+  console.error(chalk.gray('The update command doesn\'t use dashes.'));
+  process.exit(1);
+}
+
 const hasSubcommand = args.length > 0 && knownCommands.includes(args[0]);
 
 if (!hasSubcommand && args.length > 0) {
