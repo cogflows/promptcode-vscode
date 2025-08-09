@@ -49,8 +49,9 @@ export async function watchCommand(options: WatchOptions) {
       
       // Build prompt
       const result = await buildPrompt(files, instructions, {
-        includeMap: true,
-        xml: true
+        includeFiles: true,
+        includeInstructions: true,
+        includeFileContents: true
       });
       
       // Clear the spinner line
@@ -58,11 +59,11 @@ export async function watchCommand(options: WatchOptions) {
       
       if (options.out) {
         await fs.writeFile(options.out, result.prompt, 'utf-8');
-        console.log(chalk.green(`✓ Updated ${options.out} (${result.totalTokens.toLocaleString()} tokens)`));
+        console.log(chalk.green(`✓ Updated ${options.out} (${result.tokenCount.toLocaleString()} tokens)`));
       } else {
         console.log(chalk.gray('--- Generated Prompt ---'));
         console.log(result.prompt);
-        console.log(chalk.gray(`--- End (${result.totalTokens.toLocaleString()} tokens) ---\n`));
+        console.log(chalk.gray(`--- End (${result.tokenCount.toLocaleString()} tokens) ---\n`));
       }
       
     } catch (error) {

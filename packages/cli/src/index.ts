@@ -199,7 +199,7 @@ Examples:
 Legacy flags (still supported):
   $ promptcode preset --create backend
   $ promptcode preset --info backend`)
-  .option('-p, --path <dir>', 'project root directory', process.cwd())
+  .option('--path <dir>', 'project root directory', process.cwd())
   .option('--list', 'list all presets (legacy)')
   .option('--create <name>', 'create a new preset (legacy)')
   .option('--info <name>', 'show preset info (legacy)')
@@ -243,7 +243,7 @@ Examples:
   $ promptcode expert "Find potential security issues" -f "src/api/**/*.ts"
   $ promptcode expert "Review this code" --model opus-4 --stream
   $ promptcode expert --models  # See all available models`)
-  .option('-p, --path <dir>', 'project root directory', process.cwd())
+  .option('--path <dir>', 'project root directory', process.cwd())
   .option('--preset <name>', 'use a preset for context')
   .option('-f, --files <patterns...>', 'file patterns to include')
   .option('--model <model>', 'AI model to use (use --models to see available options)')
@@ -287,7 +287,7 @@ Examples:
   $ promptcode cc              # Set up Claude integration
   $ promptcode cc --force      # Recreate/update existing setup
   $ promptcode cc --uninstall  # Remove Claude integration`)
-  .option('-p, --path <dir>', 'project root directory', process.cwd())
+  .option('--path <dir>', 'project root directory', process.cwd())
   .option('--force', 'update existing structure / skip confirmation prompts')
   .option('-y, --yes', 'alias for --force (CI-friendly)')
   .option('--uninstall', 'remove Claude integration (asks for confirmation)')
@@ -300,7 +300,7 @@ Examples:
 program
   .command('stats')
   .description('Show token statistics for current project or preset')
-  .option('-p, --path <dir>', 'project root directory', process.cwd())
+  .option('--path <dir>', 'project root directory', process.cwd())
   .option('-l, --preset <name>', 'analyze a specific preset')
   .addHelpText('after', '\nShows file count, total tokens, and breakdown by file type.')
   .action(async (options) => {
@@ -407,7 +407,7 @@ Code blocks should include filename in header or first comment:
   or
   \`\`\`ts
   // filename: src/index.ts`)
-  .option('-p, --path <dir>', 'project root directory', process.cwd())
+  .option('--path <dir>', 'project root directory', process.cwd())
   .option('--apply', 'apply the changes to files')
   .option('--preview', 'show preview of changes without applying')
   .option('--json', 'output diff as JSON for programmatic use')
@@ -425,7 +425,7 @@ program
 Examples:
   $ promptcode watch -f "src/**/*.ts" -o context.md
   $ promptcode watch -t code-review --debounce 2000`)
-  .option('-p, --path <dir>', 'project root directory', process.cwd())
+  .option('--path <dir>', 'project root directory', process.cwd())
   .option('-f, --files <patterns...>', 'file glob patterns to watch')
   .option('-o, --out <file>', 'output file to update')
   .option('-t, --template <name>', 'template to use')

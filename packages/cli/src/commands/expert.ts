@@ -6,6 +6,8 @@ import { AIProvider } from '../providers/ai-provider';
 import { MODELS, DEFAULT_MODEL, getAvailableModels } from '../providers/models';
 import { logRun } from '../services/history';
 import { spinner } from '../utils/spinner';
+import { estimateCost, formatCost } from '../utils/cost';
+import { DEFAULT_EXPECTED_COMPLETION } from '../utils/constants';
 // Cost threshold for requiring approval
 const APPROVAL_COST_THRESHOLD = 0.50;
 import { 
@@ -235,14 +237,15 @@ export async function expertCommand(question: string | undefined, options: Exper
     }
 
     // Calculate estimated costs
+    const expectedOutput = Math.min(availableTokens, DEFAULT_EXPECTED_COMPLETION);
+    const estimatedTotalCost = estimateCost(modelKey, result.tokenCount, expectedOutput);
     const estimatedInputCost = (result.tokenCount / 1_000_000) * modelConfig.pricing.input;
-    const estimatedOutputCost = (Math.min(availableTokens, 4000) / 1_000_000) * modelConfig.pricing.output; // Assume ~4K output
-    const estimatedTotalCost = estimatedInputCost + estimatedOutputCost;
+    const estimatedOutputCost = (expectedOutput / 1_000_000) * modelConfig.pricing.output;
     
     // Show cost info (to stderr so it's always visible)
     console.error(chalk.blue('\n📊 Cost Breakdown:'));
     console.error(chalk.gray(`  Input:  ${result.tokenCount.toLocaleString()} tokens × $${modelConfig.pricing.input}/M = $${estimatedInputCost.toFixed(4)}`));
-    console.error(chalk.gray(`  Output: ~4,000 tokens × $${modelConfig.pricing.output}/M = $${estimatedOutputCost.toFixed(4)}`));
+    console.error(chalk.gray(`  Output: ~${expectedOutput.toLocaleString()} tokens × $${modelConfig.pricing.output}/M = $${estimatedOutputCost.toFixed(4)}`));
     console.error(chalk.bold(`  Total:  ~$${estimatedTotalCost.toFixed(4)}`));
 
     // Check if approval is needed

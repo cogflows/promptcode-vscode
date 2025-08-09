@@ -33,14 +33,14 @@ promptcode --help
 
 ## Updating
 
-PromptCode CLI includes automatic update checking and self-update capabilities:
+PromptCode CLI includes automatic update checking and update capabilities:
 
 ```bash
 # Manually update to the latest version
-promptcode self-update
+promptcode update
 
 # Force update even if on latest version
-promptcode self-update --force
+promptcode update --force
 ```
 
 The CLI automatically checks for updates in the background once per day when you run any command. If a new version is available, you'll see a notification at the end of your command execution. This check runs asynchronously and won't slow down your workflow.

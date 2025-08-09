@@ -67,12 +67,32 @@ function Get-LatestVersion {
 function Download-Binary($version, $arch) {
     $binaryName = "${CLI_NAME}-windows-${arch}.exe"
     $downloadUrl = "https://github.com/$REPO/releases/download/$version/$binaryName"
+    $checksumUrl = "https://github.com/$REPO/releases/download/$version/$binaryName.sha256"
     $tempFile = [System.IO.Path]::GetTempFileName() + ".exe"
     
     Write-Info "Downloading $CLI_NAME $version for Windows $arch..."
     
     try {
+        # Download the binary
         Invoke-WebRequest -Uri $downloadUrl -OutFile $tempFile -UseBasicParsing
+        
+        # Download and verify checksum
+        Write-Info "Verifying checksum..."
+        try {
+            $expectedChecksum = (Invoke-WebRequest -Uri $checksumUrl -UseBasicParsing).Content.Trim().Split()[0]
+            $actualChecksum = (Get-FileHash -Path $tempFile -Algorithm SHA256).Hash.ToLower()
+            
+            if ($actualChecksum -ne $expectedChecksum.ToLower()) {
+                Remove-Item $tempFile -Force
+                Write-Error "Checksum verification failed. Expected: $expectedChecksum, Got: $actualChecksum"
+            }
+            
+            Write-Success "Checksum verified successfully"
+        }
+        catch {
+            Write-Warning "Could not verify checksum (checksum file may not be available). Proceeding with caution."
+        }
+        
         return $tempFile
     }
     catch {
@@ -219,34 +239,34 @@ function Install-PromptCode {
             Write-Warning "You're running a development version"
         }
         
-        # Check if self-update command exists
+        # Check if update command exists
         try {
-            & $CLI_NAME self-update --help 2>$null | Out-Null
+            & $CLI_NAME update --help 2>$null | Out-Null
             
             # For dev versions, inform about --force option
             if ($currentVersion -like "*-dev.*") {
                 Write-Info "Development version detected. To force update to $version:"
                 Write-Host ""
-                Write-Host "  $CLI_NAME self-update --force" -ForegroundColor Cyan
+                Write-Host "  $CLI_NAME update --force" -ForegroundColor Cyan
                 Write-Host ""
                 $response = Read-Host "Run this command now? [Y/n]"
                 if ($response -ne 'n' -and $response -ne 'N') {
-                    & $CLI_NAME self-update --force
+                    & $CLI_NAME update --force
                     exit $LASTEXITCODE
                 } else {
                     Write-Info "You can run the command manually later"
                     exit 0
                 }
             } else {
-                Write-Info "Using built-in self-update to upgrade..."
+                Write-Info "Using built-in update to upgrade..."
                 Write-Host ""
-                & $CLI_NAME self-update
+                & $CLI_NAME update
                 exit $LASTEXITCODE
             }
         } catch {
-            # Older version without self-update
+            # Older version without update
             if ($currentVersion -like "*-dev.*") {
-                Write-Warning "This development version doesn't support self-update."
+                Write-Warning "This development version doesn't support update."
                 Write-Info "Will force reinstall with latest release version ($version)"
                 $response = Read-Host "Proceed with force reinstall? [Y/n]"
                 if ($response -eq 'n' -or $response -eq 'N') {
@@ -255,7 +275,7 @@ function Install-PromptCode {
                 }
                 # Continue with installation - will overwrite the dev version
             } else {
-                Write-Warning "This version doesn't support self-update. Manual reinstall required."
+                Write-Warning "This version doesn't support update. Manual reinstall required."
                 $response = Read-Host "Proceed with manual reinstall? [Y/n]"
                 if ($response -eq 'n' -or $response -eq 'N') {
                     Write-Info "Installation cancelled"

@@ -1,5 +1,3 @@
-import * as fs from 'fs';
-import * as path from 'path';
 
 /**
  * Supported providers and their corresponding ENV-VAR names.
@@ -24,17 +22,13 @@ export interface ApiKeys {
 /**
  * Lightweight service for reading PromptCode configuration.
  * – NO side-effects (does **not** write to process.env).
- * – Environment variables override keys defined in the JSON config file.
+ * – Only reads API keys from environment variables (no file storage).
  */
 export class ConfigService {
-  private readonly configPath: string;
-  private readonly fileKeys: Partial<ApiKeys>;
   private readonly mergedKeys: ApiKeys;
 
-  constructor(customConfigPath?: string) {
-    this.configPath = customConfigPath ?? this.resolveDefaultConfigPath();
-    this.fileKeys = this.readConfigFile();
-    this.mergedKeys = this.mergeWithEnv(this.fileKeys);
+  constructor() {
+    this.mergedKeys = this.readFromEnv();
   }
 
   /**
@@ -57,39 +51,20 @@ export class ConfigService {
    * Internal helpers
    * ──────────────────────────── */
 
-  private resolveDefaultConfigPath(): string {
-    const cfgDir =
-      process.env.XDG_CONFIG_HOME ||
-      path.join(process.env.HOME || '', '.config');
-    return path.join(cfgDir, 'promptcode', 'config.json');
-  }
-
-  private readConfigFile(): Partial<ApiKeys> {
-    try {
-      if (!fs.existsSync(this.configPath)) return {};
-      const raw = fs.readFileSync(this.configPath, 'utf8');
-      const parsed = JSON.parse(raw) as Partial<ApiKeys>;
-      return parsed;
-    } catch {
-      // Ignore malformed JSON; fall back to env only.
-      return {};
-    }
-  }
-
-  private mergeWithEnv(fileKeys: Partial<ApiKeys>): ApiKeys {
-    const merged: ApiKeys = { ...fileKeys };
+  private readFromEnv(): ApiKeys {
+    const keys: ApiKeys = {};
 
     (Object.keys(ENV_VAR_MAP) as Provider[]).forEach((provider) => {
       // Check each possible env var name for this provider
       for (const envName of ENV_VAR_MAP[provider]) {
         const envVal = process.env[envName];
         if (envVal?.trim()) {
-          merged[provider] = envVal.trim();
+          keys[provider] = envVal.trim();
           break; // Use first match
         }
       }
     });
 
-    return merged;
+    return keys;
   }
 }

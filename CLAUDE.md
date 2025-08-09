@@ -277,15 +277,12 @@ promptcode expert "Complex analysis" --model o3-pro
 
 ## Configuration
 
-API keys can be set via environment variables or config:
+API keys must be set via environment variables:
 ```bash
 export OPENAI_API_KEY=sk-...
 export ANTHROPIC_API_KEY=sk-ant-...
-export GEMINI_API_KEY=...
-export GROK_API_KEY=xai-...
-
-# Or use config command
-export OPENAI_API_KEY=sk-...
+export GOOGLE_API_KEY=...            # or GEMINI_API_KEY
+export XAI_API_KEY=...                # or GROK_API_KEY
 ```
 
 <details>

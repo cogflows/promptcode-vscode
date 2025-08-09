@@ -1,8 +1,5 @@
 import { MODELS } from '../providers/models';
-
-// Constants for cost estimation
-export const DEFAULT_EXPECTED_COMPLETION = 4000;  // Assume ~4K output tokens
-export const DEFAULT_SAFETY_MARGIN = 256;         // Leave room for stop tokens
+import { DEFAULT_EXPECTED_COMPLETION, DEFAULT_SAFETY_MARGIN } from './constants';
 
 /**
  * Estimate the cost for a model based on token counts

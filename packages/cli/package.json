@@ -11,7 +11,8 @@
     "copy-templates": "node -e \"const fs=require('fs'); const path=require('path'); fs.cpSync('src/claude-templates', 'dist/claude-templates', {recursive:true})\"",
     "dev": "bun run src/index.ts",
     "clean": "rm -rf dist",
-    "test": "bun test"
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^2.0.0",
