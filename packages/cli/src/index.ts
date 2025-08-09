@@ -70,7 +70,10 @@ async function defaultCommand(args: string[], opts: any): Promise<void> {
     const expertOptions = {
       ...opts,
       files: patterns.length > 0 ? patterns : undefined,
-      savePreset: opts.savePreset
+      savePreset: opts.savePreset,
+      verbosity: opts.verbosity,
+      reasoningEffort: opts.reasoningEffort,
+      serviceTier: opts.serviceTier
     };
     await expertCommand(question, expertOptions);
   } 
@@ -251,6 +254,9 @@ Examples:
   .option('-y, --yes', 'automatically confirm prompts')
   .option('--web-search', 'enable web search for current information (enabled by default for supported models)')
   .option('--no-web-search', 'disable web search even for supported models')
+  .option('--verbosity <level>', 'response verbosity: low (concise), medium, high (detailed)', 'low')
+  .option('--reasoning-effort <level>', 'reasoning depth: minimal, low, medium, high (default)', 'high')
+  .option('--service-tier <tier>', 'service tier: auto, flex (50% cheaper), priority (enterprise)')
   .action(async (question, options) => {
     await expertCommand(question, options);
   });

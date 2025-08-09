@@ -24,6 +24,9 @@ interface ExpertOptions {
   savePreset?: string;
   yes?: boolean;
   webSearch?: boolean;
+  verbosity?: 'low' | 'medium' | 'high';
+  reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
+  serviceTier?: 'auto' | 'flex' | 'priority';
 }
 
 const SYSTEM_PROMPT = `You are an expert software engineer helping analyze and improve code. Provide constructive, actionable feedback.
@@ -318,6 +321,9 @@ export async function expertCommand(question: string | undefined, options: Exper
         maxTokens: availableTokens,
         onChunk: (chunk) => process.stdout.write(chunk),
         webSearch: webSearchEnabled,
+        textVerbosity: options.verbosity,
+        reasoningEffort: options.reasoningEffort,
+        serviceTier: options.serviceTier,
       });
       console.log(); // Add newline after streaming
     } else {
@@ -325,6 +331,9 @@ export async function expertCommand(question: string | undefined, options: Exper
         systemPrompt: SYSTEM_PROMPT,
         maxTokens: availableTokens,
         webSearch: webSearchEnabled,
+        textVerbosity: options.verbosity,
+        reasoningEffort: options.reasoningEffort,
+        serviceTier: options.serviceTier,
       });
     }
     

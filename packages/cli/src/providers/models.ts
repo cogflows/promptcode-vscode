@@ -35,7 +35,36 @@ const ModelSchema = z.object({
 export type ModelConfig = z.infer<typeof ModelSchema>;
 
 export const MODELS: Record<string, ModelConfig> = {
-  // OpenAI models (2025 SOTA)
+  // OpenAI GPT-5 models (Latest August 2025 release)
+  'gpt-5': {
+    provider: 'openai',
+    modelId: 'gpt-5',
+    name: 'GPT-5',
+    description: 'State-of-the-art model with superior coding and reasoning',
+    contextWindow: 256000,
+    pricing: { input: 1.25, output: 10 },
+    supportsWebSearch: true
+  },
+  'gpt-5-mini': {
+    provider: 'openai',
+    modelId: 'gpt-5-mini',
+    name: 'GPT-5 Mini',
+    description: 'Balanced GPT-5 model for efficient performance',
+    contextWindow: 256000,
+    pricing: { input: 0.25, output: 2 },
+    supportsWebSearch: true
+  },
+  'gpt-5-nano': {
+    provider: 'openai',
+    modelId: 'gpt-5-nano',
+    name: 'GPT-5 Nano',
+    description: 'Ultra-fast GPT-5 model for quick tasks',
+    contextWindow: 256000,
+    pricing: { input: 0.05, output: 0.4 },
+    supportsWebSearch: true
+  },
+  
+  // OpenAI O3 models (reasoning specialists)
   'o3': {
     provider: 'openai',
     modelId: 'o3',
@@ -130,8 +159,8 @@ for (const [key, cfg] of Object.entries(MODELS)) {
   }
 }
 
-// Default model
-export const DEFAULT_MODEL = 'o3';
+// Default model - GPT-5 offers best performance with 50-80% fewer tokens than O3
+export const DEFAULT_MODEL = 'gpt-5';
 
 // Get available models for a provider
 export function getProviderModels(provider: string): string[] {

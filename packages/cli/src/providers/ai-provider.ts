@@ -199,6 +199,9 @@ export class AIProvider {
       temperature?: number;
       systemPrompt?: string;
       webSearch?: boolean;
+      textVerbosity?: 'low' | 'medium' | 'high';
+      reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
+      serviceTier?: 'auto' | 'flex' | 'priority';
     } = {}
   ): Promise<AIResponse> {
     // Mock mode for testing
@@ -231,8 +234,23 @@ export class AIProvider {
       model,
       messages,
       maxCompletionTokens: options.maxTokens || 4096,
-      temperature: options.temperature || 0.7,
     };
+    
+    // Only add temperature for non-GPT-5 models (GPT-5 doesn't support it)
+    if (!modelKey.startsWith('gpt-5')) {
+      requestConfig.temperature = options.temperature || 0.7;
+    }
+    
+    // Add GPT-5 specific parameters with smart defaults
+    if (modelConfig?.provider === 'openai' && modelKey.startsWith('gpt-5')) {
+      // Default to low verbosity for concise responses
+      requestConfig.textVerbosity = options.textVerbosity || 'low';
+      // Default to high reasoning effort for best quality
+      requestConfig.reasoningEffort = options.reasoningEffort || 'high';
+      if (options.serviceTier) {
+        requestConfig.serviceTier = options.serviceTier;
+      }
+    }
     
     // Add web search tools if enabled
     if (enableWebSearch) {
@@ -259,6 +277,9 @@ export class AIProvider {
       systemPrompt?: string;
       onChunk?: (chunk: string) => void;
       webSearch?: boolean;
+      textVerbosity?: 'low' | 'medium' | 'high';
+      reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
+      serviceTier?: 'auto' | 'flex' | 'priority';
     } = {}
   ): Promise<AIResponse> {
     // Mock mode for testing
@@ -300,8 +321,23 @@ export class AIProvider {
       model,
       messages,
       maxCompletionTokens: options.maxTokens || 4096,
-      temperature: options.temperature || 0.7,
     };
+    
+    // Only add temperature for non-GPT-5 models (GPT-5 doesn't support it)
+    if (!modelKey.startsWith('gpt-5')) {
+      requestConfig.temperature = options.temperature || 0.7;
+    }
+    
+    // Add GPT-5 specific parameters with smart defaults
+    if (modelConfig?.provider === 'openai' && modelKey.startsWith('gpt-5')) {
+      // Default to low verbosity for concise responses
+      requestConfig.textVerbosity = options.textVerbosity || 'low';
+      // Default to high reasoning effort for best quality
+      requestConfig.reasoningEffort = options.reasoningEffort || 'high';
+      if (options.serviceTier) {
+        requestConfig.serviceTier = options.serviceTier;
+      }
+    }
     
     // Add web search tools if enabled
     if (enableWebSearch) {
