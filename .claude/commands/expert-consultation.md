@@ -55,10 +55,13 @@ Instructions:
 
 5. Parse the response:
    - If successful: Summarize key insights
-   - If API key missing: Tell user to run:
+   - If API key missing: Tell user to set environment variable:
      ```bash
-     promptcode config --set-openai-key sk-...
-     # Or set OPENAI_API_KEY environment variable
+     export OPENAI_API_KEY=sk-...
+     # Or for other providers:
+     export ANTHROPIC_API_KEY=sk-ant-...
+     export GOOGLE_API_KEY=...
+     export XAI_API_KEY=...
      ```
    - For other errors: Report exact error message
 

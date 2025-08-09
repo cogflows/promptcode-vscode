@@ -394,7 +394,6 @@ export async function expertCommand(question: string | undefined, options: Exper
       console.log('   export ANTHROPIC_API_KEY="sk-ant-..."  # or CLAUDE_API_KEY');
       console.log('   export GOOGLE_API_KEY="..."            # or GOOGLE_CLOUD_API_KEY, GEMINI_API_KEY');
       console.log('   export XAI_API_KEY="..."               # or GROK_API_KEY');
-      console.log('\n2. Or run: promptcode config --set-<provider>-key <key>');
     }
     
     process.exit(1);

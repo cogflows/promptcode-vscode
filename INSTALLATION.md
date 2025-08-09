@@ -72,8 +72,12 @@ promptcode preset --edit my-project
 
 ### 2. Set Up AI Expert (Optional)
 ```bash
-# Configure OpenAI API key for expert consultation
-promptcode config --set-openai-key sk-your-api-key
+# Set environment variable for API key
+export OPENAI_API_KEY=sk-your-api-key
+# Or for other providers:
+export ANTHROPIC_API_KEY=sk-ant-...
+export GOOGLE_API_KEY=...
+export XAI_API_KEY=...
 ```
 
 ### 3. Verify Installation

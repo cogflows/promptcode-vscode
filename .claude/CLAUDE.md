@@ -66,22 +66,19 @@ promptcode expert "Review this code for security issues" src/api/**/*.ts
 
 ## Configuration
 
-API keys can be set via environment variables or config:
+API keys must be set via environment variables:
 ```bash
 export OPENAI_API_KEY=sk-...
 export ANTHROPIC_API_KEY=sk-ant-...
-export GEMINI_API_KEY=...
-export GROK_API_KEY=xai-...
-
-# Or use config command
-promptcode config --set-openai-key sk-...
+export GOOGLE_API_KEY=...            # or GEMINI_API_KEY
+export XAI_API_KEY=...                # or GROK_API_KEY
 ```
 
 <details>
 <summary>⚠️ Troubleshooting</summary>
 
 • **Command not found** – The CLI auto-installs to `~/.local/bin`. Ensure it's in PATH  
-• **Missing API key** – Set via environment variable or `promptcode config`  
+• **Missing API key** – Set via environment variable as shown above  
 • **Context too large** – Use more specific file patterns or create focused presets
 • **Preset not found** – Check `.promptcode/presets/` directory exists
 </details>

@@ -117,7 +117,7 @@ Common Workflows:
      $ promptcode "Review this code" file1.py file2.js  # Specific files
   
   2. Expert consultation:
-     $ promptcode config --set-openai-key sk-...
+     $ export OPENAI_API_KEY=sk-...
      $ promptcode expert "Explain the auth flow" --preset auth
   
   3. Apply AI changes:

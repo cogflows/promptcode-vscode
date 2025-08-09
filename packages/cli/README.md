@@ -151,15 +151,7 @@ Custom templates go in `~/.config/promptcode/prompts/`.
 
 ## Configuration
 
-Configuration is stored in `~/.config/promptcode/config.json`:
-
-```bash
-promptcode config --show                 # View config
-export OPENAI_API_KEY=KEY                # Set API key (use env vars)
-promptcode config --reset                # Reset all
-```
-
-Environment variables (first match wins):
+API keys must be set via environment variables (first match wins):
 - **OpenAI**: `OPENAI_API_KEY`, `OPENAI_KEY`
 - **Anthropic**: `ANTHROPIC_API_KEY`, `CLAUDE_API_KEY`
 - **Google**: `GOOGLE_API_KEY`, `GOOGLE_CLOUD_API_KEY`, `GOOGLE_AI_API_KEY`, `GEMINI_API_KEY`
@@ -217,4 +209,4 @@ promptcode diff suggestions.md --apply
 
 - **Command not found**: Ensure `~/.local/bin` is in your PATH
 - **Token counts wrong**: Clear cache with `promptcode cache clear`
-- **API errors**: Check your API keys with `promptcode config --show`
+- **API errors**: Check your API keys are set in environment variables

@@ -167,8 +167,7 @@ export class AIProvider {
       if (!keys.openai) {
         throw new Error(
           `API key not configured for openai. ` +
-          `Set via "promptcode config --set-openai-key <key>" ` +
-          `or export OPENAI_API_KEY=...`
+          `Set via environment variable: export OPENAI_API_KEY=...`
         );
       }
       // Use responses API for web search support
@@ -181,8 +180,7 @@ export class AIProvider {
       const envName = config.provider.toUpperCase() + '_API_KEY';
       throw new Error(
         `API key not configured for ${config.provider}. ` +
-          `Set via "promptcode config --set-${config.provider}-key <key>" ` +
-          `or export ${envName}=...`
+          `Set via environment variable: export ${envName}=...`
       );
     }
 

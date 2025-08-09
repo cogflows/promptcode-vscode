@@ -292,7 +292,7 @@ export OPENAI_API_KEY=sk-...
 <summary>⚠️ Troubleshooting</summary>
 
 • **Command not found** – The CLI auto-installs to `~/.local/bin`. Ensure it's in PATH  
-• **Missing API key** – Set via environment variable or `promptcode config`  
+• **Missing API key** – Set via environment variable as shown above  
 • **Context too large** – Use more specific file patterns or create focused presets
 • **Preset not found** – Check `.promptcode/presets/` directory exists
 </details>
