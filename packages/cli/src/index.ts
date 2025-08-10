@@ -242,10 +242,12 @@ Examples:
   $ promptcode expert "Explain the authentication flow" --preset auth
   $ promptcode expert "Find potential security issues" -f "src/api/**/*.ts"
   $ promptcode expert "Review this code" --model opus-4 --stream
+  $ promptcode expert --prompt-file analysis.md  # Use prompt from file
   $ promptcode expert --models  # See all available models`)
   .option('--path <dir>', 'project root directory', process.cwd())
   .option('--preset <name>', 'use a preset for context')
   .option('-f, --files <patterns...>', 'file patterns to include')
+  .option('--prompt-file <file>', 'read prompt/question from a file')
   .option('--model <model>', 'AI model to use (use --models to see available options)')
   .option('--models', 'List available AI models')
   .option('-o, --output <file>', 'save response to file')

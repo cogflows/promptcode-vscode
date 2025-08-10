@@ -31,7 +31,7 @@
     },
     "packages/cli": {
       "name": "promptcode-cli",
-      "version": "0.1.1",
+      "version": "0.4.0",
       "bin": {
         "promptcode": "./dist/promptcode",
       },
@@ -1247,6 +1247,8 @@
     "parse5/entities": ["entities@6.0.1", "", {}, "sha512-aN97NXWF6AWBTahfVOIrB/NShkzi5H7F9r1s9mD3cDj4Ko5f2qhhVoYMibXF7GlLveb/D2ioWay8lxI97Ven3g=="],
 
     "playwright/fsevents": ["fsevents@2.3.2", "", { "os": "darwin" }, "sha512-xiqMQR4xAeHTuB9uWm+fFRcIOgKBMiOBP+eXiyT7jsgVCq1bkVygt00oASowB7EdtpOHaaPgKt812P9ab+DDKA=="],
+
+    "promptcode-cli/@promptcode/core": ["@promptcode/core@file:packages/core", { "dependencies": { "@types/debug": "^4.1.12", "debug": "^4.4.1", "fast-glob": "^3.3.2", "gpt-tokenizer": "^2.1.2", "ignore": "^5.3.0", "lru-cache": "^11.1.0" }, "devDependencies": { "@types/node": "^20.0.0", "typescript": "^5.7.3" } }],
 
     "rc/strip-json-comments": ["strip-json-comments@2.0.1", "", {}, "sha512-4gB8na07fecVVkOI6Rs4e7T6NOTki5EmL7TUduTs6bu3EdnSycntVJ4re8kgZA+wx9IueI2Y11bfbgwtzuE0KQ=="],
 

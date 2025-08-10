@@ -19,6 +19,7 @@ interface ExpertOptions {
   path?: string;
   preset?: string;
   files?: string[];
+  promptFile?: string;
   model?: string;
   output?: string;
   stream?: boolean;
@@ -95,16 +96,36 @@ export async function expertCommand(question: string | undefined, options: Exper
     return;
   }
   
+  // Read question from file if --prompt-file is provided
+  let finalQuestion = question;
+  if (options.promptFile) {
+    const promptFilePath = path.resolve(options.promptFile);
+    if (!fs.existsSync(promptFilePath)) {
+      console.error(chalk.red(`❌ Prompt file not found: ${options.promptFile}`));
+      process.exit(1);
+    }
+    try {
+      finalQuestion = await fs.promises.readFile(promptFilePath, 'utf8');
+      console.log(chalk.gray(`📄 Using prompt from: ${options.promptFile}`));
+    } catch (error) {
+      console.error(chalk.red(`❌ Error reading prompt file: ${(error as Error).message}`));
+      process.exit(1);
+    }
+  }
+  
   // Require question for actual consultation
-  if (!question) {
+  if (!finalQuestion) {
     console.error(chalk.red('🙋 I need a question to ask the AI expert.\n'));
     console.error(chalk.yellow('Examples:'));
     console.error(chalk.gray('  promptcode "Why is this slow?" src/**/*.ts'));
     console.error(chalk.gray('  promptcode "Explain the auth flow" @backend/'));
-    console.error(chalk.gray('  promptcode expert "What are the security risks?" --preset api\n'));
+    console.error(chalk.gray('  promptcode expert "What are the security risks?" --preset api'));
+    console.error(chalk.gray('  promptcode expert --prompt-file analysis.md --preset backend\n'));
     console.error(chalk.gray('To list available models: promptcode expert --models'));
     process.exit(1);
   }
+  
+  question = finalQuestion;
   
   // In Claude Code environment, provide additional guidance
   if (process.env.CLAUDE_PROJECT_DIR && !options.yes) {
