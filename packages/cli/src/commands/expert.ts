@@ -189,8 +189,13 @@ export async function expertCommand(question: string | undefined, options: Exper
       } else {
         throw new Error(`Preset not found: ${options.preset}\nCreate it with: promptcode preset --create ${options.preset}`);
       }
+    } else if (options.promptFile) {
+      // When using prompt-file without files/preset, don't scan any files by default
+      // The user can specify files/preset if they want context
+      patterns = [];
+      console.log(chalk.gray('💡 No files specified. Use -f or --preset to include code context.'));
     } else {
-      // Default to all files
+      // Default to all files only when not using prompt-file
       patterns = ['**/*'];
     }
     
@@ -216,32 +221,44 @@ export async function expertCommand(question: string | undefined, options: Exper
       console.log(chalk.green(`✓ Saved file patterns to preset: ${options.savePreset}`));
     }
     
-    // Scan files
-    const files = await scanFiles({
-      cwd: projectPath,
-      patterns,
-      respectGitignore: true,
-      workspaceName: path.basename(projectPath)
-    });
+    // Scan files only if patterns exist
+    let files: any[] = [];
+    let result: any;
     
-    if (files.length === 0) {
-      if (spin) {
-        spin.fail('No files found matching patterns');
-        spin.stop(); // Ensure cleanup
+    if (patterns.length > 0) {
+      files = await scanFiles({
+        cwd: projectPath,
+        patterns,
+        respectGitignore: true,
+        workspaceName: path.basename(projectPath)
+      });
+      
+      if (files.length === 0) {
+        if (spin) {
+          spin.fail('No files found matching patterns');
+          spin.stop(); // Ensure cleanup
+        }
+        console.error(chalk.yellow('\nTips:'));
+        console.error(chalk.gray('  - Check if the path exists: ' + patterns.join(', ')));
+        console.error(chalk.gray('  - Try using absolute paths or glob patterns'));
+        console.error(chalk.gray('  - Make sure .gitignore is not excluding your files'));
+        return;
       }
-      console.error(chalk.yellow('\nTips:'));
-      console.error(chalk.gray('  - Check if the path exists: ' + patterns.join(', ')));
-      console.error(chalk.gray('  - Try using absolute paths or glob patterns'));
-      console.error(chalk.gray('  - Make sure .gitignore is not excluding your files'));
-      return;
+      
+      // Build context with files
+      result = await buildPrompt(files, '', {
+        includeFiles: true,
+        includeInstructions: false,
+        includeFileContents: true
+      });
+    } else {
+      // No files to scan - create minimal result for prompt-only queries
+      result = {
+        prompt: '',
+        tokenCount: 0,
+        fileCount: 0
+      };
     }
-    
-    // Build context
-    const result = await buildPrompt(files, '', {
-      includeFiles: true,
-      includeInstructions: false,
-      includeFileContents: true
-    });
     
     // Model already validated earlier, just use it
     
