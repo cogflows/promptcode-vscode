@@ -9,7 +9,7 @@ import { spinner } from '../utils/spinner';
 import { estimateCost, formatCost } from '../utils/cost';
 import { DEFAULT_EXPECTED_COMPLETION } from '../utils/constants';
 // Cost threshold for requiring approval
-const APPROVAL_COST_THRESHOLD = 0.50;
+const APPROVAL_COST_THRESHOLD = parseFloat(process.env.PROMPTCODE_COST_THRESHOLD || '0.50');
 import { 
   shouldSkipConfirmation,
   isInteractive
@@ -30,6 +30,7 @@ interface ExpertOptions {
   verbosity?: 'low' | 'medium' | 'high';
   reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
   serviceTier?: 'auto' | 'flex' | 'priority';
+  json?: boolean;
 }
 
 const SYSTEM_PROMPT = `You are an expert software engineer helping analyze and improve code. Provide constructive, actionable feedback.
@@ -127,9 +128,9 @@ export async function expertCommand(question: string | undefined, options: Exper
   
   question = finalQuestion;
   
-  // In Claude Code environment, provide additional guidance
+  // In non-interactive agent environments, provide additional guidance
   if (process.env.CLAUDE_PROJECT_DIR && !options.yes) {
-    console.log(chalk.gray('💡 In Claude Code: AI agents will ask for approval before expensive operations'));
+    console.log(chalk.gray('💡 In non-interactive agent environments, ask the user for cost approval before re-running with --yes.'));
   }
   
   // Early validation: Check if the selected model is available
@@ -158,7 +159,7 @@ export async function expertCommand(question: string | undefined, options: Exper
     process.exit(1);
   }
   
-  const spin = !options.stream ? spinner() : null;
+  const spin = (!options.stream && !options.json) ? spinner() : null;
   if (spin) {spin.start('Preparing context...');}
   
   try {
@@ -299,11 +300,13 @@ export async function expertCommand(question: string | undefined, options: Exper
     const estimatedInputCost = (result.tokenCount / 1_000_000) * modelConfig.pricing.input;
     const estimatedOutputCost = (expectedOutput / 1_000_000) * modelConfig.pricing.output;
     
-    // Show cost info (to stderr so it's always visible)
-    console.error(chalk.blue('\n📊 Cost Breakdown:'));
-    console.error(chalk.gray(`  Input:  ${result.tokenCount.toLocaleString()} tokens × $${modelConfig.pricing.input}/M = $${estimatedInputCost.toFixed(4)}`));
-    console.error(chalk.gray(`  Output: ~${expectedOutput.toLocaleString()} tokens × $${modelConfig.pricing.output}/M = $${estimatedOutputCost.toFixed(4)}`));
-    console.error(chalk.bold(`  Total:  ~$${estimatedTotalCost.toFixed(4)}`));
+    // Show cost info (skip in JSON mode - it will be in the JSON output)
+    if (!options.json) {
+      console.error(chalk.blue('\n📊 Cost Breakdown:'));
+      console.error(chalk.gray(`  Input:  ${result.tokenCount.toLocaleString()} tokens × $${modelConfig.pricing.input}/M = $${estimatedInputCost.toFixed(4)}`));
+      console.error(chalk.gray(`  Output: ~${expectedOutput.toLocaleString()} tokens × $${modelConfig.pricing.output}/M = $${estimatedOutputCost.toFixed(4)}`));
+      console.error(chalk.bold(`  Total:  ~$${estimatedTotalCost.toFixed(4)}`));
+    }
 
     // Check if approval is needed
     const skipConfirm = shouldSkipConfirmation(options);
@@ -313,13 +316,7 @@ export async function expertCommand(question: string | undefined, options: Exper
       if (!isInteractive()) {
         console.error(chalk.yellow('\n⚠️  Cost approval required for expensive operation (~$' + estimatedTotalCost.toFixed(2) + ')'));
         console.error(chalk.yellow('\nNon-interactive environment detected.'));
-        console.error(chalk.yellow('Use --yes to proceed with approval.'));
-        
-        // Special message for Claude Code environment
-        if (process.env.CLAUDE_PROJECT_DIR) {
-          console.error(chalk.blue('\n💡 Claude Code AI agents: Ask the user for approval before re-running with --yes'));
-        }
-        
+        console.error(chalk.yellow('Use --yes to proceed with approval after getting user confirmation.'));
         process.exit(1);
       }
       
@@ -364,12 +361,14 @@ export async function expertCommand(question: string | undefined, options: Exper
     // undefined means use default (enabled for supported models)
     const webSearchEnabled = options.webSearch;
     
-    // Show web search status and warnings
-    if (modelConfig.supportsWebSearch && webSearchEnabled !== false) {
-      console.log(chalk.cyan('🔍 Web search enabled for current information\n'));
-    } else if (webSearchEnabled === true && !modelConfig.supportsWebSearch) {
-      // User explicitly requested web search but model doesn't support it
-      console.log(chalk.yellow(`⚠️  ${modelConfig.name} does not support web search. Proceeding without web search.\n`));
+    // Show web search status and warnings (skip in JSON mode)
+    if (!options.json) {
+      if (modelConfig.supportsWebSearch && webSearchEnabled !== false) {
+        console.log(chalk.cyan('🔍 Web search enabled for current information\n'));
+      } else if (webSearchEnabled === true && !modelConfig.supportsWebSearch) {
+        // User explicitly requested web search but model doesn't support it
+        console.log(chalk.yellow(`⚠️  ${modelConfig.name} does not support web search. Proceeding without web search.\n`));
+      }
     }
     
     // Call AI
@@ -400,28 +399,59 @@ export async function expertCommand(question: string | undefined, options: Exper
     
     const responseTime = (Date.now() - startTime) / 1000;
     
-    if (!options.stream) {
-      if (spin) {
-        spin.succeed('Expert consultation complete');
-        spin.stop(); // Ensure cleanup
+    // Calculate cost for JSON output
+    const cost = response.usage && response.usage.promptTokens !== undefined
+      ? aiProvider.calculateCost(modelKey, response.usage)
+      : null;
+    
+    if (options.json) {
+      // JSON output for programmatic use
+      const jsonResult = {
+        model: modelKey,
+        question: question || '',
+        response: response.text,
+        usage: response.usage ? {
+          promptTokens: response.usage.promptTokens,
+          completionTokens: response.usage.completionTokens,
+          totalTokens: (response.usage.promptTokens || 0) + (response.usage.completionTokens || 0)
+        } : null,
+        costBreakdown: {
+          estimatedInput: estimatedInputCost,
+          estimatedOutput: estimatedOutputCost,
+          estimatedTotal: estimatedTotalCost,
+          actualTotal: cost
+        },
+        responseTime: responseTime,
+        fileCount: files.length,
+        contextTokens: result.tokenCount,
+        webSearchEnabled: modelConfig.supportsWebSearch && options.webSearch !== false
+      };
+      console.log(JSON.stringify(jsonResult, null, 2));
+    } else {
+      // Regular output
+      if (!options.stream) {
+        if (spin) {
+          spin.succeed('Expert consultation complete');
+          spin.stop(); // Ensure cleanup
+        }
+        console.log('\n' + response.text);
       }
-      console.log('\n' + response.text);
-    }
-    
-    // Save output if requested
-    if (options.output) {
-      await fs.promises.writeFile(options.output, response.text);
-      console.log(chalk.green(`\n✓ Saved response to ${options.output}`));
-    }
-    
-    // Show statistics
-    console.log(chalk.gray(`\n⏱️  Response time: ${responseTime.toFixed(1)}s`));
-    
-    if (response.usage && response.usage.promptTokens !== undefined) {
-      console.log(chalk.gray(`📊 Tokens: ${response.usage.promptTokens.toLocaleString()} in, ${response.usage.completionTokens.toLocaleString()} out`));
       
-      const cost = aiProvider.calculateCost(modelKey, response.usage);
-      console.log(chalk.gray(`💰 Cost: $${cost.toFixed(4)}`));
+      // Save output if requested
+      if (options.output) {
+        await fs.promises.writeFile(options.output, response.text);
+        console.log(chalk.green(`\n✓ Saved response to ${options.output}`));
+      }
+      
+      // Show statistics
+      console.log(chalk.gray(`\n⏱️  Response time: ${responseTime.toFixed(1)}s`));
+      
+      if (response.usage && response.usage.promptTokens !== undefined) {
+        console.log(chalk.gray(`📊 Tokens: ${response.usage.promptTokens.toLocaleString()} in, ${response.usage.completionTokens.toLocaleString()} out`));
+        if (cost !== null) {
+          console.log(chalk.gray(`💰 Cost: $${cost.toFixed(4)}`));
+        }
+      }
     }
     
     // Log to history
@@ -433,6 +463,11 @@ export async function expertCommand(question: string | undefined, options: Exper
     });
     
   } catch (error) {
+    if (options.json) {
+      console.log(JSON.stringify({ error: (error as Error).message }, null, 2));
+      process.exit(1);
+    }
+    
     if (spin) {
       spin.fail(chalk.red(`Error: ${(error as Error).message}`));
       spin.stop(); // Ensure cleanup

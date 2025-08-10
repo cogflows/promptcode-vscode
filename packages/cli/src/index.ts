@@ -141,6 +141,8 @@ Examples:
   $ promptcode preset info backend
   $ promptcode preset search "auth"
   $ promptcode generate -p backend
+  $ promptcode preset list --json        # JSON output
+  $ promptcode preset info backend --json # JSON with token counts
 
 Legacy flags (still supported):
   $ promptcode preset --create backend
@@ -152,6 +154,7 @@ Legacy flags (still supported):
   .option('--edit <name>', 'edit preset (legacy)')
   .option('--delete <name>', 'delete a preset (legacy)')
   .option('--search <query>', 'search presets (legacy)')
+  .option('--json', 'output in JSON format (for list and info)')
   .action(async (action, name, options) => {
     // Handle direct subcommand syntax
     if (action && ['list', 'create', 'info', 'edit', 'delete', 'search'].includes(action)) {
@@ -189,7 +192,8 @@ Examples:
   $ promptcode expert "Find potential security issues" -f "src/api/**/*.ts"
   $ promptcode expert "Review this code" --model opus-4 --stream
   $ promptcode expert --prompt-file analysis.md  # Use prompt from file
-  $ promptcode expert --models  # See all available models`)
+  $ promptcode expert --models  # See all available models
+  $ promptcode expert "Analyze security" --preset api --json  # JSON output`)
   .option('--path <dir>', 'project root directory', process.cwd())
   .option('--preset <name>', 'use a preset for context')
   .option('-f, --files <patterns...>', 'file patterns to include')
@@ -205,6 +209,7 @@ Examples:
   .option('--verbosity <level>', 'response verbosity: low (concise), medium, high (detailed)', 'low')
   .option('--reasoning-effort <level>', 'reasoning depth: minimal, low, medium, high (default)', 'high')
   .option('--service-tier <tier>', 'service tier: auto, flex (50% cheaper), priority (enterprise)')
+  .option('--json', 'output response in JSON format with usage stats')
   .allowExcessArguments(false)
   .action(async (question, options) => {
     await expertCommand(question, options);

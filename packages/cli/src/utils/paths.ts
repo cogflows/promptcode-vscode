@@ -154,7 +154,6 @@ async function requestDirectoryCreation(dirPath: string, dirType: string): Promi
   
   if (!isInteractive()) {
     console.error(chalk.red(`Cannot create ${dirType} directory in non-interactive mode.`));
-    console.error(chalk.yellow(`Please create the directory manually: ${dirPath}`));
     return false;
   }
 

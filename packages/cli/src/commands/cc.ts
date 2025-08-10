@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import chalk from 'chalk';
 import { ensureDirWithApproval, getClaudeTemplatesDir } from '../utils/paths';
 import { spinner } from '../utils/spinner';
+import { shouldSkipConfirmation } from '../utils/environment';
 import { findClaudeFolder, findClaudeMd, removeFromClaudeMd, removeExpertCommand } from '../utils/claude-integration';
 
 interface CcOptions {
@@ -58,9 +59,9 @@ async function updateClaudeMd(projectPath: string): Promise<void> {
 }
 
 /**
- * Set up expert consultation command
+ * Set up Claude commands
  */
-async function setupExpertCommand(projectPath: string): Promise<void> {
+async function setupClaudeCommands(projectPath: string): Promise<void> {
   // Find or create .claude folder
   const existingClaudeDir = findClaudeFolder(projectPath);
   const claudeDir = existingClaudeDir || path.join(projectPath, '.claude');
@@ -78,15 +79,52 @@ async function setupExpertCommand(projectPath: string): Promise<void> {
   // Create subdirectories (no approval needed since parent was approved)
   await fs.promises.mkdir(commandsDir, { recursive: true });
   
-  // Copy expert consultation command
-  const templatesDir = getClaudeTemplatesDir();
-  const expertTemplatePath = path.join(templatesDir, 'expert-consultation.md');
-  const expertCommandPath = path.join(commandsDir, 'expert-consultation.md');
+  // List of Claude commands to install
+  const commands = [
+    'expert-consultation.md',
+    'promptcode-preset-list.md',
+    'promptcode-preset-info.md',
+    'promptcode-preset-create.md',
+    'promptcode-preset-to-prompt.md',
+    'promptcode-ask-expert.md'
+  ];
   
-  if (fs.existsSync(expertTemplatePath)) {
-    const content = await fs.promises.readFile(expertTemplatePath, 'utf8');
-    await fs.promises.writeFile(expertCommandPath, content);
-    console.log(chalk.green(`✓ Added expert consultation command to ${commandsDir}`));
+  const templatesDir = getClaudeTemplatesDir();
+  let installedCount = 0;
+  let updatedCount = 0;
+  let skippedCount = 0;
+  
+  for (const command of commands) {
+    const templatePath = path.join(templatesDir, command);
+    const commandPath = path.join(commandsDir, command);
+    
+    if (fs.existsSync(templatePath)) {
+      const newContent = await fs.promises.readFile(templatePath, 'utf8');
+      
+      // Check if file exists and has same content
+      if (fs.existsSync(commandPath)) {
+        const existingContent = await fs.promises.readFile(commandPath, 'utf8');
+        if (existingContent === newContent) {
+          skippedCount++;
+          continue; // Skip if content is identical
+        }
+        updatedCount++;
+      } else {
+        installedCount++;
+      }
+      
+      await fs.promises.writeFile(commandPath, newContent);
+    }
+  }
+  
+  // Report what was done
+  const actions = [];
+  if (installedCount > 0) actions.push(`${installedCount} new`);
+  if (updatedCount > 0) actions.push(`${updatedCount} updated`);
+  if (skippedCount > 0) actions.push(`${skippedCount} unchanged`);
+  
+  if (actions.length > 0) {
+    console.log(chalk.green(`✓ Claude commands: ${actions.join(', ')}`));
   }
   
   // Clean up any legacy hooks from previous versions
@@ -164,10 +202,8 @@ export async function ccCommand(options: CcOptions & { detect?: boolean }): Prom
   }
   const projectPath = path.resolve(options.path || process.cwd());
   
-  // Handle --yes as alias for --force
-  if (options.yes) {
-    options.force = true;
-  }
+  // Use centralized confirmation handling
+  const skipConfirm = shouldSkipConfirmation(options);
   
   // Handle uninstall
   if (options.uninstall) {
@@ -203,9 +239,9 @@ export async function ccCommand(options: CcOptions & { detect?: boolean }): Prom
     spin.text = 'Updating project documentation...';
     await updateClaudeMd(projectPath);
     
-    // Set up expert command
-    spin.text = 'Setting up expert consultation command...';
-    await setupExpertCommand(projectPath);
+    // Set up Claude commands
+    spin.text = 'Installing Claude commands...';
+    await setupClaudeCommands(projectPath);
     
     spin.succeed(chalk.green('PromptCode CLI integration set up successfully!'));
     
@@ -216,7 +252,7 @@ export async function ccCommand(options: CcOptions & { detect?: boolean }): Prom
     console.log(chalk.bold('\n📝 Updated files:'));
     console.log(chalk.gray(`  ${path.relative(projectPath, claudeMdPath)} - PromptCode usage instructions`));
     if (claudeDir) {
-      console.log(chalk.gray(`  ${path.relative(projectPath, path.join(claudeDir, 'commands/expert-consultation.md'))} - Expert consultation command`));
+      console.log(chalk.gray(`  ${path.relative(projectPath, path.join(claudeDir, 'commands/'))} - 6 Claude commands installed`));
     }
     
     console.log(chalk.bold('\n🚀 Next steps:'));

@@ -13,6 +13,7 @@ interface PresetOptions {
   delete?: string;
   edit?: string;
   search?: string;
+  json?: boolean;
 }
 
 /**
@@ -38,10 +39,29 @@ async function ensurePresetsDir(presetsDir: string): Promise<boolean> {
 /**
  * List all presets
  */
-async function listPresets(presetsDir: string): Promise<void> {
+async function listPresets(presetsDir: string, options: { json?: boolean } = {}): Promise<void> {
   try {
     const files = await fs.promises.readdir(presetsDir);
     const presets = files.filter(f => f.endsWith('.patterns'));
+    
+    if (options.json) {
+      // JSON output for programmatic use
+      const presetData = [];
+      for (const preset of presets) {
+        const presetName = preset.replace('.patterns', '');
+        const presetPath = path.join(presetsDir, preset);
+        const content = await fs.promises.readFile(presetPath, 'utf8');
+        const lines = content.split('\n').filter(l => l.trim() && !l.trim().startsWith('#'));
+        presetData.push({
+          name: presetName,
+          path: presetPath,
+          patternCount: lines.length,
+          patterns: lines
+        });
+      }
+      console.log(JSON.stringify({ presets: presetData }, null, 2));
+      return;
+    }
     
     if (presets.length === 0) {
       console.log(chalk.yellow('No presets found. Create one with: promptcode preset --create <name>'));
@@ -63,7 +83,11 @@ async function listPresets(presetsDir: string): Promise<void> {
     console.log(chalk.gray('\nUse: promptcode generate -p <preset-name>'));
   } catch (error) {
     if ((error as any).code === 'ENOENT') {
-      console.log(chalk.yellow('No presets directory found. Create one with: promptcode preset --create <name>'));
+      if (options.json) {
+        console.log(JSON.stringify({ presets: [], error: 'No presets directory found' }, null, 2));
+      } else {
+        console.log(chalk.yellow('No presets directory found. Create one with: promptcode preset --create <name>'));
+      }
     } else {
       throw error;
     }
@@ -73,9 +97,12 @@ async function listPresets(presetsDir: string): Promise<void> {
 /**
  * Show preset info with token count
  */
-async function showPresetInfo(presetName: string, projectPath: string): Promise<void> {
-  const spin = spinner();
-  spin.start('Analyzing preset...');
+async function showPresetInfo(presetName: string, projectPath: string, options: { json?: boolean } = {}): Promise<void> {
+  const spin = options.json ? { start: () => {}, stop: () => {}, fail: () => {} } : spinner();
+  
+  if (!options.json) {
+    spin.start('Analyzing preset...');
+  }
   
   try {
     // Initialize token counter
@@ -86,8 +113,12 @@ async function showPresetInfo(presetName: string, projectPath: string): Promise<
     const presetPath = path.join(presetsDir, `${presetName}.patterns`);
     
     if (!fs.existsSync(presetPath)) {
-      spin.fail(`Preset not found: ${presetName}`);
-      spin.stop(); // Ensure cleanup
+      if (options.json) {
+        console.log(JSON.stringify({ error: `Preset not found: ${presetName}` }, null, 2));
+      } else {
+        spin.fail(`Preset not found: ${presetName}`);
+        spin.stop(); // Ensure cleanup
+      }
       return;
     }
     
@@ -108,6 +139,24 @@ async function showPresetInfo(presetName: string, projectPath: string): Promise<
     spin.stop();
     
     const totalTokens = files.reduce((sum, f) => sum + f.tokenCount, 0);
+    
+    if (options.json) {
+      // JSON output for programmatic use
+      const result = {
+        name: presetName,
+        path: presetPath,
+        patterns: patterns,
+        patternCount: patterns.length,
+        fileCount: files.length,
+        totalTokens: totalTokens,
+        files: files.map(f => ({
+          path: path.relative(projectPath, f.path),
+          tokenCount: f.tokenCount
+        })).sort((a, b) => b.tokenCount - a.tokenCount)
+      };
+      console.log(JSON.stringify(result, null, 2));
+      return;
+    }
     
     console.log(chalk.bold(`Preset: ${chalk.cyan(presetName)}`));
     console.log(chalk.gray('─'.repeat(50)));
@@ -144,8 +193,12 @@ async function showPresetInfo(presetName: string, projectPath: string): Promise<
     console.log(`  ${chalk.cyan(`promptcode generate --preset ${presetName} --output /tmp/${presetName}-${new Date().toISOString().split('T')[0]}.txt`)}`);
     
   } catch (error) {
-    spin.fail(chalk.red(`Error: ${(error as Error).message}`));
-    spin.stop(); // Ensure cleanup
+    if (options.json) {
+      console.log(JSON.stringify({ error: (error as Error).message }, null, 2));
+    } else {
+      spin.fail(chalk.red(`Error: ${(error as Error).message}`));
+      spin.stop(); // Ensure cleanup
+    }
   }
 }
 
@@ -355,11 +408,11 @@ export async function presetCommand(options: PresetOptions): Promise<void> {
   
   try {
     if (options.list || (!options.create && !options.info && !options.delete && !options.edit && !options.search)) {
-      await listPresets(presetsDir);
+      await listPresets(presetsDir, { json: options.json });
     } else if (options.create) {
       await createPreset(options.create, projectPath);
     } else if (options.info) {
-      await showPresetInfo(options.info, projectPath);
+      await showPresetInfo(options.info, projectPath, { json: options.json });
     } else if (options.delete) {
       await deletePreset(options.delete, projectPath);
     } else if (options.edit) {
@@ -368,7 +421,11 @@ export async function presetCommand(options: PresetOptions): Promise<void> {
       await searchPresets(options.search, projectPath);
     }
   } catch (error) {
-    console.error(chalk.red(`Error: ${(error as Error).message}`));
+    if (options.json) {
+      console.log(JSON.stringify({ error: (error as Error).message }, null, 2));
+    } else {
+      console.error(chalk.red(`Error: ${(error as Error).message}`));
+    }
     process.exit(1);
   }
 }

@@ -5,6 +5,7 @@
 ### Test/CI Related
 - `PROMPTCODE_TEST` - Indicates test mode, disables interactive features, forces process.exit()
 - `PROMPTCODE_TOKEN_WARNING` - Token threshold for warning (default: 50000)
+- `PROMPTCODE_COST_THRESHOLD` - Cost threshold for requiring approval in expert command (default: 0.50)
 - `CI` - Standard CI environment indicator
 - `NO_COLOR` - Disable colored output
 - `DEBUG` - Enable debug logging (e.g., DEBUG='promptcode:*')
@@ -94,6 +95,7 @@ PROMPTCODE_INTERACTIVE=false (replaces PROMPTCODE_TEST)
 PROMPTCODE_ENV=test|development|production
 PROMPTCODE_INTERACTIVE=true|false
 PROMPTCODE_TOKEN_THRESHOLD=50000
+PROMPTCODE_COST_THRESHOLD=0.50
 PROMPTCODE_DEBUG=true|false (or use DEBUG='promptcode:*')
 
 # Paths (keep standard XDG)
