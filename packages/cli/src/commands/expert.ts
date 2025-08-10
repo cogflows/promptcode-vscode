@@ -253,9 +253,13 @@ export async function expertCommand(question: string | undefined, options: Exper
       });
     } else {
       // No files to scan - create minimal result for prompt-only queries
+      // But we need to count tokens from the prompt/question itself
+      const { countTokens } = await import('@promptcode/core');
+      const promptTokens = countTokens(question || '');
+      
       result = {
         prompt: '',
-        tokenCount: 0,
+        tokenCount: promptTokens,
         fileCount: 0
       };
     }
@@ -343,8 +347,9 @@ export async function expertCommand(question: string | undefined, options: Exper
     }
 
     // Prepare the prompt
-    const fullPrompt =
-      `Here is the codebase context:\n\n${result.prompt}\n\n${question}`;
+    const fullPrompt = result.prompt 
+      ? `Here is the codebase context:\n\n${result.prompt}\n\n${question}`
+      : question || '';
     
     if (spin) {
       spin.text = `Consulting ${modelConfig.name}...`;
