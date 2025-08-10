@@ -41,6 +41,65 @@ print_error() {
   exit 1
 }
 
+# Check if running in interactive mode
+is_interactive() {
+  # Force non-interactive if NONINTERACTIVE is set
+  [[ -n "${NONINTERACTIVE:-}" ]] && return 1
+  
+  # Force interactive if INTERACTIVE is set (with warning if no TTY)
+  if [[ -n "${INTERACTIVE:-}" ]]; then
+    if [[ ! -t 0 && ! -t 1 ]]; then
+      print_warning "INTERACTIVE mode requested but no TTY available"
+    fi
+    return 0
+  fi
+  
+  # Check if stdin and stdout are connected to a terminal
+  [[ -t 0 && -t 1 ]]
+}
+
+# Safe read function that handles non-interactive environments
+safe_read() {
+  local prompt="$1"
+  local default="${2:-}"
+  
+  # Check if we're in an interactive environment
+  if is_interactive; then
+    # Standard input is a terminal
+    read -p "$prompt" -r response
+  elif [[ -t 1 ]] && [[ -r /dev/tty ]] 2>/dev/null; then
+    # stdout is a terminal and /dev/tty is readable (for piped scripts)
+    read -p "$prompt" -r response < /dev/tty 2>/dev/null || response="$default"
+  else
+    # Non-interactive environment, use default
+    [[ -n "$prompt" ]] && print_info "Non-interactive mode detected, using default: $default"
+    response="$default"
+  fi
+  
+  echo "$response"
+}
+
+# Safe read for single character with default
+safe_read_char() {
+  local prompt="$1"
+  local default="${2:-}"
+  
+  # Check if we're in an interactive environment
+  if is_interactive; then
+    # Standard input is a terminal
+    read -p "$prompt" -n 1 -r
+    echo ""  # Add newline after single char read
+  elif [[ -t 1 ]] && [[ -r /dev/tty ]] 2>/dev/null; then
+    # stdout is a terminal and /dev/tty is readable (for piped scripts)
+    read -p "$prompt" -n 1 -r < /dev/tty 2>/dev/null || REPLY="$default"
+    [[ -n "$REPLY" ]] && echo ""  # Add newline after single char read
+  else
+    # Non-interactive environment, use default
+    [[ -n "$prompt" ]] && print_info "Non-interactive mode detected, using default: $default"
+    REPLY="$default"
+  fi
+}
+
 # Detect OS and Architecture
 detect_platform() {
   local os arch
@@ -127,24 +186,29 @@ download_binary() {
   local checksum_url="${download_url}.sha256"
   print_info "Verifying checksum..."
   
-  if curl -fsSL --connect-timeout 10 -o "${temp_file}.sha256" "$checksum_url" 2>/dev/null; then
+  if curl -fsSL --connect-timeout 10 -o "${temp_file}.sha256.orig" "$checksum_url" 2>/dev/null; then
+    # Extract just the hash from the checksum file (first field)
+    local expected_sum=$(awk '{print $1}' "${temp_file}.sha256.orig")
+    
     # Verify checksum
     if command -v sha256sum >/dev/null 2>&1; then
+      # Create a checksum file with the correct temp filename for sha256sum -c
+      echo "${expected_sum}  $(basename "$temp_file")" > "${temp_file}.sha256"
       if ! (cd "$(dirname "$temp_file")" && sha256sum -c "$(basename "${temp_file}.sha256")") >/dev/null 2>&1; then
-        rm -f "$temp_file" "${temp_file}.sha256"
+        rm -f "$temp_file" "${temp_file}.sha256" "${temp_file}.sha256.orig"
         print_error "Checksum verification failed - file may be corrupted or tampered"
       fi
+      rm -f "${temp_file}.sha256"
     elif command -v shasum >/dev/null 2>&1; then
-      local expected_sum=$(awk '{print $1}' "${temp_file}.sha256")
       local actual_sum=$(shasum -a 256 "$temp_file" | awk '{print $1}')
       if [ "$expected_sum" != "$actual_sum" ]; then
-        rm -f "$temp_file" "${temp_file}.sha256"
+        rm -f "$temp_file" "${temp_file}.sha256.orig"
         print_error "Checksum verification failed - file may be corrupted or tampered"
       fi
     else
       print_warning "Cannot verify checksum - sha256sum/shasum not found"
     fi
-    rm -f "${temp_file}.sha256"
+    rm -f "${temp_file}.sha256.orig"
   else
     print_warning "Checksum file not available - proceeding without verification"
     print_warning "This is less secure. Consider updating to a newer release."
@@ -193,12 +257,7 @@ check_path() {
       # Check if PATH export already exists (idempotent)
       if ! grep -q "# PromptCode CLI PATH" "$shell_config" 2>/dev/null; then
         echo "Would you like to add ${INSTALL_DIR} to your PATH automatically? [Y/n]"
-        # Use /dev/tty for read when piping through bash
-        if [ -t 0 ]; then
-          read -r response
-        else
-          read -r response < /dev/tty
-        fi
+        response=$(safe_read "" "Y")
         if [[ ! "$response" =~ ^[Nn]$ ]]; then
           if [[ "$SHELL" == */fish ]]; then
             echo "# PromptCode CLI PATH" >> "$shell_config"
@@ -274,13 +333,7 @@ uninstall() {
 
   # Ask about cache and config
   echo ""
-  # Use /dev/tty for read when piping through bash
-  if [ -t 0 ]; then
-    read -p "Remove configuration and cache files? [y/N] " -n 1 -r
-  else
-    read -p "Remove configuration and cache files? [y/N] " -n 1 -r < /dev/tty
-  fi
-  echo ""
+  safe_read_char "Remove configuration and cache files? [y/N] " "N"
   if [[ $REPLY =~ ^[Yy]$ ]]; then
     if [ -d "$CONFIG_DIR" ]; then
       rm -rf "$CONFIG_DIR"
@@ -337,21 +390,15 @@ main() {
         echo ""
         echo "  ${CLI_NAME} update --force"
         echo ""
-        # Use /dev/tty for read when piping through bash
-        if [ -t 0 ]; then
-          read -p "Run this command now? [Y/n] " -n 1 -r
-        else
-          read -p "Run this command now? [Y/n] " -n 1 -r < /dev/tty
-        fi
-        echo ""
+        safe_read_char "Run this command now? [Y/n] " "Y"
         if [[ $REPLY =~ ^[Yy]$ ]] || [ -z "$REPLY" ]; then
           # Try to run update --force, but if it fails (old version), continue with direct install
-          if ! "$CLI_NAME" update --force 2>/dev/null; then
+          if ! "$CLI_NAME" update --force 2>&1; then
             print_warning "Current version doesn't support --force flag"
             print_info "Proceeding with direct installation of $version"
             # Continue with the installation (don't exit)
           else
-            exit $?
+            exit 0  # Successful update
           fi
         else
           print_info "You can run the command manually later"
@@ -360,21 +407,15 @@ main() {
       else
         print_info "Using built-in update to upgrade..."
         echo ""
-        "$CLI_NAME" update
-        exit $?
+        "$CLI_NAME" update 2>&1
+        exit 0  # Successful update
       fi
     else
       # Older version without update
       if [[ "$current_version" == *"-dev."* ]]; then
         print_warning "This development version doesn't support update."
         print_info "Will force reinstall with latest release version ($version)"
-        # Use /dev/tty for read when piping through bash
-        if [ -t 0 ]; then
-          read -p "Proceed with force reinstall? [Y/n] " -n 1 -r
-        else
-          read -p "Proceed with force reinstall? [Y/n] " -n 1 -r < /dev/tty
-        fi
-        echo ""
+        safe_read_char "Proceed with force reinstall? [Y/n] " "Y"
         if [[ ! $REPLY =~ ^[Yy]$ ]] && [ -n "$REPLY" ]; then
           print_info "Installation cancelled"
           exit 0
@@ -382,13 +423,7 @@ main() {
         # Continue with installation - will overwrite the dev version
       else
         print_warning "This version doesn't support update. Manual reinstall required."
-        # Use /dev/tty for read when piping through bash
-        if [ -t 0 ]; then
-          read -p "Proceed with manual reinstall? [Y/n] " -n 1 -r
-        else
-          read -p "Proceed with manual reinstall? [Y/n] " -n 1 -r < /dev/tty
-        fi
-        echo ""
+        safe_read_char "Proceed with manual reinstall? [Y/n] " "Y"
         if [[ ! $REPLY =~ ^[Yy]$ ]] && [ -n "$REPLY" ]; then
           print_info "Installation cancelled"
           exit 0

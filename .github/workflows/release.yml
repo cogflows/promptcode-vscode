@@ -38,12 +38,19 @@ jobs:
           - os: ubuntu-latest
             target: linux-x64
             binary-name: promptcode-linux-x64
+            bun-target: bun-linux-x64
           - os: macos-latest
             target: darwin-arm64
             binary-name: promptcode-darwin-arm64
+            bun-target: bun-darwin-arm64
+          - os: macos-latest
+            target: darwin-x64
+            binary-name: promptcode-darwin-x64
+            bun-target: bun-darwin-x64
           - os: windows-latest
             target: win-x64
             binary-name: promptcode-win-x64.exe
+            bun-target: bun-windows-x64
             
     runs-on: ${{ matrix.os }}
     
@@ -74,8 +81,10 @@ jobs:
           VERSION="${{ github.ref_name }}"
           VERSION="${VERSION#v}"  # Remove 'v' prefix if present
           npm version $VERSION --no-git-tag-version --allow-same-version
-          # Build with production flag
-          bun run build:prod
+          # Build with production flag and target architecture
+          PROD_BUILD=1 node scripts/inject-version.js
+          bun build src/index.ts --compile --target=${{ matrix.bun-target }} --outfile dist/promptcode
+          npm run copy-templates
         shell: bash
           
       - name: Rename binary
@@ -92,7 +101,10 @@ jobs:
         run: |
           cd packages/cli
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            certutil -hashfile ${{ matrix.binary-name }} SHA256 > ${{ matrix.binary-name }}.sha256
+            # certutil outputs multiple lines, we need just the hash
+            certutil -hashfile ${{ matrix.binary-name }} SHA256 | head -2 | tail -1 | tr -d ' ' | tr '[:upper:]' '[:lower:]' > temp_hash
+            echo "$(cat temp_hash)  ${{ matrix.binary-name }}" > ${{ matrix.binary-name }}.sha256
+            rm temp_hash
           else
             shasum -a 256 ${{ matrix.binary-name }} > ${{ matrix.binary-name }}.sha256
           fi
