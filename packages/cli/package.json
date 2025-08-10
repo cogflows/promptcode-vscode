@@ -1,0 +1,46 @@
+{
+  "name": "promptcode-cli",
+  "version": "0.3.14",
+  "description": "CLI tool for PromptCode - Generate AI-ready prompts from codebases",
+  "bin": {
+    "promptcode": "./dist/promptcode"
+  },
+  "scripts": {
+    "build": "node scripts/inject-version.js && node scripts/embed-templates.js && bun build src/index.ts --compile --target=bun --outfile dist/promptcode && npm run copy-templates",
+    "build:prod": "PROD_BUILD=1 npm run build",
+    "copy-templates": "node -e \"const fs=require('fs'); const path=require('path'); fs.cpSync('src/claude-templates', 'dist/claude-templates', {recursive:true})\"",
+    "dev": "bun run src/index.ts",
+    "clean": "rm -rf dist",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^2.0.0",
+    "@ai-sdk/google": "^2.0.0",
+    "@ai-sdk/openai": "^2.0.0",
+    "@ai-sdk/xai": "^2.0.0",
+    "@promptcode/core": "file:../core",
+    "@types/inquirer": "^9.0.9",
+    "ai": "^5.0.0",
+    "chalk": "^5.3.0",
+    "chokidar": "^3.6.0",
+    "commander": "^11.1.0",
+    "diff": "^5.2.0",
+    "inquirer": "^12.9.0",
+    "minimatch": "^9.0.3",
+    "ora": "^8.0.1",
+    "zod": "^4.0.14"
+  },
+  "devDependencies": {
+    "@types/diff": "^5.0.9",
+    "@types/minimatch": "^5.1.2",
+    "@types/node": "^20.0.0",
+    "bun-types": "latest",
+    "typescript": "^5.0.0"
+  },
+  "bun": {
+    "test": {
+      "concurrency": 4
+    }
+  }
+}

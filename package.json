@@ -3,7 +3,7 @@
   "name": "promptcode",
   "displayName": "promptcode",
   "description": "Generate prompt for LLM from your code",
-  "version": "0.3.2",
+  "version": "0.3.14",
   "license": "SEE LICENSE IN LICENSE",
   "repository": {
     "type": "git",
@@ -158,6 +158,9 @@
       ]
     }
   },
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "vscode:prepublish": "node ./scripts/build.js --minify --publish",
     "compile": "node ./scripts/build.js",
@@ -168,7 +171,10 @@
     "test:unit": "npm run compile && npm run compile:tests && node ./out/test/runTests.js",
     "compile:tests": "node ./scripts/build-tests.js",
     "build:prod": "node ./scripts/build.js --minify --publish",
-    "build:dev": "node ./scripts/build.js"
+    "build:dev": "node ./scripts/build.js",
+    "build:cli": "cd packages/cli && bun run build",
+    "build:core": "cd packages/core && npm run build",
+    "package": "vsce package"
   },
   "devDependencies": {
     "@playwright/test": "^1.52.0",
@@ -181,13 +187,14 @@
     "@vscode/codicons": "^0.0.36",
     "@vscode/test-cli": "^0.0.10",
     "@vscode/test-electron": "^2.4.1",
+    "@vscode/vsce": "^3.6.0",
     "esbuild": "^0.25.1",
     "eslint": "^9.21.0",
     "glob": "^11.0.3",
-    "gpt-tokenizer": "^2.1.2",
     "typescript": "^5.7.3"
   },
   "dependencies": {
+    "@promptcode/core": "workspace:*",
     "@types/uuid": "^10.0.0",
     "@vscode/extension-telemetry": "^0.9.8",
     "fast-glob": "^3.3.2",

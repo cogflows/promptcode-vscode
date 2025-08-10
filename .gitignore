@@ -3,6 +3,8 @@ node_modules/
 npm-debug.log
 yarn-debug.log
 yarn-error.log
+bun.lockb
+.bun/
 
 # Environment variables
 .env
@@ -37,3 +39,21 @@ coverage/
 # Telemetry configuration
 scripts/.telemetry-config.json
 .telemetry-config.json
+
+# PromptCode CLI specific
+.promptcode/context.json
+.promptcode/contexts/
+.promptcode/outputs/
+packages/cli/dist/
+packages/core/lib/
+packages/core/dist/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# TypeScript build info
+*.tsbuildinfo
+
+inspiration/

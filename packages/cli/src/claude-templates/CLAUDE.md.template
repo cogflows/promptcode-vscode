@@ -1,0 +1,138 @@
+<!-- PROMPTCODE-CLI-START -->
+# PromptCode CLI
+
+Generate AI-ready prompts from your codebase. The CLI is designed to be AI-friendly with clear commands and outputs.
+
+## Quick Start
+
+```bash
+# Generate a prompt with specific files
+promptcode generate src/api/handler.ts src/utils/*.ts
+
+# Ask AI experts questions with code context
+promptcode expert "Why is this slow?" src/api/handler.ts
+
+# Use presets for common file patterns
+promptcode preset list                    # See available presets
+promptcode preset info <name>             # Show preset details & token count
+promptcode generate -l <preset-name>      # Generate using preset
+```
+
+## Working with Presets
+
+Presets are reusable file patterns stored in `.promptcode/presets/*.patterns`:
+
+```bash
+# Create a new preset
+promptcode preset create api-endpoints
+
+# Edit the preset file to add patterns
+# Then use it:
+promptcode generate -l api-endpoints
+```
+
+## Common Workflows for AI Agents
+
+### 1. Discovering Code Structure
+```bash
+# List all presets to understand project organization
+promptcode preset list
+
+# Inspect a preset to see what files it includes
+promptcode preset info functional-utils
+```
+
+### 2. Creating Focused Presets
+When asked to analyze specific features:
+1. Create a descriptive preset: `promptcode preset create feature-name`
+2. Edit `.promptcode/presets/feature-name.patterns` with relevant patterns
+3. Use `promptcode preset info feature-name` to verify file selection
+4. Generate output: `promptcode generate -l feature-name`
+
+### 3. Analyzing Code
+```bash
+# Generate prompt with specific concern
+promptcode generate src/**/*.ts --instructions "Find performance bottlenecks"
+
+# Or use expert mode for direct AI analysis
+promptcode expert "Review this code for security issues" src/api/**/*.ts
+```
+
+## Tips for AI Agents
+
+1. **Always check token counts** - Use `promptcode preset info` to see total tokens before generating
+2. **Be specific with patterns** - Use `src/api/*.ts` not `**/*.ts` to avoid huge contexts
+3. **Leverage existing presets** - Check `promptcode preset list` before creating new ones
+4. **Use descriptive preset names** - `auth-system` not `preset1`
+
+## Important: Cost Approval for AI Agents
+
+The `expert` command includes built-in cost protection that requires approval for expensive operations (over $0.50 or using premium models). The CLI will automatically handle this in different environments:
+
+**In Interactive Mode (Terminal):**
+- The CLI will prompt the user directly for approval
+- Shows cost breakdown and waits for yes/no response
+
+**In Non-Interactive Mode (Claude Code, CI/CD):**
+```bash
+# Without approval flags, expensive operations will be blocked:
+promptcode expert "Complex analysis" --model o3-pro
+# Output: "⚠️ Cost approval required for expensive operation (~$X.XX)"
+#         "Non-interactive environment detected."
+#         "Use --yes to proceed with approval..."
+```
+
+**AI Agent Approval Protocol:**
+1. **When you see "Cost approval required"**, STOP immediately
+2. **Inform the user**: "This operation will cost approximately $X.XX. Do you want to proceed?"
+3. **Wait for explicit user confirmation** (yes/no)
+4. **If approved**, re-run the command with `--yes` flag:
+   ```bash
+   promptcode expert "Complex analysis" --model o3-pro --yes
+   ```
+5. **If declined**, inform the user the operation was cancelled
+
+**Important Guidelines for AI Agents:**
+- **NEVER** automatically add `--yes` without explicit user consent
+- **ALWAYS** show the cost estimate before asking for approval
+- The `--yes` flag means "I have user approval for this specific operation"
+- The `--yes` flag can be used to auto-approve operations after user consent
+- Default to conservative behavior - when in doubt, ask for approval
+
+**Cost Information:**
+- Expensive models: o3-pro
+- Threshold: Operations over $0.50 require approval
+- The CLI shows detailed cost breakdowns before execution
+
+## Claude Code Integration
+
+When you run `promptcode cc`, it installs a custom command for Claude:
+- **`.claude/commands/expert-consultation.md`** - Allows Claude to properly use the expert command with cost approval
+
+This command helps Claude:
+1. Check available presets and select appropriate context
+2. Handle cost approval properly (never auto-approving expensive operations)
+3. Use the correct model based on your request (o3 vs o3-pro)
+4. Parse and present results effectively
+
+To use it in Claude, simply ask: "Consult an expert about [your question]"
+
+## Configuration
+
+API keys must be set via environment variables:
+```bash
+export OPENAI_API_KEY=sk-...
+export ANTHROPIC_API_KEY=sk-ant-...
+export GOOGLE_API_KEY=...            # or GEMINI_API_KEY
+export XAI_API_KEY=...                # or GROK_API_KEY
+```
+
+<details>
+<summary>⚠️ Troubleshooting</summary>
+
+• **Command not found** – The CLI auto-installs to `~/.local/bin`. Ensure it's in PATH  
+• **Missing API key** – Set via environment variable as shown above  
+• **Context too large** – Use more specific file patterns or create focused presets
+• **Preset not found** – Check `.promptcode/presets/` directory exists
+</details>
+<!-- PROMPTCODE-CLI-END -->

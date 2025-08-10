@@ -1,0 +1,16 @@
+# vscode-extension preset
+# Use gitignore syntax for patterns
+# Include patterns:
+src/**/*.ts
+packages/cli/src/**/*.ts
+packages/core/src/**/*.ts
+package.json
+README.md
+
+# Exclude patterns (use ! prefix):
+!**/node_modules/**
+!**/*.test.*
+!**/*.spec.*
+!**/dist/**
+!**/build/**
+!**/out/**

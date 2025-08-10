@@ -9,9 +9,37 @@ const PRESET_LEGACY_EXT = '.json';
 const PRESET_PATTERN_EXT = '.patterns';
 
 /**
+ * Find .promptcode folder in current or parent directories
+ * Similar to how git finds .git folder
+ */
+function findPromptcodeFolder(startPath: string): string | null {
+  let currentPath = path.resolve(startPath);
+  const root = path.parse(currentPath).root;
+  
+  while (currentPath !== root) {
+    const candidatePath = path.join(currentPath, '.promptcode');
+    if (fs.existsSync(candidatePath)) {
+      return candidatePath;
+    }
+    
+    const parentPath = path.dirname(currentPath);
+    if (parentPath === currentPath) {break;} // Reached root
+    currentPath = parentPath;
+  }
+  
+  return null;
+}
+
+/**
  * Gets the full path to the presets directory.
+ * Now searches for existing .promptcode in parent directories
  */
 function getPresetsDirectory(workspaceRoot: string): string {
+  const existingPromptcodeDir = findPromptcodeFolder(workspaceRoot);
+  if (existingPromptcodeDir) {
+    return path.join(existingPromptcodeDir, 'presets');
+  }
+  // Default to creating in current project directory
   return path.join(workspaceRoot, PRESET_DIR);
 }
 
@@ -90,15 +118,55 @@ export function loadPresets(workspaceRoot: string): FilePreset[] {
 }
 
 /**
+ * Request user approval for directory creation
+ */
+async function requestDirectoryCreation(dirPath: string): Promise<boolean> {
+  const relativePath = vscode.workspace.asRelativePath(dirPath, false);
+  const result = await vscode.window.showInformationMessage(
+    `PromptCode needs to create the following directory:\n${relativePath}\n\nWould you like to create it?`,
+    { modal: true },
+    'Yes',
+    'No'
+  );
+  return result === 'Yes';
+}
+
+/**
+ * Ensure directory exists with user approval
+ */
+async function ensureDirWithApproval(dirPath: string): Promise<boolean> {
+  if (fs.existsSync(dirPath)) {
+    return true;
+  }
+
+  const approved = await requestDirectoryCreation(dirPath);
+  if (approved) {
+    try {
+      fs.mkdirSync(dirPath, { recursive: true });
+      vscode.window.showInformationMessage(`Created directory: ${vscode.workspace.asRelativePath(dirPath, false)}`);
+      return true;
+    } catch (error) {
+      vscode.window.showErrorMessage(`Failed to create directory: ${error}`);
+      return false;
+    }
+  }
+  return false;
+}
+
+/**
  * Saves a preset to its own file in the presets directory.
  */
-export function savePreset(workspaceRoot: string, preset: FilePreset): void {
+export async function savePreset(workspaceRoot: string, preset: FilePreset): Promise<void> {
   try {
     const presetsDir = getPresetsDirectory(workspaceRoot);
     
-    // Ensure the presets directory exists
+    // Ensure the presets directory exists with approval
     if (!fs.existsSync(presetsDir)) {
-      fs.mkdirSync(presetsDir, { recursive: true });
+      const created = await ensureDirWithApproval(presetsDir);
+      if (!created) {
+        vscode.window.showErrorMessage('Cannot save preset without creating directory');
+        return;
+      }
     }
 
     // Get the file path for this preset
@@ -117,13 +185,17 @@ export function savePreset(workspaceRoot: string, preset: FilePreset): void {
 /**
  * Saves a preset in the new pattern format.
  */
-export function savePatternPreset(workspaceRoot: string, presetName: string, patterns: string[]): void {
+export async function savePatternPreset(workspaceRoot: string, presetName: string, patterns: string[]): Promise<void> {
   try {
     const presetsDir = getPresetsDirectory(workspaceRoot);
     
-    // Ensure the presets directory exists
+    // Ensure the presets directory exists with approval
     if (!fs.existsSync(presetsDir)) {
-      fs.mkdirSync(presetsDir, { recursive: true });
+      const created = await ensureDirWithApproval(presetsDir);
+      if (!created) {
+        vscode.window.showErrorMessage('Cannot save preset without creating directory');
+        return;
+      }
     }
 
     // Get the file path for this preset
@@ -142,8 +214,8 @@ export function savePatternPreset(workspaceRoot: string, presetName: string, pat
 
 // The savePresets function is kept for backward compatibility, but now
 // it will save each preset to its own file
-export function savePresets(workspaceRoot: string, presets: FilePreset[]): void {
+export async function savePresets(workspaceRoot: string, presets: FilePreset[]): Promise<void> {
   for (const preset of presets) {
-    savePreset(workspaceRoot, preset);
+    await savePreset(workspaceRoot, preset);
   }
 } 

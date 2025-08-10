@@ -1,0 +1,62 @@
+# Semantic Versioning Analysis Preset
+# Files relevant to versioning, releases, and monorepo management
+
+# Package files
+package.json
+packages/*/package.json
+**/package.json
+
+# Monorepo configs
+lerna.json
+pnpm-workspace.yaml
+rush.json
+nx.json
+
+# GitHub workflows
+.github/workflows/*.yml
+.github/workflows/*.yaml
+
+# Build and release scripts
+scripts/build*.js
+scripts/release*.js
+scripts/version*.js
+scripts/publish*.js
+
+# Semantic release configs
+.changeset/config.json
+.changeset/README.md
+.release-it.json
+.releaserc*
+release.config.js
+
+# Version and changelog files
+CHANGELOG.md
+*/CHANGELOG.md
+VERSION
+.version
+
+# Build configs that might affect versioning
+tsconfig.json
+packages/*/tsconfig.json
+.babelrc*
+webpack.config.js
+rollup.config.js
+esbuild.config.js
+
+# CI/CD related
+.gitlab-ci.yml
+.travis.yml
+azure-pipelines.yml
+Jenkinsfile
+
+# Package manager files
+.npmrc
+.yarnrc*
+.pnpmfile.cjs
+bun.lockb
+
+# Docs about releases
+docs/RELEASE*.md
+docs/release*.md
+RELEASE.md
+RELEASING.md

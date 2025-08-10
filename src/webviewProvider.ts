@@ -15,8 +15,8 @@ import * as https from 'https';
 import { SAVE_PROMPT_TO_FILE } from './constants';
 import { savePromptToFile, getLastGeneratedPrompt, fileExplorerProvider, checkedItems } from './extension';
 import { loadPresets, savePreset, savePatternPreset } from './presetManager';
-import { generatePatternsFromSelection } from './utils/generatePatternsFromSelection';
-import { listFilesByPatternsFile } from './utils/filePattern';
+import { generatePatternsFromSelection } from '@promptcode/core';
+import { listFilesByPatternsFile } from '@promptcode/core';
 // --- End Save to file feature ---
 
 // --- File Preset Commands ---
@@ -154,7 +154,7 @@ export class PromptCodeWebViewProvider {
                         break;
                     case 'clearTokenCache':
                         console.log('ClearTokenCache command received in webview provider');
-                        const { clearTokenCache } = require('./tokenCounter');
+                        const { clearTokenCache } = require('@promptcode/core');
                         clearTokenCache();
                         vscode.window.showInformationMessage('Token cache cleared successfully');
                         return;
@@ -350,7 +350,7 @@ export class PromptCodeWebViewProvider {
                     case REQUEST_FILE_PRESETS: {
                         console.log('REQUEST_FILE_PRESETS command received');
                         const root = getWorkspaceRoot();
-                        if (!root || !this._panel) return;
+                        if (!root || !this._panel) {return;}
                         const presets = loadPresets(root);
                         this._panel.webview.postMessage({ command: UPDATE_FILE_PRESETS, presets });
                         return;
@@ -359,7 +359,7 @@ export class PromptCodeWebViewProvider {
                         console.log('SAVE_FILE_PRESET command received with options:', message);
                         const { presetName, currentPreset, useSaveDialog } = message;
                         const root = getWorkspaceRoot();
-                        if (!root || !this._panel) return;
+                        if (!root || !this._panel) {return;}
 
                         // Ensure fileExplorerProvider is available
                         if (!fileExplorerProvider || typeof fileExplorerProvider.getSelectedPaths !== 'function') {
@@ -504,7 +504,7 @@ export class PromptCodeWebViewProvider {
                         console.log('APPLY_FILE_PRESET command received with name:', message.presetName);
                         const { presetName } = message;
                         const root = getWorkspaceRoot();
-                        if (!root || !presetName) return;
+                        if (!root || !presetName) {return;}
 
                         const preset = loadPresets(root).find(p => p.name === presetName);
                         if (!preset) {

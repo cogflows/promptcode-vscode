@@ -6,8 +6,7 @@ import * as vscode from 'vscode';
 import { FileExplorerProvider, checkedItems as checkedItemsMap, FileItem } from './fileExplorer';
 import { generatePrompt as generatePromptFromGenerator, copyToClipboard } from './promptGenerator';
 import { PromptCodeWebViewProvider } from './webviewProvider';
-import { countTokensInFile, countTokensWithCache, countTokensWithCacheDetailed, clearTokenCache, initializeTokenCounter, tokenCache } from './tokenCounter';
-import { countTokens } from 'gpt-tokenizer/encoding/o200k_base';
+import { countTokensInFile, countTokensWithCache, countTokensWithCacheDetailed, clearTokenCache, initializeTokenCounter, tokenCache, countTokens } from '@promptcode/core';
 import * as path from 'path';
 import * as fs from 'fs';
 import { IgnoreHelper } from './ignoreHelper';
@@ -16,7 +15,7 @@ import { DEFAULT_IGNORE_PATTERNS } from './constants';
 import { TelemetryService } from './telemetry';
 import { FileListProcessor } from './fileListProcessor';
 // Import the moved type
-import type { SelectedFile } from './types/selectedFile';
+import type { SelectedFile } from '@promptcode/core';
 
 let lastGeneratedPrompt: string | null = null; // Variable to store the last generated prompt
 
@@ -974,7 +973,7 @@ export function activate(context: vscode.ExtensionContext) {
 			// Function to check if a file is in the specified directory relative to its workspace
 			const isFileInDirectory = (absoluteFilePath: string, targetRelativeDirPath: string, targetWorkspaceRoot?: string): boolean => {
                  const workspaceFolder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(absoluteFilePath));
-                 if (!workspaceFolder) return false; // Not in any workspace
+                 if (!workspaceFolder) {return false;} // Not in any workspace
 
                  // If a specific target workspace is defined, only consider files from that workspace
                  if (targetWorkspaceRoot && workspaceFolder.uri.fsPath !== targetWorkspaceRoot) {
@@ -1379,8 +1378,6 @@ export function activate(context: vscode.ExtensionContext) {
 		'promptcode.checkTelemetryStatus': () => {
 			const status = TelemetryService.getInstance().getTelemetryStatus();
 			vscode.window.showInformationMessage('Telemetry Status', { modal: true, detail: status });
-			console.log('[DEBUG] Telemetry status report:');
-			console.log(status);
 			return status;
 		},
         // --- ADDED ---
@@ -1514,8 +1511,8 @@ async function generatePrompt(
                 // Sort directories before files, then alphabetically
                 const aIsDir = typeof node[a] === 'object';
                 const bIsDir = typeof node[b] === 'object';
-                if (aIsDir && !bIsDir) return -1;
-                if (!aIsDir && bIsDir) return 1;
+                if (aIsDir && !bIsDir) {return -1;}
+                if (!aIsDir && bIsDir) {return 1;}
                 return a.localeCompare(b);
             });
 
@@ -1645,7 +1642,7 @@ async function getSelectedFilesWithContent(): Promise<SelectedFile[]> {
 		.map(([filePath, _]) => filePath)
 		.filter(filePath => {
 			try {
-                if (!fs.existsSync(filePath)) return false; // Ensure file exists
+                if (!fs.existsSync(filePath)) {return false;} // Ensure file exists
 				return fs.statSync(filePath).isFile();
 			} catch (error) {
                 console.warn(`Error stating file, skipping: ${filePath}`, error);

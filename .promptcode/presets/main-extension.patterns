@@ -1,0 +1,14 @@
+# main-extension preset
+# Use gitignore syntax for patterns
+# Include patterns:
+**/*.ts
+**/*.tsx
+**/*.js
+**/*.jsx
+
+# Exclude patterns (use ! prefix):
+!**/node_modules/**
+!**/*.test.*
+!**/*.spec.*
+!**/dist/**
+!**/build/**

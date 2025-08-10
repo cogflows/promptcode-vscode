@@ -90,7 +90,7 @@ let latestPreview = ''; // <-- holds the rendered prompt text
 
     // Toggling checkboxes
     [includeFilesCheckbox, includeInstructionsCheckbox].forEach((checkbox) => {
-      if (!checkbox) return;
+      if (!checkbox) {return;}
       checkbox.addEventListener('click', () => {
         checkbox.classList.toggle('checked');
         // Re-generate the preview, if we are on this tab
@@ -185,11 +185,11 @@ let latestPreview = ''; // <-- holds the rendered prompt text
       // Record the time when we started generating
       generatingStartTime = Date.now();
       
-      if (spinner) spinner.classList.remove('hidden');
-      if (tokenCountDisplay) tokenCountDisplay.classList.add('hidden');
-      if (copyButton) copyButton.disabled = true;
-      if (openButton) openButton.disabled = true;
-      if (saveButton) saveButton.disabled = true;
+      if (spinner) {spinner.classList.remove('hidden');}
+      if (tokenCountDisplay) {tokenCountDisplay.classList.add('hidden');}
+      if (copyButton) {copyButton.disabled = true;}
+      if (openButton) {openButton.disabled = true;}
+      if (saveButton) {saveButton.disabled = true;}
     }
 
     /**
@@ -230,13 +230,13 @@ let latestPreview = ''; // <-- holds the rendered prompt text
      * Actually applies the prepared mode once timing requirements are met
      */
     function applyPreparedMode() {
-      if (!pendingPreparedData) return;
+      if (!pendingPreparedData) {return;}
       
-      if (spinner) spinner.classList.add('hidden');
-      if (tokenCountDisplay) tokenCountDisplay.classList.remove('hidden');
-      if (copyButton) copyButton.disabled = false;
-      if (openButton) openButton.disabled = false;
-      if (saveButton) saveButton.disabled = false;
+      if (spinner) {spinner.classList.add('hidden');}
+      if (tokenCountDisplay) {tokenCountDisplay.classList.remove('hidden');}
+      if (copyButton) {copyButton.disabled = false;}
+      if (openButton) {openButton.disabled = false;}
+      if (saveButton) {saveButton.disabled = false;}
 
       if (typeof pendingPreparedData.tokenCount === 'number' && tokenCountElement) {
         tokenCountElement.textContent = formatTokenCount(pendingPreparedData.tokenCount);
@@ -292,7 +292,7 @@ let latestPreview = ''; // <-- holds the rendered prompt text
      * (as a fallback). Normally the extension does it, but this is a fallback.
      */
     function fallbackCopyToClipboard(text) {
-      if (!navigator?.clipboard) return;
+      if (!navigator?.clipboard) {return;}
       navigator.clipboard.writeText(text).then(() => {
         console.log('Copied to clipboard (fallback in browser).');
       }).catch(() => {

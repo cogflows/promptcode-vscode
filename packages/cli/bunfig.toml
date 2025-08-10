@@ -1,0 +1,6 @@
+[install]
+# Allow global install: bun add -g promptcode-cli
+dce = true
+
+[test]
+preload = "./src/test-setup.ts"

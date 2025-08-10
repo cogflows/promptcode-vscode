@@ -368,7 +368,7 @@
     
     // --- ADDED: Helper to escape HTML for attributes ---
     function escapeHtml(unsafe) {
-      if (!unsafe) return '';
+      if (!unsafe) {return '';}
       return unsafe
            .replace(/&/g, "&amp;")
            .replace(/</g, "&lt;")
@@ -458,7 +458,7 @@
     // ------------------------------------------------
     window.addEventListener('message', (event) => {
       const message = event.data;
-      if (!message || !message.command) return;
+      if (!message || !message.command) {return;}
 
       switch (message.command) {
         case 'updateInstructions':
@@ -556,7 +556,7 @@
     function setupPromptPicker() {
       const promptPicker = document.getElementById('prompt-picker');
       const promptList = document.querySelector('.prompt-list');
-      if (!contentEditableDiv || !promptPicker || !promptList) return;
+      if (!contentEditableDiv || !promptPicker || !promptList) {return;}
 
       let currentPosition = null;
       let currentRange = null;
@@ -643,7 +643,7 @@
       // On receiving updated prompts from extension:
       window.addEventListener('message', (event) => {
         const message = event.data;
-        if (!message || message.command !== 'updatePrompts') return;
+        if (!message || message.command !== 'updatePrompts') {return;}
         console.log('Received updated prompts:', message.prompts.length);
         availablePrompts = message.prompts;
         // Refresh prompt list if the picker is open:
@@ -725,10 +725,10 @@
       // Show/hide + arrow key handling:
       contentEditableDiv.addEventListener('input', (e) => {
         const selection = window.getSelection();
-        if (!selection.rangeCount) return;
+        if (!selection.rangeCount) {return;}
         
         const range = selection.getRangeAt(0);
-        if (!range.collapsed) return;
+        if (!range.collapsed) {return;}
         
         const node = range.startContainer;
         const offset = range.startOffset;
@@ -793,18 +793,18 @@
 
       promptList.addEventListener('click', (e) => {
         const promptItem = e.target.closest('.prompt-item');
-        if (!promptItem) return;
+        if (!promptItem) {return;}
         insertPrompt(promptItem.dataset.promptName);
       });
 
       contentEditableDiv.addEventListener('keydown', (e) => {
-        if (promptPicker.style.display !== 'block') return;
+        if (promptPicker.style.display !== 'block') {return;}
         
         // Find all visible prompt items
         const items = Array.from(promptList.querySelectorAll('.prompt-item'))
           .filter(item => item.style.display !== 'none');
         
-        if (!items.length) return;
+        if (!items.length) {return;}
 
         let selectedIndex = items.findIndex((i) => i.classList.contains('selected'));
 
@@ -847,7 +847,7 @@
        */
       function insertPrompt(promptName) {
         const selectedPrompt = availablePrompts.find((p) => p.name === promptName);
-        if (!selectedPrompt || !currentRange) return;
+        if (!selectedPrompt || !currentRange) {return;}
 
         // --- Get the current selection and range --- 
         const selection = window.getSelection();

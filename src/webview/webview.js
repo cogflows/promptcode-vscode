@@ -98,20 +98,20 @@
   document.getElementById('selected-files-list')?.addEventListener('click', (event) => {
     // Find the closest trash button in the event path
     const trash = event.target.closest('.trash-btn');
-    if (!trash) return; // Not a trash button click
+    if (!trash) {return;} // Not a trash button click
     
     // Prevent propagation to avoid triggering other click handlers
     event.preventDefault();
     event.stopPropagation();
     
     const header = trash.closest('.directory-header');
-    if (!header) return; // Not found in a directory header
+    if (!header) {return;} // Not found in a directory header
     
     const dirId = header.dataset.dirId;
-    if (!dirId) return console.warn('No dirId found on directory header');
+    if (!dirId) {return console.warn('No dirId found on directory header');}
     
     const dirPath = window.directoryMap[dirId];
-    if (!dirPath) return console.warn('Directory path not found in map for ID:', dirId);
+    if (!dirPath) {return console.warn('Directory path not found in map for ID:', dirId);}
     
     // Use the ROOT_DIR_KEY for empty strings or the special root key
     const normalizedDirPath = dirPath === '__ROOT__' ? '' : dirPath;
