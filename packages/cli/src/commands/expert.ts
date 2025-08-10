@@ -117,8 +117,8 @@ export async function expertCommand(question: string | undefined, options: Exper
   if (!finalQuestion) {
     console.error(chalk.red('🙋 I need a question to ask the AI expert.\n'));
     console.error(chalk.yellow('Examples:'));
-    console.error(chalk.gray('  promptcode "Why is this slow?" src/**/*.ts'));
-    console.error(chalk.gray('  promptcode "Explain the auth flow" @backend/'));
+    console.error(chalk.gray('  promptcode expert "Why is this slow?" -f src/**/*.ts'));
+    console.error(chalk.gray('  promptcode expert "Explain the auth flow" -f backend/**/*.ts'));
     console.error(chalk.gray('  promptcode expert "What are the security risks?" --preset api'));
     console.error(chalk.gray('  promptcode expert --prompt-file analysis.md --preset backend\n'));
     console.error(chalk.gray('To list available models: promptcode expert --models'));

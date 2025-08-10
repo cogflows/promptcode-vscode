@@ -1,5 +1,0 @@
-# Authentication system files
-# Includes auth middleware and JWT handling
-src/auth/**/*.ts
-src/middleware/auth*.ts
-!**/*.test.ts

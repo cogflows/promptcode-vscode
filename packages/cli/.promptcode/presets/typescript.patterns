@@ -1,4 +1,0 @@
-**/*.ts
-**/*.tsx
-!**/node_modules/**
-!**/*.test.*

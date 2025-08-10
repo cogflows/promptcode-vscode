@@ -94,9 +94,10 @@ Available Commands:
   $ promptcode expert "How to optimize this?" -p backend # Ask AI expert
   
 Common Workflows:
-  1. Zero-config usage:
-     $ promptcode "What are the security risks?"        # Analyze entire project
-     $ promptcode "Review this code" file1.py file2.js  # Specific files
+  1. Explicit usage:
+     $ promptcode expert "Why is this slow?" -f "src/**/*.ts"
+     $ promptcode expert "Explain the auth flow" --preset auth
+     $ promptcode generate -f "src/**/*.ts" -o prompt.md
   
   2. Expert consultation:
      $ export OPENAI_API_KEY=sk-...

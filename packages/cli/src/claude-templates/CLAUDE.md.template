@@ -7,15 +7,15 @@ Generate AI-ready prompts from your codebase. The CLI is designed to be AI-frien
 
 ```bash
 # Generate a prompt with specific files
-promptcode generate src/api/handler.ts src/utils/*.ts
+promptcode generate -f src/api/handler.ts src/utils/*.ts
 
 # Ask AI experts questions with code context
-promptcode expert "Why is this slow?" src/api/handler.ts
+promptcode expert "Why is this slow?" -f src/api/handler.ts
 
 # Use presets for common file patterns
 promptcode preset list                    # See available presets
 promptcode preset info <name>             # Show preset details & token count
-promptcode generate -l <preset-name>      # Generate using preset
+promptcode generate --preset <preset-name>  # Generate using preset
 ```
 
 ## Working with Presets
@@ -28,7 +28,7 @@ promptcode preset create api-endpoints
 
 # Edit the preset file to add patterns
 # Then use it:
-promptcode generate -l api-endpoints
+promptcode generate --preset api-endpoints
 ```
 
 ## Common Workflows for AI Agents
@@ -47,7 +47,7 @@ When asked to analyze specific features:
 1. Create a descriptive preset: `promptcode preset create feature-name`
 2. Edit `.promptcode/presets/feature-name.patterns` with relevant patterns
 3. Use `promptcode preset info feature-name` to verify file selection
-4. Generate output: `promptcode generate -l feature-name`
+4. Generate output: `promptcode generate --preset feature-name`
 
 ### 3. Analyzing Code
 ```bash

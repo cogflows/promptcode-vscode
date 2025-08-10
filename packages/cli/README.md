@@ -37,23 +37,21 @@ npm install -g promptcode-cli
 
 ## Quick Start
 
-### AI-Agent Friendly (Zero Configuration)
+### Expert Mode
 ```bash
-# Ask questions with codebase context
-promptcode "Why is this API slow?" src/**/*.ts
-promptcode "Explain the auth flow" @backend/ @frontend/
-promptcode "What are the security risks?"  # Analyzes entire project
-
-# Generate prompts from files
-promptcode src/**/*.ts docs/**/*.md  # Just files = generate mode
+# Ask questions with codebase context using AI experts
+promptcode expert "Why is this API slow?" -f src/**/*.ts
+promptcode expert "Explain the auth flow" -f backend/**/*.ts
+promptcode expert "What are the security risks?" --preset api
 ```
 
-### Traditional Workflow
+### Generate Mode
 ```bash
-# Create a preset for your backend code
-promptcode preset --create backend
+# Generate prompts from files for AI analysis
+promptcode generate -f src/**/*.ts docs/**/*.md
 
-# Generate a prompt using the preset
+# Create and use presets for reusable patterns
+promptcode preset create backend
 promptcode generate -p backend -o prompt.md
 
 # Ask AI expert for help (requires API key)
