@@ -15,41 +15,6 @@ import { uninstallCommand } from './commands/uninstall';
 import { BUILD_VERSION } from './version';
 import { startUpdateCheck } from './utils/update-checker';
 
-/**
- * Parse positional arguments to detect question and file patterns
- * Following o3-pro's recommendation for AI-agent friendly syntax
- */
-function parsePositional(tokens: string[]): { question: string; patterns: string[] } {
-  const patterns: string[] = [];
-  const questionParts: string[] = [];
-  let foundQuestion = false;
-  
-  // Check if first token is a quoted question
-  if (tokens.length > 0 && (tokens[0].includes(' ') || tokens[0].endsWith('?'))) {
-    foundQuestion = true;
-    questionParts.push(tokens[0]);
-    tokens = tokens.slice(1);
-  }
-  
-  for (const token of tokens) {
-    // Strip @ prefix if present (Gemini-style)
-    const cleanToken = token.startsWith('@') ? token.slice(1) : token;
-    
-    // Check if token looks like a file/pattern
-    const hasGlobChars = /[*?[\]{}]/.test(cleanToken);
-    const existsAsFile = fs.existsSync(path.resolve(cleanToken));
-    const hasPathSeparator = cleanToken.includes('/') || cleanToken.includes('\\');
-    
-    if (hasGlobChars || existsAsFile || hasPathSeparator) {
-      patterns.push(cleanToken);
-    } else if (!foundQuestion) {
-      questionParts.push(token);
-    }
-  }
-  
-  const question = questionParts.join(' ').trim();
-  return { question, patterns };
-}
 
 /**
  * Show help when no valid command is provided
@@ -134,6 +99,7 @@ Examples:
   .option('--dry-run', 'show what would be included without generating')
   .option('--token-warning <n>', 'token threshold for warning (default: 50000)')
   .option('-y, --yes', 'skip confirmation prompts')
+  .allowExcessArguments(false)
   .action(async (options) => {
     // Handle preset shorthand
     if (options.preset && !options.list) {
@@ -174,7 +140,7 @@ Examples:
   $ promptcode preset create backend
   $ promptcode preset info backend
   $ promptcode preset search "auth"
-  $ promptcode generate -l backend
+  $ promptcode generate -p backend
 
 Legacy flags (still supported):
   $ promptcode preset --create backend
@@ -239,6 +205,7 @@ Examples:
   .option('--verbosity <level>', 'response verbosity: low (concise), medium, high (detailed)', 'low')
   .option('--reasoning-effort <level>', 'reasoning depth: minimal, low, medium, high (default)', 'high')
   .option('--service-tier <tier>', 'service tier: auto, flex (50% cheaper), priority (enterprise)')
+  .allowExcessArguments(false)
   .action(async (question, options) => {
     await expertCommand(question, options);
   });
@@ -429,10 +396,6 @@ program
       process.exit(0);
     }
   });
-
-// Add global options that work with the default command
-program
-  .option('--save-preset <name>', 'save file patterns as a preset for later use');
 
 // Parse command line arguments
 let args = process.argv.slice(2);

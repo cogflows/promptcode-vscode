@@ -52,10 +52,10 @@ When asked to analyze specific features:
 ### 3. Analyzing Code
 ```bash
 # Generate prompt with specific concern
-promptcode generate src/**/*.ts --instructions "Find performance bottlenecks"
+promptcode generate -f "src/**/*.ts" --instructions "Find performance bottlenecks"
 
 # Or use expert mode for direct AI analysis
-promptcode expert "Review this code for security issues" src/api/**/*.ts
+promptcode expert "Review this code for security issues" -f "src/api/**/*.ts"
 ```
 
 ## Tips for AI Agents

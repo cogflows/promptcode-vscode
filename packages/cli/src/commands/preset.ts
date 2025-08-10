@@ -60,7 +60,7 @@ async function listPresets(presetsDir: string): Promise<void> {
       console.log(`  ${chalk.cyan(presetName.padEnd(20))} ${chalk.gray(`${lines.length} patterns`)}`);
     }
     
-    console.log(chalk.gray('\nUse: promptcode generate -l <preset-name>'));
+    console.log(chalk.gray('\nUse: promptcode generate -p <preset-name>'));
   } catch (error) {
     if ((error as any).code === 'ENOENT') {
       console.log(chalk.yellow('No presets directory found. Create one with: promptcode preset --create <name>'));
@@ -190,7 +190,7 @@ async function createPreset(presetName: string, projectPath: string): Promise<vo
   console.log(chalk.green(`✓ Created preset: ${presetName}`));
   console.log(chalk.gray(`  Path: ${presetPath}`));
   console.log(chalk.gray(`  Edit the file to customize patterns`));
-  console.log(chalk.gray(`  Use: promptcode generate -l ${presetName}`));
+  console.log(chalk.gray(`  Use: promptcode generate -p ${presetName}`));
 }
 
 /**
