@@ -141,11 +141,10 @@ describe('system tests - core CLI functionality', () => {
         timeout: 5000 
       });
       
-      // The CLI treats unknown single arguments as file patterns
-      // and shows tips when no files match
-      expect(result.exitCode).toBe(0);
+      // The CLI now properly detects unknown commands and exits with error
+      expect(result.exitCode).toBe(1);
       const output = result.stdout + result.stderr;
-      expect(output.toLowerCase()).toContain('no files found');
+      expect(output.toLowerCase()).toContain('invalidcommand123');
     });
 
     it('should handle missing arguments', async () => {

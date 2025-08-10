@@ -12,35 +12,41 @@ describe('CLI argument parsing', () => {
     fixture.cleanup();
   });
   
-  it('should parse zero-friction expert commands', async () => {
+  it('should require explicit expert command', async () => {
     createTestFiles(fixture.dir, {
       'src/index.ts': 'console.log("Test");',
       'backend/auth.ts': 'export const auth = {};'
     });
     
-    // These should be interpreted as expert commands (with question)
+    // These should now fail without explicit command
     const testCases = [
-      { args: ['"Why is this slow?"', 'src/**/*.ts'], hasQuestion: true },
-      { args: ['"Explain the auth flow"', 'backend/**/*.ts'], hasQuestion: true },
-      { args: ["'What are the security risks?'", 'src/**/*.ts'], hasQuestion: true },
+      { args: ['"Why is this slow?"', 'src/**/*.ts'] },
+      { args: ['"Explain the auth flow"', 'backend/**/*.ts'] },
+      { args: ["'What are the security risks?'", 'src/**/*.ts'] },
     ];
     
     for (const testCase of testCases) {
-      // We can't fully test expert without API keys, but we can verify it tries to run expert
+      // Should fail with invalid usage error
       const result = await runCLI(testCase.args, { 
-        cwd: fixture.dir,
-        env: { ...process.env, OPENAI_API_KEY: '', ANTHROPIC_API_KEY: '', GOOGLE_API_KEY: '', XAI_API_KEY: '', GROK_API_KEY: '' }
+        cwd: fixture.dir
       });
       
-      // Should fail asking for API key (meaning it tried expert command)
+      // Should fail with error about invalid usage
       expect(result.exitCode).toBe(1);
-      // Error message could be on stdout or stderr
       const output = result.stdout + result.stderr;
-      expect(output).toContain('API key');
+      expect(output.toLowerCase()).toContain('invalid usage');
     }
+    
+    // Test that explicit expert command works (fails with API key error)
+    const result = await runCLI(['expert', '"Why is this slow?"', '-f', 'src/**/*.ts'], {
+      cwd: fixture.dir,
+      env: { ...process.env, OPENAI_API_KEY: '', ANTHROPIC_API_KEY: '', GOOGLE_API_KEY: '', XAI_API_KEY: '', GROK_API_KEY: '' }
+    });
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout + result.stderr).toContain('API key');
   });
   
-  it('should parse zero-friction generate commands', async () => {
+  it('should require explicit generate command', async () => {
     createTestFiles(fixture.dir, {
       'src/index.ts': 'console.log("Test");',
       'src/utils.ts': 'export const util = 1;',
@@ -48,45 +54,61 @@ describe('CLI argument parsing', () => {
       'main.js': 'console.log("js");'
     });
     
-    // These should be interpreted as generate commands (no question)
+    // These should now fail without explicit command
     const testCases = [
       { args: ['src/**/*.ts'] },
-      { args: ['src/**/*', 'tests/**/*'] },  // Use glob patterns for directories
-      { args: ['*.js', 'src/**/*.ts'] },  // Mixed patterns
+      { args: ['src/**/*', 'tests/**/*'] },
+      { args: ['*.js', 'src/**/*.ts'] },
     ];
     
     for (const testCase of testCases) {
       const result = await runCLI(testCase.args, { cwd: fixture.dir });
       
-      // Should succeed and output prompt
-      expect(result.exitCode).toBe(0);
-      expect(result.stdout).toContain('console.log("Test")');
+      // Should fail with invalid usage error
+      expect(result.exitCode).toBe(1);
+      const output = result.stdout + result.stderr;
+      expect(output.toLowerCase()).toContain('invalid usage');
     }
+    
+    // Test that explicit generate command works
+    const result = await runCLI(['generate', '-f', 'src/**/*.ts'], { cwd: fixture.dir });
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('console.log("Test")');
   });
   
-  it('should handle @ prefix in file patterns', async () => {
+  it('should handle @ prefix in file patterns with explicit command', async () => {
     createTestFiles(fixture.dir, {
       'backend/server.ts': 'const server = {};',
       'frontend/app.tsx': 'const app = {};'
     });
     
-    // @ prefix should be stripped
-    const result = await runCLI(['@backend/**/*.ts'], { cwd: fixture.dir });
+    // @ prefix no longer works without explicit command
+    const result1 = await runCLI(['@backend/**/*.ts'], { cwd: fixture.dir });
+    expect(result1.exitCode).toBe(1);
+    expect((result1.stdout + result1.stderr).toLowerCase()).toContain('invalid usage');
     
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain('const server');
-    expect(result.stdout).not.toContain('const app');
+    // @ prefix should be stripped with explicit command
+    const result2 = await runCLI(['generate', '-f', '@backend/*.ts'], { cwd: fixture.dir });
+    expect(result2.exitCode).toBe(0);
+    expect(result2.stdout).toContain('const server');
+    expect(result2.stdout).not.toContain('const app');
   });
   
-  it('should save preset with zero-friction syntax', async () => {
+  it('should require explicit command even with --save-preset', async () => {
     createTestFiles(fixture.dir, {
       'src/index.ts': 'console.log("Test");'
     });
     
+    // Should fail without explicit command
     const result = await runCLI(['src/**/*.ts', '--save-preset', 'my-files'], { cwd: fixture.dir });
+    expect(result.exitCode).toBe(1);
+    expect((result.stdout + result.stderr).toLowerCase()).toContain('invalid usage');
     
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain('Saved file patterns to preset: my-files');
+    // Test that explicit generate command with --save-preset works
+    const result2 = await runCLI(['generate', '-f', 'src/**/*.ts', '--save-preset', 'my-files'], { cwd: fixture.dir });
+    expect(result2.exitCode).toBe(0);
+    // Should generate the prompt output
+    expect(result2.stdout).toContain('console.log("Test")');
   });
   
   it('should show help when no arguments provided', async () => {

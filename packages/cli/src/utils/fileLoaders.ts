@@ -101,7 +101,9 @@ export async function getPatternsFromOptions(options: { list?: string; files?: s
   if (options.list) {
     return loadFileList(options.list, projectPath);
   }
-  return options.files || ['**/*'];
+  // Strip @ prefix from patterns (used for better readability)
+  const patterns = options.files || ['**/*'];
+  return patterns.map(p => p.startsWith('@') ? p.slice(1) : p);
 }
 
 /**

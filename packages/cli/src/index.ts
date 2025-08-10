@@ -52,50 +52,30 @@ function parsePositional(tokens: string[]): { question: string; patterns: string
 }
 
 /**
- * Smart default command handler for zero-friction usage
- * Supports: promptcode "question" file1 file2...
+ * Show help when no valid command is provided
  */
-async function defaultCommand(args: string[], opts: any): Promise<void> {
-  // If no args provided, check if they meant to use --help
+function showHelpOrError(args: string[]): void {
+  // If no args provided, show help
   if (args.length === 0) {
     program.outputHelp();
     return;
   }
   
-  // Parse positional arguments
-  const { question, patterns } = parsePositional(args);
-  
-  // If we have a question, use expert mode
-  if (question) {
-    const expertOptions = {
-      ...opts,
-      files: patterns.length > 0 ? patterns : undefined,
-      savePreset: opts.savePreset,
-      verbosity: opts.verbosity,
-      reasoningEffort: opts.reasoningEffort,
-      serviceTier: opts.serviceTier
-    };
-    await expertCommand(question, expertOptions);
-  } 
-  // If only files provided, generate prompt
-  else if (patterns.length > 0) {
-    const generateOptions = {
-      ...opts,
-      files: patterns,
-      savePreset: opts.savePreset
-    };
-    await generateCommand(generateOptions);
-  }
-  // No clear intent, show helpful error
-  else {
-    console.error(chalk.red('🙋 I need either a question or file patterns to work with.\n'));
-    console.error(chalk.yellow('Examples:'));
-    console.error(chalk.gray('  promptcode "Why is this slow?" src/**/*.ts'));
-    console.error(chalk.gray('  promptcode "Explain the auth flow" @backend/ @frontend/'));
-    console.error(chalk.gray('  promptcode src/**/*.ts  # Just generate prompt\n'));
-    console.error(chalk.gray('For more help: promptcode --help'));
-    process.exit(1);
-  }
+  // Otherwise show error for invalid usage
+  console.error(chalk.red(`Error: Invalid usage. Please specify a command.\n`));
+  console.error(chalk.yellow('Available commands:'));
+  console.error(chalk.gray('  generate   - Generate a prompt from selected files'));
+  console.error(chalk.gray('  expert     - Ask AI experts questions with code context'));
+  console.error(chalk.gray('  preset     - Manage file pattern presets'));
+  console.error(chalk.gray('  cc         - Set up Claude Code integration'));
+  console.error(chalk.gray('  stats      - Show codebase statistics'));
+  console.error(chalk.gray('  update     - Update the CLI to latest version\n'));
+  console.error(chalk.yellow('Examples:'));
+  console.error(chalk.gray('  promptcode generate -f "src/**/*.ts"'));
+  console.error(chalk.gray('  promptcode expert "Why is this slow?" -f "src/**/*.ts"'));
+  console.error(chalk.gray('  promptcode preset create backend\n'));
+  console.error(chalk.gray('For more help: promptcode --help'));
+  process.exit(1);
 }
 
 const program = new Command()
@@ -103,13 +83,12 @@ const program = new Command()
   .description('Generate AI-ready prompts from codebases - designed for AI coding assistants')
   .version(BUILD_VERSION)
   .addHelpText('after', `
-Quick Start (AI-Agent Friendly):
-  $ promptcode "Why is this slow?" src/**/*.ts          # Ask AI about files
-  $ promptcode "Explain the auth flow" @backend/ @api/  # @ prefix supported
-  $ promptcode src/**/*.ts                              # Just generate prompt
-  $ promptcode "Find bugs" src/**/*.ts --save-preset qa # Save patterns for reuse
+Quick Start:
+  $ promptcode expert "Why is this slow?" -f src/**/*.ts   # Ask AI about files
+  $ promptcode generate -f src/**/*.ts                      # Generate prompt for AI
+  $ promptcode preset create backend                        # Create reusable preset
   
-Traditional Commands:
+Available Commands:
   $ promptcode generate -f "src/**/*.ts" -o prompt.md   # Generate prompt
   $ promptcode preset --create backend                   # Create preset
   $ promptcode expert "How to optimize this?" -p backend # Ask AI expert
@@ -454,8 +433,7 @@ program
 program
   .option('--save-preset <name>', 'save file patterns as a preset for later use');
 
-// Handle smart routing for zero-friction usage
-// Check if we should use the default command handler
+// Parse command line arguments
 let args = process.argv.slice(2);
 
 // Handle --command syntax by converting to command syntax BEFORE any parsing
@@ -481,9 +459,9 @@ const knownCommands = [
   '--help', '-h', '--version', '-V', '--detailed'
 ];
 
-// Check if first arg looks like a command (starts with letters, not a path)
+// Check if first arg looks like a command (alphanumeric, not a path)
 const firstArg = args[0];
-const looksLikeCommand = firstArg && /^[a-z]+$/i.test(firstArg) && !firstArg.includes('/') && !firstArg.includes('.');
+const looksLikeCommand = firstArg && /^[a-z][a-z0-9]*$/i.test(firstArg) && !firstArg.includes('/') && !firstArg.includes('.');
 
 // Check for removed commands and provide helpful migration messages
 const REMOVED_COMMANDS = new Set(['diff', 'watch', 'validate', 'extract']);
@@ -533,31 +511,8 @@ if (args.includes('--update')) {
 const hasSubcommand = args.length > 0 && knownCommands.includes(args[0]);
 
 if (!hasSubcommand && args.length > 0) {
-  // Start async update check - will show message at exit if update available
-  startUpdateCheck();
-  
-  // Parse options for default command
-  const savePresetIndex = args.indexOf('--save-preset');
-  let savePreset;
-  let filteredArgs = args;
-  
-  if (savePresetIndex !== -1 && args[savePresetIndex + 1]) {
-    savePreset = args[savePresetIndex + 1];
-    // Remove --save-preset and its value from args
-    filteredArgs = args.filter((_, i) => i !== savePresetIndex && i !== savePresetIndex + 1);
-  }
-  
-  // Use smart default command for zero-friction usage
-  defaultCommand(filteredArgs, { savePreset })
-    .then(async () => {
-      // Exit cleanly after command completes
-      const { exitInTestMode } = await import('./utils/environment');
-      exitInTestMode(0);
-    })
-    .catch(err => {
-      console.error(chalk.red(`Error: ${err.message}`));
-      process.exit(1);
-    });
+  // No valid command found, show error
+  showHelpOrError(args);
 } else {
   // Start async update check - will show message at exit if update available
   startUpdateCheck();
