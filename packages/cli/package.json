@@ -6,7 +6,7 @@
     "promptcode": "./dist/promptcode"
   },
   "scripts": {
-    "build": "node scripts/inject-version.js && bun build src/index.ts --compile --target=bun --outfile dist/promptcode && npm run copy-templates",
+    "build": "node scripts/inject-version.js && node scripts/embed-templates.js && bun build src/index.ts --compile --target=bun --outfile dist/promptcode && npm run copy-templates",
     "build:prod": "PROD_BUILD=1 npm run build",
     "copy-templates": "node -e \"const fs=require('fs'); const path=require('path'); fs.cpSync('src/claude-templates', 'dist/claude-templates', {recursive:true})\"",
     "dev": "bun run src/index.ts",

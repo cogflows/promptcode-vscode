@@ -4,6 +4,8 @@ import * as fsSync from 'fs';
 import * as os from 'os';
 import chalk from 'chalk';
 import { isInteractive } from './environment';
+import { BUILD_VERSION } from '../version';
+import { getEmbeddedTemplates, hasEmbeddedTemplates } from '../embedded-templates';
 
 // Import readline for interactive prompts
 import * as readline from 'readline';
@@ -50,28 +52,79 @@ export function findPromptcodeFolder(startPath: string): string | null {
 
 /**
  * Get the templates directory for Claude integration.
- * Works correctly for both development and compiled Bun binaries.
+ * Works correctly for development, local binaries, and global installations.
  */
 export function getClaudeTemplatesDir(): string {
-  // For compiled Bun binaries, templates are in dist/claude-templates
-  const execDir = path.dirname(process.execPath);
-  const compiledPath = path.join(execDir, 'claude-templates');
-  
-  if (fsSync.existsSync(compiledPath)) {
-    return compiledPath;
+  // 1) Try embedded templates (works for compiled binaries and global installs)
+  if (hasEmbeddedTemplates()) {
+    try {
+      const templates = getEmbeddedTemplates();
+      
+      // Use versioned cache directory to avoid stale copies
+      const cacheBase = getCacheDir();
+      const templatesDir = path.join(cacheBase, 'claude-templates', BUILD_VERSION);
+      
+      // Create cache directory if it doesn't exist
+      if (!fsSync.existsSync(templatesDir)) {
+        fsSync.mkdirSync(templatesDir, { recursive: true });
+      }
+      
+      // Write templates to cache (idempotent - only writes if changed)
+      for (const [filename, content] of Object.entries(templates)) {
+        const filePath = path.join(templatesDir, filename);
+        
+        // Check if we need to write the file
+        let needsWrite = true;
+        try {
+          if (fsSync.existsSync(filePath)) {
+            const existing = fsSync.readFileSync(filePath, 'utf8');
+            needsWrite = existing !== content;
+          }
+        } catch {
+          needsWrite = true;
+        }
+        
+        if (needsWrite) {
+          fsSync.writeFileSync(filePath, content, 'utf8');
+        }
+      }
+      
+      return templatesDir;
+    } catch (error) {
+      // If cache write fails, try temp directory as fallback
+      try {
+        const tempDir = path.join(os.tmpdir(), 'promptcode', 'claude-templates', BUILD_VERSION);
+        if (!fsSync.existsSync(tempDir)) {
+          fsSync.mkdirSync(tempDir, { recursive: true });
+          
+          const templates = getEmbeddedTemplates();
+          for (const [filename, content] of Object.entries(templates)) {
+            fsSync.writeFileSync(path.join(tempDir, filename), content, 'utf8');
+          }
+        }
+        return tempDir;
+      } catch {
+        // Continue to filesystem fallbacks
+      }
+    }
   }
   
-  // For development mode, use __dirname relative path
-  // This will be resolved at compile time
+  // 2) Development/local fallback - check relative to __dirname
   const devPath = path.join(__dirname, '..', 'claude-templates');
   if (fsSync.existsSync(devPath)) {
     return devPath;
   }
   
-  // Fallback: check if we're running from packages/cli/dist
+  // 3) Check if running from packages/cli/dist (for local testing)
   const distPath = path.join(process.cwd(), 'packages', 'cli', 'dist', 'claude-templates');
   if (fsSync.existsSync(distPath)) {
     return distPath;
+  }
+  
+  // 4) Last resort - check source directory for development
+  const srcPath = path.join(__dirname, '..', '..', 'src', 'claude-templates');
+  if (fsSync.existsSync(srcPath)) {
+    return srcPath;
   }
   
   throw new Error('Claude templates directory not found. Please rebuild the CLI.');
