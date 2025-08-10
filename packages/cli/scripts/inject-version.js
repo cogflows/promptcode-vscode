@@ -16,10 +16,19 @@ try {
 } catch (error) {
   // Fallback: read version directly from package.json
   const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, '../package.json'), 'utf8'));
-  const gitHash = execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim();
-  const date = new Date().toISOString().split('T')[0].replace(/-/g, '');
-  version = `${packageJson.version}-dev.${date}.${gitHash}`;
-  console.warn('Warning: resolveVersion.js not found, using fallback version generation');
+  
+  // For production builds, use clean version without dev suffix
+  if (process.env.PROD_BUILD === '1') {
+    version = packageJson.version;
+  } else {
+    const gitHash = execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim();
+    const date = new Date().toISOString().split('T')[0].replace(/-/g, '');
+    version = `${packageJson.version}-dev.${date}.${gitHash}`;
+  }
+  
+  if (!process.env.PROD_BUILD) {
+    console.warn('Warning: resolveVersion.js not found, using fallback version generation');
+  }
 }
 
 // Create version.ts file
