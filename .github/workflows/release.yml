@@ -167,7 +167,7 @@ jobs:
             4. Run: `promptcode --help`
 
             ### Features
-            - ✨ **Self-updating**: Run `promptcode self-update` to get the latest version
+            - ✨ **Auto-updating**: Run `promptcode update` to get the latest version
             - 🤖 **Claude Code Integration**: Auto-detects and configures for Claude projects
             - 🗑️ **Clean uninstall**: Run `promptcode uninstall` to remove completely
 
