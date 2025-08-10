@@ -101,6 +101,19 @@ describe('CLI argument parsing', () => {
     expect([0, 1]).toContain(result.exitCode);
   });
   
+  it('should handle unknown commands with error', async () => {
+    const result = await runCLI(['unknowncommand'], { cwd: fixture.dir });
+    
+    // Should exit with error code 1
+    expect(result.exitCode).toBe(1);
+    
+    // Should show some error output (not checking exact text to avoid brittleness)
+    const output = result.stdout + result.stderr;
+    expect(output.length).toBeGreaterThan(0);
+    // Just verify it mentions the unknown command somehow
+    expect(output.toLowerCase()).toContain('unknowncommand');
+  });
+  
   it('should handle traditional command syntax', async () => {
     createTestFiles(fixture.dir, {
       'src/index.ts': 'console.log("Test");'
