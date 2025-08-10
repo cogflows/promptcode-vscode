@@ -102,22 +102,10 @@ promptcode stats                         # Whole project
 promptcode stats -p backend              # Specific preset
 ```
 
-**Diff** - Apply AI-generated changes:
+**Cache** - Manage token cache:
 ```bash
-promptcode diff response.md --preview    # Preview changes
-promptcode diff response.md --apply      # Apply changes
-```
-
-**Extract** - Extract code from AI responses:
-```bash
-promptcode extract response.md           # List code blocks
-promptcode extract response.md --output-dir ./generated
-```
-
-**Validate** - Check generated code:
-```bash
-promptcode validate generated.ts         # Check for issues
-promptcode validate response.md --fix    # Auto-fix
+promptcode cache clear                   # Clear cache
+promptcode cache stats                   # Show cache statistics
 ```
 
 ## Presets
@@ -192,18 +180,16 @@ promptcode preset --create old-components
 # Get suggestions
 promptcode generate -p old-components -t refactor | your-ai-tool
 
-# Apply changes
-promptcode diff suggestions.md --preview
-promptcode diff suggestions.md --apply
+# Review and apply suggestions using your IDE or VCS
 ```
 
 ## Tips
 
 1. **Use presets** for different parts of your codebase
 2. **Check token counts** with `stats` before generating
-3. **Always preview** before applying diffs
-4. **Stream responses** for long expert consultations
-5. **Save outputs** to `.promptcode/outputs/` for reference
+3. **Stream responses** for long expert consultations
+4. **Save outputs** to `.promptcode/outputs/` for reference
+5. **Clear cache** occasionally to ensure accurate token counts
 
 ## Troubleshooting
 

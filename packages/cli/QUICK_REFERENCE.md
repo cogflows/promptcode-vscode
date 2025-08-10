@@ -30,31 +30,12 @@ promptcode generate -t code-review
 promptcode generate --json -o prompt.json
 ```
 
-### 3. Apply AI Changes
+### 3. Working with AI Responses
 ```bash
-# After generating code, preview changes
-promptcode diff ai-response.md --preview
-
-# Apply the changes
-promptcode diff ai-response.md --apply
-```
-
-### 4. Extract Code from Responses
-```bash
-# List code blocks in response
-promptcode extract conversation.md
-
-# Save specific language code
-promptcode extract response.md --lang typescript --save-dir ./generated
-```
-
-### 5. Validate Generated Code
-```bash
-# Check for common issues
-promptcode validate generated-code.ts
-
-# Auto-fix issues
-promptcode validate response.md --fix
+# After generating code:
+# - Use your IDE's diff tools to review changes
+# - Ask your AI tool to save code blocks directly to files
+# - Use your project's linter and test suite to validate code
 ```
 
 ## Command Cheat Sheet
@@ -62,13 +43,9 @@ promptcode validate response.md --fix
 | Command | Purpose | Key Options |
 |---------|---------|-------------|
 | `generate` | Create AI prompts | `-f` patterns, `-t` template, `--json` |
-| `context add` | Add files to context | Glob patterns supported |
-| `context list` | Show current context | - |
-| `context save` | Save named context | `--save <name>` |
-| `diff` | Compare/apply changes | `--preview`, `--apply` |
-| `extract` | Get code from responses | `--lang`, `--save-dir` |
-| `validate` | Check code quality | `--fix`, `--rules` |
-| `watch` | Monitor file changes | `-o` output, `--debounce` |
+| `preset` | Manage file presets | `--create`, `--list`, `--info` |
+| `expert` | Ask AI expert | `--model`, `--stream`, `--preset` |
+| `cache` | Manage token cache | `clear`, `stats` |
 | `stats` | Project token info | Shows breakdown by file type |
 
 ## File Patterns
@@ -106,19 +83,18 @@ promptcode generate -f "src/api/*.ts" "src/utils/logger.ts" -o debug-context.md
 
 ### Applying Fixes
 ```bash
-# AI generates fixes in response.md
-promptcode extract response.md --save-dir ./fixes
-promptcode diff response.md --preview
-promptcode diff response.md --apply
+# Ask AI to generate fixes with specific file patterns
+promptcode expert "Fix the authentication issues" -f "src/auth/**/*.ts"
+# Review changes in your IDE and apply using version control
 ```
 
 ## Tips
 
-1. Use `context` commands to maintain state across AI conversations
-2. Always `--preview` before `--apply` when using diff
-3. Use `--json` output for programmatic processing
-4. Create custom templates in `~/.config/promptcode/prompts/`
-5. Use `stats` to check if context fits in token limits
+1. Use presets to maintain consistent file patterns
+2. Use `--json` output for programmatic processing
+3. Create custom templates in `~/.config/promptcode/prompts/`
+4. Use `stats` to check if context fits in token limits
+5. Clear cache with `cache clear` if token counts seem incorrect
 
 ## Getting Help
 

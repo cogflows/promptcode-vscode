@@ -123,9 +123,9 @@ Common Workflows:
      $ export OPENAI_API_KEY=sk-...
      $ promptcode expert "Explain the auth flow" --preset auth
   
-  3. Apply AI changes:
-     $ promptcode diff response.md --preview
-     $ promptcode diff response.md --apply
+  3. Create and manage presets:
+     $ promptcode preset create api-endpoints
+     $ promptcode preset info api-endpoints
 
 For detailed help: promptcode <command> --help`);
 
@@ -390,93 +390,9 @@ program
     }
   });
 
-// Diff command - compare prompt output with actual file changes
-program
-  .command('diff <prompt-file>')
-  .description('Compare AI-suggested changes with actual files')
-  .addHelpText('after', `
-This command extracts code blocks from AI responses and shows diffs.
-
-Examples:
-  $ promptcode diff ai-response.md                # Show diff summary
-  $ promptcode diff ai-response.md --preview      # Show full diff
-  $ promptcode diff ai-response.json --apply      # Apply changes
-
-Code blocks should include filename in header or first comment:
-  \`\`\`typescript // src/index.ts
-  or
-  \`\`\`ts
-  // filename: src/index.ts`)
-  .option('--path <dir>', 'project root directory', process.cwd())
-  .option('--apply', 'apply the changes to files')
-  .option('--preview', 'show preview of changes without applying')
-  .option('--json', 'output diff as JSON for programmatic use')
-  .action(async (promptFile, options) => {
-    const { diffCommand } = await import('./commands/diff');
-    await diffCommand(promptFile, options);
-  });
-
-
-// Watch command - monitor files and regenerate prompt on changes
-program
-  .command('watch')
-  .description('Watch files and regenerate prompt on changes')
-  .addHelpText('after', `
-Examples:
-  $ promptcode watch -f "src/**/*.ts" -o context.md
-  $ promptcode watch -t code-review --debounce 2000`)
-  .option('--path <dir>', 'project root directory', process.cwd())
-  .option('-f, --files <patterns...>', 'file glob patterns to watch')
-  .option('-o, --out <file>', 'output file to update')
-  .option('-t, --template <name>', 'template to use')
-  .option('--debounce <ms>', 'debounce time in milliseconds', '1000')
-  .action(async (options) => {
-    const { watchCommand } = await import('./commands/watch');
-    await watchCommand(options);
-  });
-
-// Validate command - check if generated code matches constraints
-program
-  .command('validate')
-  .description('Validate AI-generated code against security and quality rules')
-  .argument('<file>', 'file containing AI-generated code')
-  .addHelpText('after', `
-Built-in checks:
-  - No console.log statements
-  - No debugger statements
-  - No exposed API keys/secrets
-  - No private keys
-  - TODO comment detection
-
-Examples:
-  $ promptcode validate response.md
-  $ promptcode validate code.ts --fix
-  $ promptcode validate response.md --rules .promptcode/rules.json`)
-  .option('--rules <file>', 'custom validation rules file')
-  .option('--fix', 'attempt to auto-fix issues')
-  .action(async (file, options) => {
-    const { validateCommand } = await import('./commands/validate');
-    await validateCommand(file, options);
-  });
-
-// Extract command - extract code blocks from AI responses
-program
-  .command('extract')
-  .description('Extract code blocks from AI response files')
-  .argument('<response-file>', 'markdown/text file with code blocks')
-  .addHelpText('after', `
-Examples:
-  $ promptcode extract response.md                         # List code blocks
-  $ promptcode extract response.md --lang typescript       # Filter by language
-  $ promptcode extract response.md --output-dir ./generated  # Save to files
-  $ promptcode extract response.md --stdout > code.ts      # Output to stdout`)
-  .option('--lang <language>', 'filter by language (e.g., typescript, python)')
-  .option('--output-dir <dir>', 'directory to save extracted files')
-  .option('--stdout', 'output to stdout instead of files')
-  .action(async (responseFile, options) => {
-    const { extractCommand } = await import('./commands/extract');
-    await extractCommand(responseFile, options);
-  });
+// Removed commands: diff, watch, validate, extract
+// These were rarely used and added unnecessary complexity.
+// Core functionality is focused on: generate, expert, preset, cc
 
 // History command - view and manage command history
 program
@@ -546,8 +462,7 @@ if (args[0] && args[0].startsWith('--')) {
   const possibleCommand = args[0].substring(2);
   const knownCommandNames = [
     'generate', 'cache', 'templates', 'list-templates', 'preset',
-    'expert', 'config', 'cc', 'stats', 'diff', 'watch', 'validate',
-    'extract', 'history', 'update', 'uninstall'
+    'expert', 'config', 'cc', 'stats', 'history', 'update', 'uninstall'
   ];
   
   if (knownCommandNames.includes(possibleCommand)) {
@@ -560,14 +475,36 @@ if (args[0] && args[0].startsWith('--')) {
 
 const knownCommands = [
   'generate', 'cache', 'templates', 'list-templates', 'preset', 
-  'expert', 'config', 'cc', 'stats', 'diff', 'watch', 'validate', 
-  'extract', 'history', 'update', 'uninstall',
+  'expert', 'config', 'cc', 'stats', 'history', 'update', 'uninstall',
   '--help', '-h', '--version', '-V', '--detailed'
 ];
 
 // Check if first arg looks like a command (starts with letters, not a path)
 const firstArg = args[0];
 const looksLikeCommand = firstArg && /^[a-z]+$/i.test(firstArg) && !firstArg.includes('/') && !firstArg.includes('.');
+
+// Check for removed commands and provide helpful migration messages
+const REMOVED_COMMANDS = new Set(['diff', 'watch', 'validate', 'extract']);
+if (looksLikeCommand && REMOVED_COMMANDS.has(firstArg)) {
+  console.error(chalk.red(`The '${firstArg}' command was removed in v0.3.x to simplify the CLI.`));
+  console.error(chalk.yellow('\nSuggested alternatives:'));
+  
+  if (firstArg === 'diff') {
+    console.error(chalk.gray('  • Use your VCS (git diff) to preview/apply changes'));
+    console.error(chalk.gray('  • Use your editor\'s diff tools'));
+  } else if (firstArg === 'extract') {
+    console.error(chalk.gray('  • Ask your AI tool to save code blocks directly to files'));
+    console.error(chalk.gray('  • Use your editor\'s code block extraction features'));
+  } else if (firstArg === 'validate') {
+    console.error(chalk.gray('  • Use your project\'s linter (eslint, prettier, etc.)'));
+    console.error(chalk.gray('  • Run your test suite to validate code'));
+  } else if (firstArg === 'watch') {
+    console.error(chalk.gray('  • Use your editor\'s file watcher'));
+    console.error(chalk.gray('  • Use native tools like fswatch or inotify'));
+  }
+  
+  process.exit(2);
+}
 
 // If it looks like a command but isn't known, show error
 if (looksLikeCommand && !knownCommands.includes(firstArg)) {
