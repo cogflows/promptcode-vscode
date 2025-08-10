@@ -25,15 +25,15 @@ NC='\033[0m' # No Color
 
 # Helper functions
 print_info() {
-  echo -e "${BLUE}[INFO]${NC} $1"
+  echo -e "${BLUE}[INFO]${NC} $1" >&2
 }
 
 print_success() {
-  echo -e "${GREEN}[SUCCESS]${NC} $1"
+  echo -e "${GREEN}[SUCCESS]${NC} $1" >&2
 }
 
 print_warning() {
-  echo -e "${YELLOW}[WARNING]${NC} $1"
+  echo -e "${YELLOW}[WARNING]${NC} $1" >&2
 }
 
 print_error() {
@@ -104,13 +104,24 @@ safe_read_char() {
 detect_platform() {
   local os arch
 
+  # Block Git Bash/MSYS/Cygwin on Windows
+  case "$(uname -s)" in
+    MINGW*|CYGWIN*|MSYS*)
+      print_error "Windows shell detected. Please use PowerShell to install:\n  irm https://raw.githubusercontent.com/cogflows/promptcode-vscode/main/packages/cli/scripts/install.ps1 | iex"
+      ;;
+  esac
+
   # Detect OS
   case "$(uname -s)" in
     Linux*)  os="linux" ;;
     Darwin*) os="darwin" ;;
-    MINGW*|CYGWIN*|MSYS*) os="windows" ;;
     *) print_error "Unsupported operating system: $(uname -s)" ;;
   esac
+
+  # WSL detection
+  if [[ "$os" == "linux" ]] && grep -qEi "(microsoft|wsl)" /proc/version 2>/dev/null; then
+    print_info "WSL detected - installing Linux binary"
+  fi
 
   # Detect architecture
   case "$(uname -m)" in
@@ -190,28 +201,42 @@ download_binary() {
     # Extract just the hash from the checksum file (first field)
     local expected_sum=$(awk '{print $1}' "${temp_file}.sha256.orig")
     
-    # Verify checksum
+    # Verify checksum - try multiple commands for cross-platform compatibility
+    local checksum_verified=false
+    local actual_sum=""
+    
+    # Try sha256sum first (Linux standard)
     if command -v sha256sum >/dev/null 2>&1; then
-      # Create a checksum file with the correct temp filename for sha256sum -c
-      echo "${expected_sum}  $(basename "$temp_file")" > "${temp_file}.sha256"
-      if ! (cd "$(dirname "$temp_file")" && sha256sum -c "$(basename "${temp_file}.sha256")") >/dev/null 2>&1; then
-        rm -f "$temp_file" "${temp_file}.sha256" "${temp_file}.sha256.orig"
-        print_error "Checksum verification failed - file may be corrupted or tampered"
+      actual_sum=$(sha256sum "$temp_file" 2>/dev/null | awk '{print $1}')
+      if [ "$expected_sum" = "$actual_sum" ]; then
+        checksum_verified=true
       fi
-      rm -f "${temp_file}.sha256"
+    # Try shasum (macOS standard)
     elif command -v shasum >/dev/null 2>&1; then
-      local actual_sum=$(shasum -a 256 "$temp_file" | awk '{print $1}')
-      if [ "$expected_sum" != "$actual_sum" ]; then
-        rm -f "$temp_file" "${temp_file}.sha256.orig"
-        print_error "Checksum verification failed - file may be corrupted or tampered"
+      actual_sum=$(shasum -a 256 "$temp_file" 2>/dev/null | awk '{print $1}')
+      if [ "$expected_sum" = "$actual_sum" ]; then
+        checksum_verified=true
+      fi
+    # Try openssl as fallback
+    elif command -v openssl >/dev/null 2>&1; then
+      actual_sum=$(openssl dgst -sha256 "$temp_file" 2>/dev/null | awk '{print $NF}')
+      if [ "$expected_sum" = "$actual_sum" ]; then
+        checksum_verified=true
       fi
     else
-      print_warning "Cannot verify checksum - sha256sum/shasum not found"
+      rm -f "$temp_file" "${temp_file}.sha256.orig"
+      print_error "Cannot verify checksum - no SHA256 tool found (sha256sum/shasum/openssl). Installation aborted."
     fi
+    
+    if [ "$checksum_verified" = false ] && [ -n "$actual_sum" ]; then
+      rm -f "$temp_file" "${temp_file}.sha256.orig"
+      print_error "Checksum verification failed - expected: $expected_sum, got: $actual_sum"
+    fi
+    
     rm -f "${temp_file}.sha256.orig"
   else
-    print_warning "Checksum file not available - proceeding without verification"
-    print_warning "This is less secure. Consider updating to a newer release."
+    rm -f "$temp_file"
+    print_error "Checksum file not available. Installation aborted for security."
   fi
 
   echo "$temp_file"
@@ -225,8 +250,13 @@ install_binary() {
   # Create installation directory
   mkdir -p "$INSTALL_DIR"
 
-  # Install with proper permissions
-  install -m 755 "$binary_path" "$target_path"
+  # Install with proper permissions (fallback to cp if install unavailable)
+  if command -v install >/dev/null 2>&1; then
+    install -m 755 "$binary_path" "$target_path"
+  else
+    cp "$binary_path" "$target_path"
+    chmod 755 "$target_path"
+  fi
   rm -f "$binary_path"
 
   print_success "${CLI_NAME} installed to ${target_path}"
