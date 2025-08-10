@@ -538,7 +538,26 @@ program
 
 // Handle smart routing for zero-friction usage
 // Check if we should use the default command handler
-const args = process.argv.slice(2);
+let args = process.argv.slice(2);
+
+// Handle --command syntax by converting to command syntax BEFORE any parsing
+// This allows commands to work with -- prefix (e.g., --cc becomes cc)
+if (args[0] && args[0].startsWith('--')) {
+  const possibleCommand = args[0].substring(2);
+  const knownCommandNames = [
+    'generate', 'cache', 'templates', 'list-templates', 'preset',
+    'expert', 'config', 'cc', 'stats', 'diff', 'watch', 'validate',
+    'extract', 'history', 'update', 'uninstall'
+  ];
+  
+  if (knownCommandNames.includes(possibleCommand)) {
+    // Convert --command to command
+    args[0] = possibleCommand;
+    // Update process.argv so Commander.js sees the corrected version
+    process.argv[2] = possibleCommand;
+  }
+}
+
 const knownCommands = [
   'generate', 'cache', 'templates', 'list-templates', 'preset', 
   'expert', 'config', 'cc', 'stats', 'diff', 'watch', 'validate', 
@@ -571,6 +590,7 @@ if (args.includes('--update')) {
   process.exit(1);
 }
 
+// After converting --command to command, check if we have a known subcommand
 const hasSubcommand = args.length > 0 && knownCommands.includes(args[0]);
 
 if (!hasSubcommand && args.length > 0) {
