@@ -122,6 +122,13 @@ export class AIProvider {
     const config = MODELS[modelKey];
     if (!config || !config.supportsWebSearch) {return undefined;}
 
+    // Check if the provider is initialized before trying to use its tools
+    const providerInstance = this.providers[config.provider];
+    if (!providerInstance) {
+      // Provider not initialized (no API key), can't use web search tools
+      return undefined;
+    }
+
     switch (config.provider) {
       case 'openai':
         // OpenAI requires using the responses API for web search

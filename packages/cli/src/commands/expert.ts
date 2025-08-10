@@ -132,6 +132,32 @@ export async function expertCommand(question: string | undefined, options: Exper
     console.log(chalk.gray('💡 In Claude Code: AI agents will ask for approval before expensive operations'));
   }
   
+  // Early validation: Check if the selected model is available
+  const modelKey = options.model || DEFAULT_MODEL;
+  const modelConfig = MODELS[modelKey];
+  
+  if (!modelConfig) {
+    const available = getAvailableModels();
+    console.error(chalk.red(`Unknown model: ${modelKey}. Available models: ${available.join(', ')}`));
+    process.exit(1);
+  }
+  
+  // Check if API key is configured for the provider
+  const availableModels = getAvailableModels();
+  if (!availableModels.includes(modelKey)) {
+    const envVars = {
+      openai: 'OPENAI_API_KEY or OPENAI_KEY',
+      anthropic: 'ANTHROPIC_API_KEY or CLAUDE_API_KEY',
+      google: 'GOOGLE_API_KEY, GOOGLE_CLOUD_API_KEY, or GEMINI_API_KEY',
+      xai: 'XAI_API_KEY or GROK_API_KEY'
+    };
+    console.error(chalk.red(`\n❌ API key not configured for ${modelConfig.provider}.`));
+    console.error(chalk.yellow(`\nTo use ${modelConfig.name}, set the environment variable:`));
+    console.error(chalk.gray(`  export ${envVars[modelConfig.provider as keyof typeof envVars]}=<your-key>`));
+    console.error(chalk.gray(`\nOr use a different model with --model flag. Run 'promptcode expert --models' to see available options.`));
+    process.exit(1);
+  }
+  
   const spin = !options.stream ? spinner() : null;
   if (spin) {spin.start('Preparing context...');}
   
@@ -217,18 +243,7 @@ export async function expertCommand(question: string | undefined, options: Exper
       includeFileContents: true
     });
     
-    // Select model
-    const modelKey = options.model || DEFAULT_MODEL;
-    const modelConfig = MODELS[modelKey];
-    
-    if (!modelConfig) {
-      const available = getAvailableModels();
-      if (spin) {
-        spin.fail(`Unknown model: ${modelKey}. Available models: ${available.join(', ')}`);
-        spin.stop(); // Ensure cleanup
-      }
-      return;
-    }
+    // Model already validated earlier, just use it
     
     /* ──────────────────────────────────────────────────────────
      *  Token-limit enforcement
