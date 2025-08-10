@@ -227,7 +227,7 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
   } catch (error) {
     spin.fail(chalk.red(`Error: ${(error as Error).message}`));
     spin.stop(); // Ensure cleanup
-    if (!options.json) console.error(chalk.red(`Error: ${(error as Error).message}`));
+    if (!options.json) {console.error(chalk.red(`Error: ${(error as Error).message}`));}
     process.exit(1);
   }
 }

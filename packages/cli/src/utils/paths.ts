@@ -43,7 +43,7 @@ export function findPromptcodeFolder(startPath: string): string | null {
     }
     
     const parentPath = path.dirname(currentPath);
-    if (parentPath === currentPath) break; // Reached root
+    if (parentPath === currentPath) {break;} // Reached root
     currentPath = parentPath;
   }
   

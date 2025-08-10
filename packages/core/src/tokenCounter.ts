@@ -117,7 +117,7 @@ export function initializeTokenCounter(cacheDir: string, version?: string): void
  * Load cache from disk
  */
 function loadDiskCache(): void {
-  if (!diskCachePath) return;
+  if (!diskCachePath) {return;}
   
   try {
     if (fs.existsSync(diskCachePath)) {
@@ -144,7 +144,7 @@ function loadDiskCache(): void {
  * Save cache to disk (debounced)
  */
 function scheduleCacheSave(): void {
-  if (!diskCachePath) return;
+  if (!diskCachePath) {return;}
   
   // Clear existing timer
   if (saveCacheTimer) {
@@ -161,7 +161,7 @@ function scheduleCacheSave(): void {
  * Immediately save cache to disk
  */
 export function saveCacheToDisk(): void {
-  if (!diskCachePath) return;
+  if (!diskCachePath) {return;}
   
   try {
     const entries: Record<string, TokenCacheEntry> = {};

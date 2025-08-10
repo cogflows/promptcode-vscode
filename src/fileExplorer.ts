@@ -425,7 +425,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
       let currentPath = matchPath;
       while (currentPath !== path.dirname(currentPath)) { // Loop up towards the root
         const parentPath = path.dirname(currentPath);
-        if (parentPath === currentPath) break; // Stop at filesystem root
+        if (parentPath === currentPath) {break;} // Stop at filesystem root
 
         this.includedPaths.add(parentPath); // Add ancestor
 
@@ -1146,7 +1146,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
                 return true; // Expand if the directory or an ancestor matches
             }
              const parentPath = path.dirname(currentPath);
-             if (parentPath === currentPath) break;
+             if (parentPath === currentPath) {break;}
              currentPath = parentPath;
          }
          return false;

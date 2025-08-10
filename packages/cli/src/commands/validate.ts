@@ -116,8 +116,8 @@ export async function validateCommand(file: string, options: ValidateOptions) {
       console.log(`${icon} ${color(rule.name)}: ${rule.message}`);
       console.log(chalk.gray(`   Found ${matches.length} occurrence(s)`));
       
-      if (rule.severity === 'error') errors += matches.length;
-      else warnings += matches.length;
+      if (rule.severity === 'error') {errors += matches.length;}
+      else {warnings += matches.length;}
       
       // Show first few matches
       const showMatches = matches.slice(0, 3);
@@ -134,8 +134,8 @@ export async function validateCommand(file: string, options: ValidateOptions) {
     
     // Summary
     console.log(chalk.bold('Summary:'));
-    if (errors > 0) console.log(chalk.red(`  ${errors} error(s)`));
-    if (warnings > 0) console.log(chalk.yellow(`  ${warnings} warning(s)`));
+    if (errors > 0) {console.log(chalk.red(`  ${errors} error(s)`));}
+    if (warnings > 0) {console.log(chalk.yellow(`  ${warnings} warning(s)`));}
     
     // Apply fixes if requested
     if (options.fix && fixedContent !== contentToValidate) {

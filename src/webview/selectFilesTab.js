@@ -27,7 +27,7 @@ if (typeof window !== 'undefined') {
                 // Helper Functions
                 // ----------------------------------------------------------
                 function escapeHtml(unsafe) {
-                    if (!unsafe) return '';
+                    if (!unsafe) {return '';}
                     return unsafe
                          .replace(/&/g, "&amp;")
                          .replace(/</g, "&lt;")
@@ -146,7 +146,7 @@ if (typeof window !== 'undefined') {
 
                 // Update the clear button visibility for searching
                 function updateClearButtonVisibility() {
-                    if (!searchInput) return;
+                    if (!searchInput) {return;}
                     if (searchInput.value) {
                         clearSearchBtn.style.display = 'block';
                     } else {
@@ -572,8 +572,8 @@ if (typeof window !== 'undefined') {
                         }
                         // Show the modal
                         modalOverlay.style.display = 'flex';
-                        if (pasteTextArea) pasteTextArea.value = ''; // Clear textarea
-                        if (pasteTextArea) pasteTextArea.focus();
+                        if (pasteTextArea) {pasteTextArea.value = '';} // Clear textarea
+                        if (pasteTextArea) {pasteTextArea.focus();}
                     });
                 } else {
                     console.warn('Load File List button or modal overlay not found.');
@@ -722,7 +722,7 @@ if (typeof window !== 'undefined') {
                     let currentPresetName = null;
 
                     function populatePresetPicker(presets) {
-                        if (!presets) return;
+                        if (!presets) {return;}
                         // Create the "No preset selected" option as the first option
                         let options = '<option value="none">No preset selected</option>';
                         // Add preset options

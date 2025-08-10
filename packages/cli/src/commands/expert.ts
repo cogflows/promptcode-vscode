@@ -112,7 +112,7 @@ export async function expertCommand(question: string | undefined, options: Exper
   }
   
   const spin = !options.stream ? spinner() : null;
-  if (spin) spin.start('Preparing context...');
+  if (spin) {spin.start('Preparing context...');}
   
   try {
     // Initialize AI provider

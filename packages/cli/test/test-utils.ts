@@ -110,7 +110,7 @@ export async function runCLI(
     let resolved = false;
     
     const handleExit = (code: number | null) => {
-      if (resolved || timedOut) return;
+      if (resolved || timedOut) {return;}
       resolved = true;
       clearTimeout(timer);
       resolve({

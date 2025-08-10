@@ -57,8 +57,8 @@ function isNewerVersion(latest: string, current: string): boolean {
       const latestPart = latestParts[i] || 0;
       const currentPart = currentParts[i] || 0;
       
-      if (latestPart > currentPart) return true;
-      if (latestPart < currentPart) return false;
+      if (latestPart > currentPart) {return true;}
+      if (latestPart < currentPart) {return false;}
     }
     
     return false;

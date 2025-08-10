@@ -110,13 +110,13 @@ export async function getPatternsFromOptions(options: { list?: string; files?: s
 export async function handlePresetSave(name: string, patterns: string[], projectPath: string, isJson?: boolean): Promise<void> {
   try {
     await savePreset(name, patterns, projectPath, { overwrite: process.stdout.isTTY });
-    if (!isJson) console.log(chalk.green(`✓ Saved file patterns to preset: ${name}`));
+    if (!isJson) {console.log(chalk.green(`✓ Saved file patterns to preset: ${name}`));}
   } catch (error) {
     const presetPath = path.join(projectPath, '.promptcode', 'presets', `${name}.patterns`);
     if (!isJson && fs.existsSync(presetPath)) {
       console.log(chalk.yellow(`⚠️  Overwriting existing preset: ${name}`));
       await savePreset(name, patterns, projectPath, { overwrite: true });
-      if (!isJson) console.log(chalk.green(`✓ Saved file patterns to preset: ${name}`));
+      if (!isJson) {console.log(chalk.green(`✓ Saved file patterns to preset: ${name}`));}
     } else {
       throw error;
     }

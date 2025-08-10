@@ -973,7 +973,7 @@ export function activate(context: vscode.ExtensionContext) {
 			// Function to check if a file is in the specified directory relative to its workspace
 			const isFileInDirectory = (absoluteFilePath: string, targetRelativeDirPath: string, targetWorkspaceRoot?: string): boolean => {
                  const workspaceFolder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(absoluteFilePath));
-                 if (!workspaceFolder) return false; // Not in any workspace
+                 if (!workspaceFolder) {return false;} // Not in any workspace
 
                  // If a specific target workspace is defined, only consider files from that workspace
                  if (targetWorkspaceRoot && workspaceFolder.uri.fsPath !== targetWorkspaceRoot) {
@@ -1511,8 +1511,8 @@ async function generatePrompt(
                 // Sort directories before files, then alphabetically
                 const aIsDir = typeof node[a] === 'object';
                 const bIsDir = typeof node[b] === 'object';
-                if (aIsDir && !bIsDir) return -1;
-                if (!aIsDir && bIsDir) return 1;
+                if (aIsDir && !bIsDir) {return -1;}
+                if (!aIsDir && bIsDir) {return 1;}
                 return a.localeCompare(b);
             });
 
@@ -1642,7 +1642,7 @@ async function getSelectedFilesWithContent(): Promise<SelectedFile[]> {
 		.map(([filePath, _]) => filePath)
 		.filter(filePath => {
 			try {
-                if (!fs.existsSync(filePath)) return false; // Ensure file exists
+                if (!fs.existsSync(filePath)) {return false;} // Ensure file exists
 				return fs.statSync(filePath).isFile();
 			} catch (error) {
                 console.warn(`Error stating file, skipping: ${filePath}`, error);

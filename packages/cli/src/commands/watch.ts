@@ -25,7 +25,7 @@ export async function watchCommand(options: WatchOptions) {
   let isGenerating = false;
   
   const regeneratePrompt = async () => {
-    if (isGenerating) return;
+    if (isGenerating) {return;}
     isGenerating = true;
     
     const spinner = chalk.cyan('⟳');

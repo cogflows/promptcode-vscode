@@ -347,7 +347,7 @@
      */
     function getElementCData(parentEl, tagName) {
       const el = parentEl.getElementsByTagName(tagName)[0];
-      if (!el) return '';
+      if (!el) {return '';}
       
       // Look for CDATA section
       for (let i = 0; i < el.childNodes.length; i++) {

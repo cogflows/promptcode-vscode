@@ -36,7 +36,7 @@ const TOKEN_FIELD_MAP = {
 
 // Export for testing
 export function normalizeUsage(usage?: ProviderUsage | any): AIResponse['usage'] | undefined {
-  if (!usage) return undefined;
+  if (!usage) {return undefined;}
   
   // Helper to safely convert values to numbers
   const toNumber = (value: unknown): number => {
@@ -120,7 +120,7 @@ export class AIProvider {
 
   private getWebSearchTools(modelKey: string): Record<string, any> | undefined {
     const config = MODELS[modelKey];
-    if (!config || !config.supportsWebSearch) return undefined;
+    if (!config || !config.supportsWebSearch) {return undefined;}
 
     switch (config.provider) {
       case 'openai':
@@ -159,7 +159,7 @@ export class AIProvider {
     }
     
     const config = MODELS[modelKey];
-    if (!config) throw new Error(`Unknown model: ${modelKey}`);
+    if (!config) {throw new Error(`Unknown model: ${modelKey}`);}
 
     // Special handling for OpenAI with web search
     if (config.provider === 'openai' && useWebSearch && config.supportsWebSearch) {
@@ -371,7 +371,7 @@ export class AIProvider {
     usage: { promptTokens: number; completionTokens: number }
   ): number {
     const config = MODELS[modelKey];
-    if (!config) return 0;
+    if (!config) {return 0;}
 
     const input = (usage.promptTokens / 1_000_000) * config.pricing.input;
     const output = (usage.completionTokens / 1_000_000) * config.pricing.output;
