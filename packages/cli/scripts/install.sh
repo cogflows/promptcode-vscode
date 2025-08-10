@@ -286,7 +286,7 @@ check_path() {
     if [[ -n "$shell_config" ]]; then
       # Check if PATH export already exists (idempotent)
       if ! grep -q "# PromptCode CLI PATH" "$shell_config" 2>/dev/null; then
-        echo "Would you like to add ${INSTALL_DIR} to your PATH automatically? [Y/n]"
+        echo "Would you like to add ${INSTALL_DIR} to your PATH automatically? [Y/n]" >&2
         response=$(safe_read "" "Y")
         if [[ ! "$response" =~ ^[Nn]$ ]]; then
           if [[ "$SHELL" == */fish ]]; then
@@ -298,17 +298,17 @@ check_path() {
             echo "export PATH=\"\$PATH:${INSTALL_DIR}\"" >> "$shell_config"
           fi
           print_success "PATH updated in $shell_config"
-          echo "Please restart your shell or run: source $shell_config"
+          echo "Please restart your shell or run: source $shell_config" >&2
         else
-          echo "Add this to your shell configuration file ($shell_config):"
-          echo "  export PATH=\"\$PATH:${INSTALL_DIR}\""
+          echo "Add this to your shell configuration file ($shell_config):" >&2
+          echo "  export PATH=\"\$PATH:${INSTALL_DIR}\"" >&2
         fi
       else
         print_info "PATH entry already exists in $shell_config"
       fi
     else
-      echo "Add this to your shell configuration file:"
-      echo "  export PATH=\"\$PATH:${INSTALL_DIR}\""
+      echo "Add this to your shell configuration file:" >&2
+      echo "  export PATH=\"\$PATH:${INSTALL_DIR}\"" >&2
     fi
   fi
 }
@@ -338,13 +338,13 @@ detect_claude_code() {
   fi
 
   if [ "$claude_found" = true ]; then
-    echo ""
+    echo "" >&2
     print_info "🤖 Claude Code Integration Available!"
-    echo "Run this command to set up the integration:"
-    echo ""
-    echo "  ${CLI_NAME} cc"
-    echo ""
-    echo "This will configure cost approval hooks for AI commands."
+    echo "Run this command to set up the integration:" >&2
+    echo "" >&2
+    echo "  ${CLI_NAME} cc" >&2
+    echo "" >&2
+    echo "This will configure cost approval hooks for AI commands." >&2
   fi
 }
 
@@ -376,16 +376,18 @@ uninstall() {
   fi
 
   print_success "Uninstall complete"
-  echo ""
-  echo "Don't forget to remove ${INSTALL_DIR} from your PATH if you added it."
+  echo "" >&2
+  echo "Don't forget to remove ${INSTALL_DIR} from your PATH if you added it." >&2
 }
 
 # Main installation flow
 main() {
-  echo "╔══════════════════════════════════════╗"
-  echo "║     PromptCode CLI Installer        ║"
-  echo "╚══════════════════════════════════════╝"
-  echo ""
+  # Simple, compact banner that works in narrow terminals (35 chars wide)
+  echo "" >&2
+  echo "  ╭───────────────────────────────╮" >&2
+  echo "  │   PromptCode CLI Installer   │" >&2  
+  echo "  ╰───────────────────────────────╯" >&2
+  echo "" >&2
 
   # Handle uninstall
   if [ "${1:-}" = "--uninstall" ]; then
@@ -417,9 +419,9 @@ main() {
       # For dev versions, inform about --force option
       if [[ "$current_version" == *"-dev."* ]]; then
         print_info "Development version detected. To force update to $version:"
-        echo ""
-        echo "  ${CLI_NAME} update --force"
-        echo ""
+        echo "" >&2
+        echo "  ${CLI_NAME} update --force" >&2
+        echo "" >&2
         safe_read_char "Run this command now? [Y/n] " "Y"
         if [[ $REPLY =~ ^[Yy]$ ]] || [ -z "$REPLY" ]; then
           # Try to run update --force, but if it fails (old version), continue with direct install
@@ -436,7 +438,7 @@ main() {
         fi
       else
         print_info "Using built-in update to upgrade..."
-        echo ""
+        echo "" >&2
         "$CLI_NAME" update 2>&1
         exit 0  # Successful update
       fi
@@ -474,15 +476,15 @@ main() {
   # Detect Claude Code
   detect_claude_code
 
-  echo ""
+  echo "" >&2
   print_success "Installation complete! 🎉"
-  echo ""
-  echo "Get started with:"
-  echo "  ${CLI_NAME} --help"
-  echo ""
-  echo "Generate prompts from your code:"
-  echo "  ${CLI_NAME} generate src/**/*.ts"
-  echo ""
+  echo "" >&2
+  echo "Get started with:" >&2
+  echo "  ${CLI_NAME} --help" >&2
+  echo "" >&2
+  echo "Generate prompts from your code:" >&2
+  echo "  ${CLI_NAME} generate src/**/*.ts" >&2
+  echo "" >&2
 }
 
 # Handle errors
