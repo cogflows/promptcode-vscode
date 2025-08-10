@@ -3,7 +3,7 @@
   "name": "promptcode",
   "displayName": "promptcode",
   "description": "Generate prompt for LLM from your code",
-  "version": "0.3.4",
+  "version": "0.3.13",
   "license": "SEE LICENSE IN LICENSE",
   "repository": {
     "type": "git",
