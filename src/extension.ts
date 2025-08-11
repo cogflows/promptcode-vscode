@@ -1456,11 +1456,18 @@ async function generatePrompt(
 ): Promise<string> {
 	const startTime = performance.now();
 
-	// If files are not to be included and no instructions, return empty string
+	// Early returns for edge cases (per O3-pro recommendation)
 	if (!includeOptions.files && (!instructions || !includeOptions.instructions)) {
 		const endTime = performance.now();
 		console.log(`Prompt generation took ${endTime - startTime}ms for ${selectedFiles.length} files`);
 		return '';
+	}
+	
+	// Early return if no files selected but files are required
+	if (selectedFiles.length === 0 && includeOptions.files) {
+		const endTime = performance.now();
+		console.log(`Prompt generation took ${endTime - startTime}ms - no files selected`);
+		return includeOptions.instructions ? instructions : '';
 	}
 
 	// Convert to SelectedFile format expected by core
@@ -1484,13 +1491,22 @@ async function generatePrompt(
 	// Extension expects: <user_instructions>, <file_tree>, <files>
 	let prompt = result.prompt;
 	if (prompt) {
-		// Replace core tag names with extension's expected tag names
-		prompt = prompt.replace(/<instructions>/g, '<user_instructions>');
-		prompt = prompt.replace(/<\/instructions>/g, '</user_instructions>');
-		prompt = prompt.replace(/<file_map>/g, '<file_tree>');
-		prompt = prompt.replace(/<\/file_map>/g, '</file_tree>');
-		prompt = prompt.replace(/<file_contents>/g, '<files>');
-		prompt = prompt.replace(/<\/file_contents>/g, '</files>');
+		// Improved tag translation per O3-pro recommendation
+		// This approach is more maintainable and safer
+		const TAG_MAP = {
+			'instructions': 'user_instructions',
+			'/instructions': '/user_instructions',
+			'file_map': 'file_tree',
+			'/file_map': '/file_tree',
+			'file_contents': 'files',
+			'/file_contents': '/files'
+		} as const;
+		
+		// Replace all tags in a single pass with exact matches only
+		prompt = prompt.replace(/<(\/?)(instructions|file_map|file_contents)>/g, (match, slash, tag) => {
+			const key = `${slash}${tag}` as keyof typeof TAG_MAP;
+			return TAG_MAP[key] ? `<${TAG_MAP[key]}>` : match;
+		});
 	}
 
 	const endTime = performance.now();
