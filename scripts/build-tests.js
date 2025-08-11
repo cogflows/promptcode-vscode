@@ -10,6 +10,8 @@ const testEntryPoints = [
   'src/test/runTests.ts',
   'src/test/filePattern.test.ts',
   'src/test/generatePatternsFromSelection.test.ts',
+  'src/test/smoke.test.ts',
+  'src/test/migration.test.ts',
   // Also compile the utils that tests depend on
   'src/utils/filePattern.ts',
   'src/utils/generatePatternsFromSelection.ts'

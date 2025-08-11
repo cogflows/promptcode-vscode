@@ -17,6 +17,16 @@ import { FileListProcessor } from './fileListProcessor';
 // Import the moved type
 import type { SelectedFile } from '@promptcode/core';
 
+// Security helper to prevent path traversal attacks
+function resolveSecurePath(rootPath: string, relativePath: string): string {
+	const resolved = path.resolve(rootPath, relativePath);
+	const rootResolved = path.resolve(rootPath) + path.sep;
+	if (!resolved.startsWith(rootResolved)) {
+		throw new Error('Security Error: Path traversal attempt detected');
+	}
+	return resolved;
+}
+
 let lastGeneratedPrompt: string | null = null; // Variable to store the last generated prompt
 
 // Export a getter for the last generated prompt
@@ -99,7 +109,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 	// Initialize output channel
 	const outputChannel = vscode.window.createOutputChannel('PromptCode');
-	outputChannel.show(true);
+	// Don't show automatically - only show on error or user request
 
 	// Get the workspace folder
 	const workspaceRoot = vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0
@@ -181,7 +191,7 @@ export function activate(context: vscode.ExtensionContext) {
 	// Register select all command
 	const selectAllCommand = vscode.commands.registerCommand('promptcode.selectAll', async () => {
 		await vscode.window.withProgress({
-			location: vscode.ProgressLocation.Notification,
+			location: vscode.ProgressLocation.Window,
 			title: "Selecting all files...",
 			cancellable: false
 		}, async () => {
@@ -193,7 +203,7 @@ export function activate(context: vscode.ExtensionContext) {
 	// Register deselect all command
 	const deselectAllCommand = vscode.commands.registerCommand('promptcode.deselectAll', async () => {
 		await vscode.window.withProgress({
-			location: vscode.ProgressLocation.Notification,
+			location: vscode.ProgressLocation.Window,
 			title: "Deselecting all files...",
 			cancellable: false
 		}, async () => {
@@ -236,7 +246,7 @@ export function activate(context: vscode.ExtensionContext) {
 	const generatePromptCommand = vscode.commands.registerCommand('promptcode.generatePrompt', async () => {
 		// Generate the prompt text
 		vscode.window.withProgress({
-			location: vscode.ProgressLocation.Notification,
+			location: vscode.ProgressLocation.Window,
 			title: 'Generating Prompt',
 			cancellable: false
 		}, async (progress) => {
@@ -353,7 +363,7 @@ export function activate(context: vscode.ExtensionContext) {
 	const copyPromptDirectlyCommand = vscode.commands.registerCommand('promptcode.copyPromptDirectly', async () => {
 		// Generate the prompt text and copy to clipboard
 		vscode.window.withProgress({
-			location: vscode.ProgressLocation.Notification,
+			location: vscode.ProgressLocation.Window,
 			title: 'Generating and Copying Prompt',
 			cancellable: false
 		}, async (progress) => {
@@ -440,7 +450,7 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 
 			// Construct the full file path using the determined workspace folder
-			const fullPath = path.join(targetWorkspaceFolder.uri.fsPath, filePath);
+			const fullPath = resolveSecurePath(targetWorkspaceFolder.uri.fsPath, filePath);
 
 			// Handle different file operations
 			switch (fileOperation.toUpperCase()) {
@@ -457,6 +467,17 @@ export function activate(context: vscode.ExtensionContext) {
 					break;
 
 				case 'DELETE':
+					// Confirm deletion with user for security
+					const userChoice = await vscode.window.showWarningMessage(
+						`Are you sure you want to delete ${path.basename(fullPath)}?`,
+						{ modal: true, detail: `Full path: ${fullPath}` },
+						'Delete',
+						'Cancel'
+					);
+					if (userChoice !== 'Delete') {
+						vscode.window.showInformationMessage('Deletion cancelled');
+						return;
+					}
 					// Delete the file
 					await fs.promises.unlink(fullPath);
 					break;
@@ -687,7 +708,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 		// Show progress indicator
 		await vscode.window.withProgress({
-			location: vscode.ProgressLocation.Notification,
+			location: vscode.ProgressLocation.Window,
 			title: "Processing selected files...",
 			cancellable: false
 		}, async (progress) => {
@@ -1112,7 +1133,8 @@ export function activate(context: vscode.ExtensionContext) {
 				} else {
 					// It's a relative path, check if workspaceFolderRootPath is provided and valid
 					if (workspaceFolderRootPath && fs.existsSync(workspaceFolderRootPath)) {
-						fileUri = vscode.Uri.file(path.join(workspaceFolderRootPath, filePath));
+						const securePath = resolveSecurePath(workspaceFolderRootPath, filePath);
+						fileUri = vscode.Uri.file(securePath);
 					} else {
 						// Try to find the file in one of the workspace folders
 						let found = false;

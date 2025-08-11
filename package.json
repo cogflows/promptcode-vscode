@@ -90,7 +90,29 @@
         "promptcode.ignorePatterns": {
           "type": "string",
           "default": "",
-          "description": "Custom patterns to ignore when scanning files (one per line)"
+          "description": "[Deprecated] Use .promptcode_ignore file at workspace root instead. Custom patterns to ignore when scanning files (one per line)"
+        },
+        "promptcode.includeBuiltInTemplates": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include built-in prompt templates in the PromptCode UI"
+        },
+        "promptcode.promptFolders": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            ".promptcode/prompts",
+            ".cursor/rules",
+            ".github/copilot-instructions.md",
+            ".zed/",
+            ".windsurfrules",
+            ".clinerules",
+            ".ai-rules/",
+            "ai-docs/"
+          ],
+          "description": "Additional folders/files to scan for prompt templates"
         },
         "promptcode.enableTelemetry": {
           "type": "boolean",
