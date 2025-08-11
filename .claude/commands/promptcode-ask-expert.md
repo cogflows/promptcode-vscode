@@ -71,7 +71,7 @@ Consult an expert about: $ARGUMENTS
    ```
    
    **Ensemble Mode (Parallel Execution):**
-   - Use Task tool to run multiple models in parallel
+   - Use Task tool to run multiple models in **parallel** (multiple sub-tasks)
    - Each task runs the same consultation file with different models
    - Store each result in separate file: `/tmp/expert-{model}-{timestamp}.txt`
    - Example for 3 models (run these in PARALLEL using Task tool):
@@ -127,9 +127,6 @@ Consult an expert about: $ARGUMENTS
    - {Model1}: {unique_insight_from_model1}
    - {Model2}: {unique_insight_from_model2}
    
-   **🏆 WINNER:** {winning_model} - {clear_reason_why_this_model_won}
-   (If tie: "TIE - Both models provided equally valuable but complementary insights")
-   
    **Performance Summary:**
    - Total Cost: ${total_actual_cost}
    - Total Time: {total_time}s
@@ -137,8 +134,7 @@ Consult an expert about: $ARGUMENTS
    ```
    
    - Open synthesis in Cursor if available
-   - IMPORTANT: Always declare a clear winner (or explicitly state if it's a tie)
-   - Provide brief summary of which model performed best and why they won
+   - Provide brief summary of which model performed best and why
 
    **Error Handling:**
    - If any model fails in ensemble mode, continue with successful ones

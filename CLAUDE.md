@@ -135,144 +135,92 @@ After recent changes:
 - DO NOT make shortcuts, always use the most idiomatic and generic solution
 
 <!-- PROMPTCODE-CLI-START -->
-# PromptCode CLI
+# PromptCode CLI Integration
 
-Generate AI-ready prompts from your codebase. The CLI is designed to be AI-friendly with clear commands and outputs.
+This project has PromptCode CLI integrated for AI-assisted code analysis. The CLI provides structured access to the codebase through presets and intelligent commands.
 
-## Quick Start
+## Available Claude Commands
 
-```bash
-# Generate a prompt with specific files
-promptcode generate src/api/handler.ts src/utils/*.ts
+The following commands are available to help you work with this codebase:
 
-# Ask AI experts questions with code context
-promptcode expert "Why is this slow?" src/api/handler.ts
+- `/promptcode-preset-list` - List all available code presets
+- `/promptcode-preset-info <name>` - Show details and token count for a preset
+- `/promptcode-preset-create <description>` - Create a new preset from description
+- `/promptcode-preset-to-prompt <preset>` - Export preset to a file
+- `/promptcode-ask-expert <question>` - Consult AI expert (or ensemble of experts) with code context
 
-# Use presets for common file patterns
-promptcode preset list                    # See available presets
-promptcode preset info <name>             # Show preset details & token count
-promptcode generate -l <preset-name>      # Generate using preset
-```
-
-## Working with Presets
-
-Presets are reusable file patterns stored in `.promptcode/presets/*.patterns`:
+## Quick Examples
 
 ```bash
-# Create a new preset
-promptcode preset create api-endpoints
+# See what presets are available
+/promptcode-preset-list
 
-# Edit the preset file to add patterns
-# Then use it:
-promptcode generate -l api-endpoints
+# Get details about a specific preset
+/promptcode-preset-info auth-system
+
+# Create a preset for a feature
+/promptcode-preset-create authentication and authorization system
+
+# Ask an expert about the code
+/promptcode-ask-expert How does the authentication flow work?
 ```
 
-## Common Workflows for AI Agents
+## Direct CLI Usage
 
-### 1. Discovering Code Structure
+For simple operations, you can also use the CLI directly:
+
 ```bash
-# List all presets to understand project organization
-promptcode preset list
+# Generate a prompt from files
+promptcode generate -f "src/**/*.ts" -o analysis.txt
 
-# Inspect a preset to see what files it includes
-promptcode preset info functional-utils
+# Quick expert consultation (requires API key)
+promptcode expert "Find security issues" --preset api --yes
+
+# View preset information with JSON output
+promptcode preset info backend --json
 ```
 
-### 2. Creating Focused Presets
-When asked to analyze specific features:
-1. Create a descriptive preset: `promptcode preset create feature-name`
-2. Edit `.promptcode/presets/feature-name.patterns` with relevant patterns
-3. Use `promptcode preset info feature-name` to verify file selection
-4. Generate output: `promptcode generate -l feature-name`
+## Ensemble Experts Mode
 
-### 3. Analyzing Code
+The `/promptcode-ask-expert` command supports running multiple AI models in parallel:
+
 ```bash
-# Generate prompt with specific concern
-promptcode generate src/**/*.ts --instructions "Find performance bottlenecks"
-
-# Or use expert mode for direct AI analysis
-promptcode expert "Review this code for security issues" src/api/**/*.ts
+# Ensemble mode activates when requesting 2+ models
+/promptcode-ask-expert Compare approaches using o3 and gpt-5
+/promptcode-ask-expert Analyze with o3, gemini-2.5-pro, and sonnet-4
 ```
 
-## Tips for AI Agents
+**Features:**
 
-1. **Always check token counts** - Use `promptcode preset info` to see total tokens before generating
-2. **Be specific with patterns** - Use `src/api/*.ts` not `**/*.ts` to avoid huge contexts
-3. **Leverage existing presets** - Check `promptcode preset list` before creating new ones
-4. **Use descriptive preset names** - `auth-system` not `preset1`
-
-## Important: Cost Approval for AI Agents
-
-The `expert` command includes built-in cost protection that requires approval for expensive operations (over $0.50 or using premium models). The CLI will automatically handle this in different environments:
-
-**In Interactive Mode (Terminal):**
-- The CLI will prompt the user directly for approval
-- Shows cost breakdown and waits for yes/no response
-
-**In Non-Interactive Mode (Claude Code, CI/CD):**
-```bash
-# Without approval flags, expensive operations will be blocked:
-promptcode expert "Complex analysis" --model o3-pro
-# Output: "⚠️ Cost approval required for expensive operation (~$X.XX)"
-#         "Non-interactive environment detected."
-#         "Use --yes to proceed with approval..."
-```
-
-**AI Agent Approval Protocol:**
-1. **When you see "Cost approval required"**, STOP immediately
-2. **Inform the user**: "This operation will cost approximately $X.XX. Do you want to proceed?"
-3. **Wait for explicit user confirmation** (yes/no)
-4. **If approved**, re-run the command with `--yes` flag:
-   ```bash
-   promptcode expert "Complex analysis" --model o3-pro --yes
-   ```
-5. **If declined**, inform the user the operation was cancelled
-
-**Important Guidelines for AI Agents:**
-- **NEVER** automatically add `--yes` without explicit user consent
-- **ALWAYS** show the cost estimate before asking for approval
-- The `--yes` flag means "I have user approval for this specific operation"
-- The `--yes` flag can be used to auto-approve operations after user consent
-- Default to conservative behavior - when in doubt, ask for approval
-
-**Cost Information:**
-- Expensive models: o3-pro
-- Threshold: Operations over $0.50 require approval
-- The CLI shows detailed cost breakdowns before execution
-
-## Claude Code Integration
-
-When you run `promptcode cc`, it installs custom commands for Claude:
-- **`.claude/commands/promptcode-ask-expert.md`** - Expert consultation with file preview workflow
-- **`.claude/commands/promptcode-preset-list.md`** - List available presets
-- **`.claude/commands/promptcode-preset-info.md`** - Show preset details
-- **`.claude/commands/promptcode-preset-create.md`** - Create new presets
-- **`.claude/commands/promptcode-preset-to-prompt.md`** - Export presets to files
-
-These commands help Claude:
-1. Check available presets and select appropriate context
-2. Handle cost approval properly (never auto-approving expensive operations)
-3. Use the correct model based on your request (o3 vs o3-pro)
-4. Parse and present results effectively
-
-To use them in Claude, simply use the slash commands like `/promptcode-ask-expert [your question]`
+- Runs 2-4 models in parallel with same question
+- Synthesizes results showing consensus and unique insights
+- Compares cost, speed, and quality across models
+- Identifies best value and most comprehensive answers
 
 ## Configuration
 
-API keys must be set via environment variables:
+Set API keys via environment variables for expert consultations:
 ```bash
-export OPENAI_API_KEY=sk-...
-export ANTHROPIC_API_KEY=sk-ant-...
-export GOOGLE_API_KEY=...            # or GEMINI_API_KEY
-export XAI_API_KEY=...                # or GROK_API_KEY
+export OPENAI_API_KEY=sk-...      # For O3/O3-pro models
+export ANTHROPIC_API_KEY=sk-...   # For Claude models
+export GOOGLE_API_KEY=...         # For Gemini models
+export XAI_API_KEY=...            # For Grok models
 ```
+
+## Cost Protection
+
+The expert command has built-in cost protection:
+
+- Operations over $0.50 require explicit approval
+- Premium models (e.g., o3-pro) always require confirmation
+- Use `--yes` flag only after getting user approval
 
 <details>
 <summary>⚠️ Troubleshooting</summary>
 
 • **Command not found** – The CLI auto-installs to `~/.local/bin`. Ensure it's in PATH  
-• **Missing API key** – Set via environment variable as shown above  
-• **Context too large** – Use more specific file patterns or create focused presets
+• **Missing API key** – Set environment variables as shown above  
+• **Context too large** – Use more specific file patterns or focused presets  
 • **Preset not found** – Check `.promptcode/presets/` directory exists
 </details>
 <!-- PROMPTCODE-CLI-END -->
