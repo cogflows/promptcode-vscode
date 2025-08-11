@@ -59,7 +59,11 @@ async function listPresets(presetsDir: string, options: { json?: boolean } = {})
           patterns: lines
         });
       }
-      console.log(JSON.stringify({ presets: presetData }, null, 2));
+      console.log(JSON.stringify({ 
+        schemaVersion: 1,
+        generatedAt: new Date().toISOString(),
+        presets: presetData 
+      }, null, 2));
       return;
     }
     
@@ -84,7 +88,12 @@ async function listPresets(presetsDir: string, options: { json?: boolean } = {})
   } catch (error) {
     if ((error as any).code === 'ENOENT') {
       if (options.json) {
-        console.log(JSON.stringify({ presets: [], error: 'No presets directory found' }, null, 2));
+        console.log(JSON.stringify({ 
+        schemaVersion: 1,
+        generatedAt: new Date().toISOString(),
+        presets: [], 
+        error: 'No presets directory found' 
+      }, null, 2));
       } else {
         console.log(chalk.yellow('No presets directory found. Create one with: promptcode preset --create <name>'));
       }
@@ -143,6 +152,8 @@ async function showPresetInfo(presetName: string, projectPath: string, options: 
     if (options.json) {
       // JSON output for programmatic use
       const result = {
+        schemaVersion: 1,
+        generatedAt: new Date().toISOString(),
         name: presetName,
         path: presetPath,
         patterns: patterns,

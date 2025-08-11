@@ -4,7 +4,7 @@ import * as fsp from 'fs/promises';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getCacheDir, getConfigDir } from '../utils/paths';
-import { removeFromClaudeMd, removeExpertCommand, findClaudeFolder, findClaudeMd, hasPromptCodeSection } from '../utils/claude-integration';
+import { removeFromClaudeMd, removePromptCodeCommands, findClaudeFolder, findClaudeMd, hasPromptCodeSection, PROMPTCODE_CLAUDE_COMMANDS, LEGACY_CLAUDE_COMMANDS } from '../utils/claude-integration';
 import inquirer from 'inquirer';
 
 async function removeDirectory(dir: string, description: string): Promise<boolean> {
@@ -58,28 +58,34 @@ async function removeClaudeIntegration(projectPath: string, skipPrompts: boolean
     }
   }
   
-  // Remove expert command and .claude folder contents
+  // Remove PromptCode commands from .claude folder
   if (claudeDir) {
-    // Remove expert command
-    const expertCommandPath = path.join(claudeDir, 'commands', 'expert-consultation.md');
-    if (fs.existsSync(expertCommandPath)) {
+    // Check if any PromptCode commands exist
+    const commandsDir = path.join(claudeDir, 'commands');
+    const allCommands = [...PROMPTCODE_CLAUDE_COMMANDS, ...LEGACY_CLAUDE_COMMANDS];
+    
+    const existingCommands = allCommands.filter(cmd => 
+      fs.existsSync(path.join(commandsDir, cmd))
+    );
+    
+    if (existingCommands.length > 0) {
       let shouldRemove = skipPrompts;
       if (!skipPrompts) {
-        const { removeExpertCmd } = await inquirer.prompt([
+        const { removeCommands } = await inquirer.prompt([
           {
             type: 'confirm',
-            name: 'removeExpertCmd',
-            message: `Remove expert consultation command from .claude/commands/?`,
+            name: 'removeCommands',
+            message: `Remove ${existingCommands.length} PromptCode command(s) from .claude/commands/?`,
             default: true
           }
         ]);
-        shouldRemove = removeExpertCmd;
+        shouldRemove = removeCommands;
       }
       
       if (shouldRemove) {
-        const result = await removeExpertCommand(projectPath);
+        const result = await removePromptCodeCommands(projectPath);
         if (result) {
-          console.log(chalk.green(`✓ Removed expert consultation command`));
+          console.log(chalk.green(`✓ Removed PromptCode commands`));
         }
         removed = removed || result;
       }

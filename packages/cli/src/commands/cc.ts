@@ -4,7 +4,7 @@ import chalk from 'chalk';
 import { ensureDirWithApproval, getClaudeTemplatesDir } from '../utils/paths';
 import { spinner } from '../utils/spinner';
 import { shouldSkipConfirmation } from '../utils/environment';
-import { findClaudeFolder, findClaudeMd, removeFromClaudeMd, removeExpertCommand } from '../utils/claude-integration';
+import { findClaudeFolder, findClaudeMd, removeFromClaudeMd, removePromptCodeCommands, PROMPTCODE_CLAUDE_COMMANDS, LEGACY_CLAUDE_COMMANDS } from '../utils/claude-integration';
 
 interface CcOptions {
   path?: string;
@@ -38,9 +38,9 @@ async function updateClaudeMd(projectPath: string): Promise<void> {
     
     // Check if PromptCode section already exists
     if (existingContent.includes('<!-- PROMPTCODE-CLI-START -->')) {
-      // Replace existing section
+      // Replace existing section (non-greedy to handle multiple sections)
       const updatedContent = existingContent.replace(
-        /<!-- PROMPTCODE-CLI-START -->[\s\S]*<!-- PROMPTCODE-CLI-END -->/,
+        /<!-- PROMPTCODE-CLI-START -->[\s\S]*?<!-- PROMPTCODE-CLI-END -->/,
         templateContent.trim()
       );
       await fs.promises.writeFile(claudeMdPath, updatedContent);
@@ -79,15 +79,17 @@ async function setupClaudeCommands(projectPath: string): Promise<void> {
   // Create subdirectories (no approval needed since parent was approved)
   await fs.promises.mkdir(commandsDir, { recursive: true });
   
+  // Clean up old/legacy command files before installing new ones
+  for (const oldCmd of LEGACY_CLAUDE_COMMANDS) {
+    const oldPath = path.join(commandsDir, oldCmd);
+    if (fs.existsSync(oldPath)) {
+      await fs.promises.unlink(oldPath);
+      console.log(chalk.gray(`  Removed legacy command: ${oldCmd}`));
+    }
+  }
+  
   // List of Claude commands to install
-  const commands = [
-    'expert-consultation.md',
-    'promptcode-preset-list.md',
-    'promptcode-preset-info.md',
-    'promptcode-preset-create.md',
-    'promptcode-preset-to-prompt.md',
-    'promptcode-ask-expert.md'
-  ];
+  const commands = PROMPTCODE_CLAUDE_COMMANDS;
   
   const templatesDir = getClaudeTemplatesDir();
   let installedCount = 0;
@@ -202,9 +204,6 @@ export async function ccCommand(options: CcOptions & { detect?: boolean }): Prom
   }
   const projectPath = path.resolve(options.path || process.cwd());
   
-  // Use centralized confirmation handling
-  const skipConfirm = shouldSkipConfirmation(options);
-  
   // Handle uninstall
   if (options.uninstall) {
     console.log(chalk.bold('Removing PromptCode CLI integration...'));
@@ -216,8 +215,8 @@ export async function ccCommand(options: CcOptions & { detect?: boolean }): Prom
       removed = true;
     }
     
-    // Remove expert command
-    if (await removeExpertCommand(projectPath)) {
+    // Remove PromptCode commands
+    if (await removePromptCodeCommands(projectPath)) {
       removed = true;
     }
     
@@ -252,7 +251,7 @@ export async function ccCommand(options: CcOptions & { detect?: boolean }): Prom
     console.log(chalk.bold('\n📝 Updated files:'));
     console.log(chalk.gray(`  ${path.relative(projectPath, claudeMdPath)} - PromptCode usage instructions`));
     if (claudeDir) {
-      console.log(chalk.gray(`  ${path.relative(projectPath, path.join(claudeDir, 'commands/'))} - 6 Claude commands installed`));
+      console.log(chalk.gray(`  ${path.relative(projectPath, path.join(claudeDir, 'commands/'))} - 5 Claude commands installed`));
     }
     
     console.log(chalk.bold('\n🚀 Next steps:'));

@@ -407,6 +407,8 @@ export async function expertCommand(question: string | undefined, options: Exper
     if (options.json) {
       // JSON output for programmatic use
       const jsonResult = {
+        schemaVersion: 1,
+        generatedAt: new Date().toISOString(),
         model: modelKey,
         question: question || '',
         response: response.text,

@@ -22,7 +22,7 @@ describe('cc command', () => {
     
     // Check files were created
     assertFileExists(path.join(fixture.dir, 'CLAUDE.md'), '<!-- PROMPTCODE-CLI-START -->');
-    assertFileExists(path.join(fixture.dir, '.claude/commands/expert-consultation.md'));
+    assertFileExists(path.join(fixture.dir, '.claude/commands/promptcode-ask-expert.md'));
     assertFileExists(path.join(fixture.dir, '.claude/.gitignore'));
   });
   
@@ -78,7 +78,7 @@ describe('cc command', () => {
     // First install
     await runCLI(['cc'], { cwd: fixture.dir });
     assertFileExists(path.join(fixture.dir, 'CLAUDE.md'));
-    assertFileExists(path.join(fixture.dir, '.claude/commands/expert-consultation.md'));
+    assertFileExists(path.join(fixture.dir, '.claude/commands/promptcode-ask-expert.md'));
     
     // Then uninstall
     const result = await runCLI(['cc', '--uninstall'], { cwd: fixture.dir });

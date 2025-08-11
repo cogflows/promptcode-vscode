@@ -75,7 +75,7 @@ describe('CLI integration tests', () => {
     let result = await runCLI(['cc'], { cwd: fixture.dir });
     expect(result.exitCode).toBe(0);
     assertFileExists(path.join(fixture.dir, 'CLAUDE.md'));
-    assertFileExists(path.join(fixture.dir, '.claude/commands/expert-consultation.md'));
+    assertFileExists(path.join(fixture.dir, '.claude/commands/promptcode-ask-expert.md'));
     
     // Create a preset
     result = await runCLI(['preset', 'create', 'all-code'], { cwd: fixture.dir });

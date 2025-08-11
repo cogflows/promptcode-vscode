@@ -242,16 +242,20 @@ promptcode expert "Complex analysis" --model o3-pro
 
 ## Claude Code Integration
 
-When you run `promptcode cc`, it installs a custom command for Claude:
-- **`.claude/commands/expert-consultation.md`** - Allows Claude to properly use the expert command with cost approval
+When you run `promptcode cc`, it installs custom commands for Claude:
+- **`.claude/commands/promptcode-ask-expert.md`** - Expert consultation with file preview workflow
+- **`.claude/commands/promptcode-preset-list.md`** - List available presets
+- **`.claude/commands/promptcode-preset-info.md`** - Show preset details
+- **`.claude/commands/promptcode-preset-create.md`** - Create new presets
+- **`.claude/commands/promptcode-preset-to-prompt.md`** - Export presets to files
 
-This command helps Claude:
+These commands help Claude:
 1. Check available presets and select appropriate context
 2. Handle cost approval properly (never auto-approving expensive operations)
 3. Use the correct model based on your request (o3 vs o3-pro)
 4. Parse and present results effectively
 
-To use it in Claude, simply ask: "Consult an expert about [your question]"
+To use them in Claude, simply use the slash commands like `/promptcode-ask-expert [your question]`
 
 ## Configuration
 

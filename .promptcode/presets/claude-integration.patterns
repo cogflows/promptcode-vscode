@@ -1,0 +1,27 @@
+# Claude Integration Changes
+# This preset captures all files related to the recent Claude Code integration updates
+
+# Core command files
+packages/cli/src/commands/cc.ts
+packages/cli/src/commands/uninstall.ts
+
+# Claude integration utilities
+packages/cli/src/utils/claude-integration.ts
+
+# Template files
+packages/cli/src/claude-templates/*.md
+packages/cli/src/claude-templates/CLAUDE.md.template
+packages/cli/src/embedded-templates.ts
+
+# Test files
+packages/cli/test/commands/cc.test.ts
+packages/cli/test/integration.test.ts
+
+# Documentation
+CLAUDE.md
+packages/cli/README.md
+
+# Exclusions
+!**/node_modules/**
+!**/dist/**
+!**/*.log

@@ -3,6 +3,24 @@ import * as fs from 'fs';
 import chalk from 'chalk';
 
 /**
+ * PromptCode command files for Claude
+ */
+export const PROMPTCODE_CLAUDE_COMMANDS = [
+  'promptcode-ask-expert.md',
+  'promptcode-preset-list.md',
+  'promptcode-preset-info.md',
+  'promptcode-preset-create.md',
+  'promptcode-preset-to-prompt.md'
+];
+
+/**
+ * Legacy command files to clean up
+ */
+export const LEGACY_CLAUDE_COMMANDS = [
+  'expert-consultation.md'
+];
+
+/**
  * Find .claude folder by searching up the directory tree
  */
 export function findClaudeFolder(startPath: string): string | null {
@@ -87,9 +105,9 @@ export async function removeFromClaudeMd(projectPath: string): Promise<boolean> 
 }
 
 /**
- * Remove expert consultation command
+ * Remove all PromptCode commands from .claude/commands/
  */
-export async function removeExpertCommand(projectPath: string): Promise<boolean> {
+export async function removePromptCodeCommands(projectPath: string): Promise<boolean> {
   const claudeDir = findClaudeFolder(projectPath);
   if (!claudeDir) {
     return false;
@@ -97,12 +115,18 @@ export async function removeExpertCommand(projectPath: string): Promise<boolean>
   
   let removed = false;
   
-  // Remove expert command
-  const expertCommandPath = path.join(claudeDir, 'commands', 'expert-consultation.md');
-  if (fs.existsSync(expertCommandPath)) {
-    await fs.promises.unlink(expertCommandPath);
-    removed = true;
-    
+  // All PromptCode command files (old and new)
+  const allCommands = [...PROMPTCODE_CLAUDE_COMMANDS, ...LEGACY_CLAUDE_COMMANDS];
+  
+  for (const commandFile of allCommands) {
+    const commandPath = path.join(claudeDir, 'commands', commandFile);
+    if (fs.existsSync(commandPath)) {
+      await fs.promises.unlink(commandPath);
+      removed = true;
+    }
+  }
+  
+  if (removed) {
     // Remove commands directory if empty
     const commandsDir = path.join(claudeDir, 'commands');
     try {
