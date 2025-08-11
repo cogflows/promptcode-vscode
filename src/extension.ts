@@ -4,9 +4,9 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import { FileExplorerProvider, checkedItems as checkedItemsMap, FileItem } from './fileExplorer';
-import { generatePrompt as generatePromptFromGenerator, copyToClipboard } from './promptGenerator';
+import { generatePrompt as generatePromptFromGenerator, copyToClipboard, processInstructionsAndResources } from './promptGenerator';
 import { PromptCodeWebViewProvider } from './webviewProvider';
-import { countTokensInFile, countTokensWithCache, countTokensWithCacheDetailed, clearTokenCache, initializeTokenCounter, tokenCache, countTokens } from '@promptcode/core';
+import { countTokensInFile, countTokensWithCache, countTokensWithCacheDetailed, clearTokenCache, initializeTokenCounter, tokenCache, countTokens, buildPrompt } from '@promptcode/core';
 import * as path from 'path';
 import * as fs from 'fs';
 import { IgnoreHelper } from './ignoreHelper';
@@ -1442,7 +1442,7 @@ function isValidIncludeOptions(options: any): options is { files: boolean; instr
 	       typeof options.instructions === 'boolean';
 }
 
-// Helper function to generate prompt
+// Helper function to generate prompt using core's buildPrompt
 async function generatePrompt(
 	selectedFiles: {
 		path: string;
@@ -1454,175 +1454,47 @@ async function generatePrompt(
 	instructions: string,
 	includeOptions: { files: boolean; instructions: boolean }
 ): Promise<string> {
-	// ... (implementation remains the same) ...
-    const startTime = performance.now();
+	const startTime = performance.now();
 
 	// If files are not to be included and no instructions, return empty string
 	if (!includeOptions.files && (!instructions || !includeOptions.instructions)) {
 		const endTime = performance.now();
-		console.log(`Prompt generation1 took ${endTime - startTime}ms for ${selectedFiles.length} files`);
+		console.log(`Prompt generation took ${endTime - startTime}ms for ${selectedFiles.length} files`);
 		return '';
 	}
 
-	// If no files are selected but we have instructions
-	if (selectedFiles.length === 0 && instructions && includeOptions.instructions) {
-		const endTime = performance.now();
-		console.log(`Prompt generation2 took ${endTime - startTime}ms for ${selectedFiles.length} files`);
-		return instructions;
-	}
+	// Convert to SelectedFile format expected by core
+	const coreSelectedFiles: SelectedFile[] = selectedFiles.map(file => ({
+		path: file.path,
+		absolutePath: file.absolutePath || path.join(file.workspaceFolderRootPath || '', file.path),
+		tokenCount: file.tokenCount,
+		workspaceFolderRootPath: file.workspaceFolderRootPath || '',
+		workspaceFolderName: file.workspaceFolderName || ''
+	}));
 
-    let prompt = '';
+	// Use core's buildPrompt
+	const result = await buildPrompt(coreSelectedFiles, instructions, {
+		includeFiles: includeOptions.files,
+		includeInstructions: includeOptions.instructions,
+		includeFileContents: includeOptions.files
+	});
 
-	// --- File Tree Generation ---
-    if (includeOptions.files && selectedFiles.length > 0) {
-        prompt += '<file_tree>\n';
-        const treeStructure: { [root: string]: any } = {};
-        const workspaceFolders = vscode.workspace.workspaceFolders || [];
-
-        // Initialize tree structure for each workspace root involved
-        selectedFiles.forEach(file => {
-            const workspaceRoot = file.workspaceFolderRootPath || "unknown_root";
-            if (!treeStructure[workspaceRoot]) {
-                treeStructure[workspaceRoot] = {};
-            }
-        });
-
-        // Build the tree for each selected file
-        for (const file of selectedFiles) {
-            const workspaceRoot = file.workspaceFolderRootPath || "unknown_root";
-            const parts = file.path.split(path.sep);
-            let currentLevel = treeStructure[workspaceRoot];
-
-            for (let i = 0; i < parts.length - 1; i++) {
-                const part = parts[i];
-                if (!currentLevel[part]) {
-                    currentLevel[part] = {};
-                }
-                currentLevel = currentLevel[part];
-            }
-            const fileName = parts[parts.length - 1];
-            currentLevel[fileName] = true; // Mark as file
-        }
-
-        // Function to render the tree
-        const renderTree = (node: any, indent: string = '', isLast: boolean = true): string => {
-            let output = '';
-            const keys = Object.keys(node).sort((a, b) => {
-                // Sort directories before files, then alphabetically
-                const aIsDir = typeof node[a] === 'object';
-                const bIsDir = typeof node[b] === 'object';
-                if (aIsDir && !bIsDir) {return -1;}
-                if (!aIsDir && bIsDir) {return 1;}
-                return a.localeCompare(b);
-            });
-
-            keys.forEach((key, index) => {
-                const currentIsLast = index === keys.length - 1;
-                const connector = currentIsLast ? '└── ' : '├── ';
-                const isDir = typeof node[key] === 'object';
-
-                output += `${indent}${connector}${key}${isDir ? '/' : ''}\n`;
-
-                if (isDir) {
-                    const newIndent = indent + (currentIsLast ? '    ' : '│   ');
-                    output += renderTree(node[key], newIndent, currentIsLast);
-                }
-            });
-            return output;
-        };
-
-        // Render tree for each workspace root
-        Object.keys(treeStructure).forEach(rootPath => {
-            const workspaceName = workspaceFolders.find(f => f.uri.fsPath === rootPath)?.name || path.basename(rootPath);
-            prompt += `${workspaceName}/\n`; // Use workspace name or root folder name
-            prompt += renderTree(treeStructure[rootPath], '');
-            prompt += '\n';
-        });
-
-
-        prompt += '</file_tree>\n\n';
-    }
-    // --- End File Tree Generation ---
-
-
-	// Get file contents only if files are to be included
-	const fileContents = includeOptions.files ? await Promise.all(selectedFiles.map(async file => {
-		try {
-			let absolutePath: string;
-
-			// Use the file's absolutePath if available
-			if (file.absolutePath) {
-				absolutePath = file.absolutePath;
-			}
-			// Use the file's specific workspace folder root path if available
-			else if (file.workspaceFolderRootPath) {
-				absolutePath = path.join(file.workspaceFolderRootPath, file.path);
-			}
-			// Fallback to trying to resolve relative path if absolute doesn't work
-            else if(path.isAbsolute(file.path)) {
-                 absolutePath = file.path;
-            }
-            else {
-                // Last resort: assume relative to first workspace folder
-                const firstWorkspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-                if (!firstWorkspaceRoot) {
-                    throw new Error('Cannot resolve file path: No workspace folder is open and path is relative.');
-                }
-                absolutePath = path.join(firstWorkspaceRoot, file.path);
-                 if (!fs.existsSync(absolutePath)) {
-                     throw new Error(`Cannot resolve file path: Tried joining relative path "${file.path}" with first workspace root, but file not found.`);
-                 }
-            }
-
-
-			const content = await vscode.workspace.fs.readFile(vscode.Uri.file(absolutePath));
-			return {
-				path: file.path, // Keep original relative path for display
-                fullPath: absolutePath,
-                content: content.toString(),
-				tokenCount: file.tokenCount,
-                workspaceFolderName: file.workspaceFolderName,
-                workspaceFolderRootPath: file.workspaceFolderRootPath,
-                relPath: file.path // Use the original relative path here
-			};
-		} catch (error) {
-			console.error(`Error reading file ${file.path}:`, error);
-			return null;
-		}
-	})) : [];
-
-	// Filter out failed reads
-	const validFiles = fileContents.filter((file): file is NonNullable<typeof file> => file !== null);
-
-
-	// Add file contents section only if files are to be included and there are valid files
-	if (includeOptions.files && validFiles.length > 0) {
-		prompt += '<files>\n';
-		for (const file of validFiles) {
-            // Determine file extension for syntax highlighting hint
-            const ext = path.extname(file.path).substring(1);
-
-			prompt += `workspace_name: ${file.workspaceFolderName || 'Unknown'}\n`;
-			prompt += `workspace_root: ${file.workspaceFolderRootPath || 'Unknown'}\n`;
-			prompt += `rel_path: ${file.relPath}\n`; // Use the calculated relative path
-			prompt += `full_filepath: ${file.fullPath}\n`; // Use the resolved absolute path
-            prompt += `\`\`\`${ext}\n${file.content}\n\`\`\`\n\n`; // Use backticks with lang hint
-		}
-		prompt += '</files>';
-	}
-
-	// Add instructions if they exist and are to be included
-	if (instructions?.trim() && includeOptions.instructions) {
-		if (prompt) {
-			prompt += '\n';
-		}
-		prompt += '<user_instructions>\n';
-		prompt += instructions.trim();
-		prompt += '\n</user_instructions>\n';
+	// Apply compatibility transformation to maintain existing tag names
+	// Core uses: <instructions>, <file_map>, <file_contents>
+	// Extension expects: <user_instructions>, <file_tree>, <files>
+	let prompt = result.prompt;
+	if (prompt) {
+		// Replace core tag names with extension's expected tag names
+		prompt = prompt.replace(/<instructions>/g, '<user_instructions>');
+		prompt = prompt.replace(/<\/instructions>/g, '</user_instructions>');
+		prompt = prompt.replace(/<file_map>/g, '<file_tree>');
+		prompt = prompt.replace(/<\/file_map>/g, '</file_tree>');
+		prompt = prompt.replace(/<file_contents>/g, '<files>');
+		prompt = prompt.replace(/<\/file_contents>/g, '</files>');
 	}
 
 	const endTime = performance.now();
-	console.log(`Prompt generation took ${endTime - startTime}ms for ${validFiles.length} files`);
+	console.log(`Prompt generation took ${endTime - startTime}ms for ${selectedFiles.length} files`);
 
 	return prompt;
 }
