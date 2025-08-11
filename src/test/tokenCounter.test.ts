@@ -8,7 +8,7 @@ import {
   clearTokenCache, 
   initializeTokenCounter,
   tokenCache
-} from '../tokenCounter';
+} from '@promptcode/core';
 
 suite('Token Counter Tests', () => {
   let tempDir: string;
