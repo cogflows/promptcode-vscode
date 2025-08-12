@@ -1,0 +1,29 @@
+---
+description: Ask AI expert questions with code context using promptcode
+alwaysApply: false
+---
+
+Ask AI expert questions with code context using promptcode.
+
+When asked to consult an expert or analyze code:
+```bash
+promptcode expert "<question>" --preset <preset-name>
+```
+
+Or with specific files:
+```bash
+promptcode expert "<question>" -f "src/**/*.ts"
+```
+
+Options:
+- `--model <name>`: Choose AI model (gpt-5, o3, opus-4, sonnet-4, gemini-2.5-pro, grok-4)
+- `--web-search`: Enable web search for current information
+- `--yes`: Skip cost confirmation prompts
+
+Important: This requires API keys to be set:
+- `OPENAI_API_KEY` for O3/GPT models
+- `ANTHROPIC_API_KEY` for Claude models
+- `GOOGLE_API_KEY` for Gemini models
+- `XAI_API_KEY` for Grok models
+
+For expensive operations (>$0.50), always inform the user of the cost before proceeding.

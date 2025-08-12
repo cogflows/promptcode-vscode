@@ -9,27 +9,44 @@ const fs = require('fs');
 const path = require('path');
 
 function embedTemplates() {
-  const templatesDir = path.join(__dirname, '..', 'src', 'claude-templates');
+  const claudeTemplatesDir = path.join(__dirname, '..', 'src', 'claude-templates');
+  const cursorTemplatesDir = path.join(__dirname, '..', 'src', 'cursor-templates');
   const outputFile = path.join(__dirname, '..', 'src', 'embedded-templates.ts');
   
   console.log('🔨 Embedding templates into binary...');
   
-  if (!fs.existsSync(templatesDir)) {
-    console.error('❌ Templates directory not found:', templatesDir);
+  if (!fs.existsSync(claudeTemplatesDir)) {
+    console.error('❌ Claude templates directory not found:', claudeTemplatesDir);
     process.exit(1);
   }
   
   const templates = {};
-  const files = fs.readdirSync(templatesDir);
   
-  for (const file of files) {
-    const filePath = path.join(templatesDir, file);
+  // Embed Claude templates
+  const claudeFiles = fs.readdirSync(claudeTemplatesDir);
+  for (const file of claudeFiles) {
+    const filePath = path.join(claudeTemplatesDir, file);
     const stats = fs.statSync(filePath);
     
     if (stats.isFile()) {
       const content = fs.readFileSync(filePath, 'utf8');
       templates[file] = content;
-      console.log(`  ✓ Embedded ${file} (${content.length} chars)`);
+      console.log(`  ✓ Embedded Claude: ${file} (${content.length} chars)`);
+    }
+  }
+  
+  // Embed Cursor templates if they exist
+  if (fs.existsSync(cursorTemplatesDir)) {
+    const cursorFiles = fs.readdirSync(cursorTemplatesDir);
+    for (const file of cursorFiles) {
+      const filePath = path.join(cursorTemplatesDir, file);
+      const stats = fs.statSync(filePath);
+      
+      if (stats.isFile()) {
+        const content = fs.readFileSync(filePath, 'utf8');
+        templates[file] = content;
+        console.log(`  ✓ Embedded Cursor: ${file} (${content.length} chars)`);
+      }
     }
   }
   

@@ -1,10 +1,11 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import chalk from 'chalk';
-import { ensureDirWithApproval, getClaudeTemplatesDir } from '../utils/paths';
+import { getClaudeTemplatesDir } from '../utils/paths';
 import { spinner } from '../utils/spinner';
 import { shouldSkipConfirmation } from '../utils/environment';
 import { findClaudeFolder, findClaudeMd, removeFromClaudeMd, removePromptCodeCommands, PROMPTCODE_CLAUDE_COMMANDS, LEGACY_CLAUDE_COMMANDS } from '../utils/claude-integration';
+import { findOrCreateIntegrationDir } from '../utils/integration-helper';
 
 interface CcOptions {
   path?: string;
@@ -17,10 +18,7 @@ interface CcOptions {
 /**
  * Add PromptCode section to CLAUDE.md or create it
  */
-async function updateClaudeMd(projectPath: string): Promise<void> {
-  // Find where .claude folder is (or would be)
-  const existingClaudeDir = findClaudeFolder(projectPath);
-  const claudeDir = existingClaudeDir || path.join(projectPath, '.claude');
+async function updateClaudeMd(claudeDir: string): Promise<void> {
   const claudeMdPath = findClaudeMd(claudeDir);
   
   // Read template
@@ -61,20 +59,20 @@ async function updateClaudeMd(projectPath: string): Promise<void> {
 /**
  * Set up Claude commands
  */
-async function setupClaudeCommands(projectPath: string): Promise<void> {
-  // Find or create .claude folder
-  const existingClaudeDir = findClaudeFolder(projectPath);
-  const claudeDir = existingClaudeDir || path.join(projectPath, '.claude');
-  const commandsDir = path.join(claudeDir, 'commands');
+async function setupClaudeCommands(projectPath: string): Promise<{ claudeDir: string | null; isNew: boolean }> {
+  // Find or create .claude directory
+  const { dir: claudeDir, isNew } = await findOrCreateIntegrationDir(
+    projectPath,
+    '.claude',
+    findClaudeFolder
+  );
   
-  // Create directories with approval
-  if (!existingClaudeDir) {
-    const claudeApproved = await ensureDirWithApproval(claudeDir, '.claude');
-    if (!claudeApproved) {
-      console.log(chalk.red('Cannot setup Claude integration without .claude directory'));
-      return;
-    }
+  if (!claudeDir) {
+    console.log(chalk.red('Cannot setup Claude integration without .claude directory'));
+    return { claudeDir: null, isNew: false };
   }
+  
+  const commandsDir = path.join(claudeDir, 'commands');
   
   // Create subdirectories (no approval needed since parent was approved)
   await fs.promises.mkdir(commandsDir, { recursive: true });
@@ -137,7 +135,7 @@ async function setupClaudeCommands(projectPath: string): Promise<void> {
     try {
       const files = await fs.promises.readdir(hooksDir);
       if (files.length === 0) {
-        await fs.promises.rmdir(hooksDir);
+        await fs.promises.rm(hooksDir, { recursive: false, force: true });
       }
     } catch (error) {
       // Directory might not exist
@@ -178,8 +176,8 @@ async function setupClaudeCommands(projectPath: string): Promise<void> {
     }
   }
   
-  // Add .gitignore if .claude didn't exist
-  if (!existingClaudeDir) {
+  // Add .gitignore if .claude was newly created
+  if (isNew) {
     const gitignoreContent = `.env
 .env.*
 !.env.example
@@ -191,6 +189,8 @@ tmp/
       gitignoreContent
     );
   }
+  
+  return { claudeDir, isNew };
 }
 
 /**
@@ -234,19 +234,23 @@ export async function ccCommand(options: CcOptions & { detect?: boolean }): Prom
   spin.start('Setting up PromptCode CLI integration...');
   
   try {
+    // Set up Claude commands and get the directory
+    spin.text = 'Setting up Claude integration...';
+    const { claudeDir, isNew } = await setupClaudeCommands(projectPath);
+    
+    if (!claudeDir) {
+      spin.fail(chalk.red('Setup cancelled'));
+      return;
+    }
+    
     // Update or create CLAUDE.md
     spin.text = 'Updating project documentation...';
-    await updateClaudeMd(projectPath);
-    
-    // Set up Claude commands
-    spin.text = 'Installing Claude commands...';
-    await setupClaudeCommands(projectPath);
+    await updateClaudeMd(claudeDir);
     
     spin.succeed(chalk.green('PromptCode CLI integration set up successfully!'));
     
     // Find where things were installed
-    const claudeDir = findClaudeFolder(projectPath);
-    const claudeMdPath = findClaudeMd(claudeDir || path.join(projectPath, '.claude'));
+    const claudeMdPath = findClaudeMd(claudeDir);
     
     console.log(chalk.bold('\n📝 Updated files:'));
     console.log(chalk.gray(`  ${path.relative(projectPath, claudeMdPath)} - PromptCode usage instructions`));
@@ -265,7 +269,6 @@ export async function ccCommand(options: CcOptions & { detect?: boolean }): Prom
     
   } catch (error) {
     spin.fail(chalk.red(`Error: ${(error as Error).message}`));
-    spin.stop(); // Ensure cleanup
     process.exit(1);
   }
 }

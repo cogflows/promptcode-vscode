@@ -1,6 +1,6 @@
 ---
-allowed-tools: Bash(promptcode preset list:*)
 description: List all available promptcode presets with pattern counts
+alwaysApply: false
 ---
 
 List all available promptcode presets.
