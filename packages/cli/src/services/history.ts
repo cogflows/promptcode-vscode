@@ -37,9 +37,15 @@ async function ensureHistoryDir(): Promise<void> {
  */
 async function getGitCommit(projectPath: string): Promise<string | undefined> {
   try {
+    // Validate path to prevent command injection
+    const resolvedPath = path.resolve(projectPath);
+    if (!fs.existsSync(resolvedPath) || !fs.statSync(resolvedPath).isDirectory()) {
+      return undefined;
+    }
+    
     const { execSync } = await import('child_process');
     const commit = execSync('git rev-parse --short HEAD', {
-      cwd: projectPath,
+      cwd: resolvedPath,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore']
     }).trim();
