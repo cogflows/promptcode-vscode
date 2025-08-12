@@ -1,0 +1,20 @@
+---
+description: Create a new promptcode preset from a description
+alwaysApply: false
+---
+
+Create a new promptcode preset based on a description.
+
+When asked to create a preset, run:
+```bash
+promptcode preset create <preset-name>
+```
+
+This will:
+1. Create a new preset file in `.promptcode/presets/`
+2. Add the specified file patterns
+3. Make it available for use with other commands
+
+After creation, edit `.promptcode/presets/<preset-name>.patterns` to refine the file patterns.
+
+Example: `promptcode preset create authentication-system`

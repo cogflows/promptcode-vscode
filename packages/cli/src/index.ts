@@ -10,6 +10,7 @@ import { presetCommand } from './commands/preset';
 import { expertCommand } from './commands/expert';
 import { configCommand } from './commands/config';
 import { ccCommand } from './commands/cc';
+import { cursorCommand } from './commands/cursor';
 import { updateCommand } from './commands/update';
 import { uninstallCommand } from './commands/uninstall';
 import { BUILD_VERSION } from './version';
@@ -33,6 +34,7 @@ function showHelpOrError(args: string[]): void {
   console.error(chalk.gray('  expert     - Ask AI experts questions with code context'));
   console.error(chalk.gray('  preset     - Manage file pattern presets'));
   console.error(chalk.gray('  cc         - Set up Claude Code integration'));
+  console.error(chalk.gray('  cursor     - Set up Cursor IDE/CLI integration'));
   console.error(chalk.gray('  stats      - Show codebase statistics'));
   console.error(chalk.gray('  update     - Update the CLI to latest version\n'));
   console.error(chalk.yellow('Examples:'));
@@ -250,6 +252,29 @@ Examples:
     await ccCommand(options);
   });
 
+// Cursor command - Cursor IDE/CLI integration setup
+program
+  .command('cursor')
+  .description('Set up or remove Cursor AI integration (.cursor/rules folder)')
+  .addHelpText('after', `
+This command creates a .cursor/rules folder with:
+  - MDC rule files: Instructions for Cursor AI agents
+  - Pseudo-commands matching Claude Code: /promptcode-preset-list, /promptcode-preset-info, etc.
+The .cursor folder is automatically detected in current or parent directories.
+
+Examples:
+  $ promptcode cursor              # Set up Cursor integration
+  $ promptcode cursor --uninstall  # Remove Cursor integration
+  $ promptcode cursor --yes        # Skip confirmation prompts`)
+  .option('--path <dir>', 'project directory', process.cwd())
+  .option('--uninstall', 'remove Cursor integration', false)
+  .option('--yes', 'skip confirmation prompts', false)
+  .option('--force', 'force overwrite existing files', false)
+  .option('--detect', 'detect Cursor environment (exit 0 if found)', false)
+  .action(async (options) => {
+    await cursorCommand(options);
+  });
+
 // Stats command (quick stats about current directory)
 program
   .command('stats')
@@ -424,7 +449,7 @@ if (args[0] && args[0].startsWith('--')) {
 
 const knownCommands = [
   'generate', 'cache', 'templates', 'list-templates', 'preset', 
-  'expert', 'config', 'cc', 'stats', 'history', 'update', 'uninstall',
+  'expert', 'config', 'cc', 'cursor', 'stats', 'history', 'update', 'uninstall',
   '--help', '-h', '--version', '-V', '--detailed'
 ];
 

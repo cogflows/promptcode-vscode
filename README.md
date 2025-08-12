@@ -63,7 +63,32 @@ Tailor PromptCode to your needs with these options:
 
 ## Installation
 
-You can install this extension from the Visual Studio Code marketplace.
+### VS Code Extension
+
+You can install the extension from the Visual Studio Code marketplace.
+
+### CLI Tool
+
+PromptCode also includes a powerful CLI tool for command-line workflows:
+
+```bash
+# Quick install (macOS/Linux)
+curl -fsSL https://raw.githubusercontent.com/cogflows/promptcode-vscode/main/packages/cli/scripts/install.sh | bash
+
+# Use the CLI
+promptcode generate src/**/*.ts                    # Generate prompts from files
+promptcode expert "Why is this slow?" src/api/*.ts # Ask AI experts questions
+promptcode preset create backend                   # Create reusable file patterns
+```
+
+The CLI provides:
+- **Expert Mode**: Direct AI consultation with codebase context
+- **Preset Management**: Save and reuse file selection patterns
+- **Template Support**: Apply structured prompts for common tasks
+- **Multi-Model Support**: Works with OpenAI, Anthropic, Google, and xAI models
+- **IDE Integration**: Set up integrations with Claude Code and Cursor
+
+See the [CLI documentation](packages/cli/README.md) for detailed usage and examples.
 
 ## Telemetry
 

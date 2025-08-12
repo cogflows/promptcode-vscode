@@ -1,6 +1,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import chalk from 'chalk';
+import { findUpDirectory } from './find-up';
 
 /**
  * PromptCode command files for Claude
@@ -22,30 +23,10 @@ export const LEGACY_CLAUDE_COMMANDS = [
 
 /**
  * Find .claude folder by searching up the directory tree
+ * Stops at home directory to avoid going too high up
  */
 export function findClaudeFolder(startPath: string): string | null {
-  let currentPath = path.resolve(startPath);
-  const root = path.parse(currentPath).root;
-  
-  while (currentPath !== root) {
-    const candidatePath = path.join(currentPath, '.claude');
-    if (fs.existsSync(candidatePath)) {
-      return candidatePath;
-    }
-    
-    const parentPath = path.dirname(currentPath);
-    if (parentPath === currentPath) {
-      break;
-    }
-    currentPath = parentPath;
-  }
-  
-  const rootCandidate = path.join(root, '.claude');
-  if (fs.existsSync(rootCandidate)) {
-    return rootCandidate;
-  }
-  
-  return null;
+  return findUpDirectory('.claude', startPath);
 }
 
 /**
@@ -132,7 +113,7 @@ export async function removePromptCodeCommands(projectPath: string): Promise<boo
     try {
       const files = await fs.promises.readdir(commandsDir);
       if (files.length === 0) {
-        await fs.promises.rmdir(commandsDir);
+        await fs.promises.rm(commandsDir, { recursive: false, force: true });
       }
     } catch (error) {
       // Directory might not exist
@@ -150,7 +131,7 @@ export async function removePromptCodeCommands(projectPath: string): Promise<boo
     try {
       const files = await fs.promises.readdir(hooksDir);
       if (files.length === 0) {
-        await fs.promises.rmdir(hooksDir);
+        await fs.promises.rm(hooksDir, { recursive: false, force: true });
       }
     } catch (error) {
       // Directory might not exist

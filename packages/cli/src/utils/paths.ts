@@ -253,3 +253,83 @@ export function resolveProjectPath(pathOption?: string): string {
 export function getHistoryPath(): string {
   return path.join(getConfigDir(), 'history.json');
 }
+
+/**
+ * Get the templates directory for Cursor integration.
+ * Works correctly for development, local binaries, and global installations.
+ */
+export function getCursorTemplatesDir(): string {
+  // 1) Try embedded templates (works for compiled binaries and global installs)
+  if (hasEmbeddedTemplates()) {
+    try {
+      const templates = getEmbeddedTemplates();
+      
+      // Use versioned cache directory to avoid stale copies
+      const cacheBase = getCacheDir();
+      const templatesDir = path.join(cacheBase, 'cursor-templates', BUILD_VERSION);
+      
+      // Create cache directory if it doesn't exist
+      if (!fsSync.existsSync(templatesDir)) {
+        fsSync.mkdirSync(templatesDir, { recursive: true });
+      }
+      
+      // Write templates to cache (idempotent - only writes if changed)
+      for (const [filename, content] of Object.entries(templates)) {
+        const filePath = path.join(templatesDir, filename);
+        
+        // Check if we need to write the file
+        let needsWrite = true;
+        try {
+          if (fsSync.existsSync(filePath)) {
+            const existing = fsSync.readFileSync(filePath, 'utf8');
+            needsWrite = existing !== content;
+          }
+        } catch {
+          needsWrite = true;
+        }
+        
+        if (needsWrite) {
+          fsSync.writeFileSync(filePath, content, 'utf8');
+        }
+      }
+      
+      return templatesDir;
+    } catch (error) {
+      // If cache write fails, try temp directory as fallback
+      try {
+        const tempDir = path.join(os.tmpdir(), 'promptcode', 'cursor-templates', BUILD_VERSION);
+        if (!fsSync.existsSync(tempDir)) {
+          fsSync.mkdirSync(tempDir, { recursive: true });
+          
+          const templates = getEmbeddedTemplates();
+          for (const [filename, content] of Object.entries(templates)) {
+            fsSync.writeFileSync(path.join(tempDir, filename), content, 'utf8');
+          }
+        }
+        return tempDir;
+      } catch {
+        // Continue to filesystem fallbacks
+      }
+    }
+  }
+  
+  // 2) Development/local fallback - check relative to __dirname
+  const devPath = path.join(__dirname, '..', 'cursor-templates');
+  if (fsSync.existsSync(devPath)) {
+    return devPath;
+  }
+  
+  // 3) Check if running from packages/cli/dist (for local testing)
+  const distPath = path.join(process.cwd(), 'packages', 'cli', 'dist', 'cursor-templates');
+  if (fsSync.existsSync(distPath)) {
+    return distPath;
+  }
+  
+  // 4) Last resort - check source directory for development
+  const srcPath = path.join(__dirname, '..', '..', 'src', 'cursor-templates');
+  if (fsSync.existsSync(srcPath)) {
+    return srcPath;
+  }
+  
+  throw new Error('Cursor templates directory not found. Please rebuild the CLI.');
+}

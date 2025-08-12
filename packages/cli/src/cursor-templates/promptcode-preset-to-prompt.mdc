@@ -1,0 +1,20 @@
+---
+description: Export a promptcode preset to a file for sharing or archiving
+alwaysApply: false
+---
+
+Export a promptcode preset to a file.
+
+When asked to export or save a preset:
+```bash
+promptcode generate -l <preset-name> -o <output-file>
+```
+
+This generates a complete prompt with:
+- All file contents from the preset
+- Structured XML-like formatting
+- Token count information
+
+Examples:
+- Export to file: `promptcode generate -l backend -o backend-context.md`
+- Export with instructions: `promptcode generate -l api --instructions "Review for security issues" -o security-review.md`

@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.5.1] - 2025-01-12
+
+### Added
+- **Cursor IDE Integration**: New `promptcode cursor` command creates `.cursor/rules/*.mdc` files for Cursor IDE integration
+- **Enhanced CLI Documentation**: Added 8 new comprehensive example sections covering real-world use cases
+- **Shared Integration Utilities**: New helper module for managing AI agent integrations (Claude Code, Cursor, etc.)
+
+### Fixed
+- Documentation URLs now correctly reference `main` branch instead of feature branches
+- Markdown formatting issues resolved across all documentation files
+- Security: Added path validation for git command execution to prevent injection attacks
+
+### Breaking Changes
+- **CLI Parsing**: Commands must now be explicitly specified. Previously `promptcode "question"` would implicitly run the expert command, now you must use `promptcode expert "question"`. This change improves clarity and prevents ambiguous command interpretation.
+
 ## [0.3.3] - 2025-01-06
 
 ### Added

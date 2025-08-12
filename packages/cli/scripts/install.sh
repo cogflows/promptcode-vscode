@@ -6,7 +6,7 @@ IFS=$'\n\t'       # Set secure Internal Field Separator
 # https://github.com/cogflows/promptcode-vscode
 # 
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/cogflows/promptcode-vscode/feature/cli-integration/packages/cli/scripts/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/cogflows/promptcode-vscode/main/packages/cli/scripts/install.sh | bash
 #   curl -fsSL ... | bash -s -- --uninstall
 
 # Configuration

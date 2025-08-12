@@ -1,0 +1,19 @@
+---
+description: Show details and token count for a specific promptcode preset
+alwaysApply: false
+---
+
+Show details and token count for a specific promptcode preset.
+
+When asked about a preset, run:
+```bash
+promptcode preset info <preset-name>
+```
+
+This displays:
+- File patterns included in the preset
+- Total file count
+- Token count estimate
+- List of matched files
+
+Example: `promptcode preset info backend`

@@ -5,9 +5,10 @@ Command-line interface for PromptCode - generate AI-ready prompts from your code
 ## Installation
 
 ### Quick Install
+
 ```bash
-# Install from current branch (feature/cli-integration)
-curl -fsSL https://raw.githubusercontent.com/cogflows/promptcode-vscode/feature/cli-integration/packages/cli/scripts/install.sh | bash
+# Install from GitHub releases
+curl -fsSL https://raw.githubusercontent.com/cogflows/promptcode-vscode/main/packages/cli/scripts/install.sh | bash
 ```
 
 The installation script will:
@@ -17,6 +18,7 @@ The installation script will:
 - Create a global `promptcode` command
 
 ### Manual Installation
+
 ```bash
 # Install Bun first (if not installed)
 curl -fsSL https://bun.sh/install | bash
@@ -29,15 +31,15 @@ bun link
 ```
 
 ### Via NPM (Coming Soon)
+
 ```bash
 npm install -g promptcode-cli
 ```
 
-> Note: Installation URLs use feature/cli-integration branch until merged to main
-
 ## Quick Start
 
 ### Expert Mode
+
 ```bash
 # Ask questions with codebase context using AI experts
 promptcode expert "Why is this API slow?" -f src/**/*.ts
@@ -46,6 +48,7 @@ promptcode expert "What are the security risks?" --preset api
 ```
 
 ### Generate Mode
+
 ```bash
 # Generate prompts from files for AI analysis
 promptcode generate -f src/**/*.ts docs/**/*.md
@@ -62,7 +65,9 @@ promptcode expert "How can I optimize this API?" -p backend
 ## Core Commands
 
 ### Generate
+
 Generate AI-ready prompts from your codebase:
+
 ```bash
 promptcode generate                      # All files
 promptcode generate -f "src/**/*.ts"     # Specific patterns
@@ -71,7 +76,9 @@ promptcode generate -t code-review       # Apply template
 ```
 
 ### Preset Management
+
 Create and manage file pattern presets:
+
 ```bash
 promptcode preset --list                 # List all presets
 promptcode preset --create api-routes    # Create new preset
@@ -81,7 +88,9 @@ promptcode preset --delete api-routes    # Delete preset
 ```
 
 ### Expert Consultation
+
 Ask questions with full codebase context:
+
 ```bash
 # Set up OpenAI API key first
 export OPENAI_API_KEY=sk-...
@@ -92,15 +101,37 @@ promptcode expert "Find security issues" -f "src/api/**/*.ts"
 promptcode expert "Review this code" --stream  # Real-time response
 ```
 
+### AI Agent Integrations
+
+**Claude Code Integration** - Set up integration with Claude Code:
+
+```bash
+promptcode cc                             # Set up Claude integration
+promptcode cc --uninstall                 # Remove Claude integration
+```
+
+This creates a `.claude/` folder with custom commands that appear in Claude Code as slash commands like `/promptcode-preset-list`.
+
+**Cursor Integration** - Set up integration with Cursor IDE/CLI:
+
+```bash
+promptcode cursor                         # Set up Cursor integration
+promptcode cursor --uninstall             # Remove Cursor integration
+```
+
+This creates `.cursor/rules/*.mdc` files that teach Cursor's AI agent about PromptCode. Supports pseudo-commands like `/promptcode-preset-list` and `/promptcode-preset-info` (matching Claude Code's command naming).
+
 ### Other Commands
 
 **Stats** - Analyze token usage:
+
 ```bash
 promptcode stats                         # Whole project
 promptcode stats -p backend              # Specific preset
 ```
 
 **Cache** - Manage token cache:
+
 ```bash
 promptcode cache clear                   # Clear cache
 promptcode cache stats                   # Show cache statistics
@@ -129,6 +160,7 @@ tsconfig.json
 ## Templates
 
 Built-in templates:
+
 - `code-review` - Code review checklist
 - `optimize` - Performance optimization
 - `refactor` - Refactoring suggestions
@@ -138,6 +170,7 @@ Custom templates go in `~/.config/promptcode/prompts/`.
 ## Configuration
 
 API keys must be set via environment variables (first match wins):
+
 - **OpenAI**: `OPENAI_API_KEY`, `OPENAI_KEY`
 - **Anthropic**: `ANTHROPIC_API_KEY`, `CLAUDE_API_KEY`
 - **Google**: `GOOGLE_API_KEY`, `GOOGLE_CLOUD_API_KEY`, `GOOGLE_AI_API_KEY`, `GEMINI_API_KEY`
@@ -149,7 +182,67 @@ API keys must be set via environment variables (first match wins):
 
 ## Examples
 
+### API Performance Analysis
+
+```bash
+# Create a preset for API endpoints
+promptcode preset create api-endpoints
+# Edit .promptcode/presets/api-endpoints.patterns to include:
+# src/api/**/*.ts
+# src/middleware/**/*.ts
+# !**/*.test.ts
+
+# Analyze performance issues
+promptcode expert "Why are our API endpoints slow?" --preset api-endpoints
+
+# Generate detailed context for manual analysis
+promptcode generate --preset api-endpoints --instructions "Focus on database queries and N+1 problems"
+```
+
+### Security Audit
+
+```bash
+# Quick security check of authentication code
+promptcode expert "Find security vulnerabilities in our auth system" \
+  -f "src/auth/**/*.ts" "src/middleware/auth.ts"
+
+# Comprehensive security review with context
+promptcode generate \
+  -f "src/api/**/*.ts" "src/auth/**/*.ts" "src/middleware/**/*.ts" \
+  --template security-review \
+  --output security-audit.md
+```
+
+### Documentation Generation
+
+```bash
+# Generate API documentation from code
+promptcode expert "Create OpenAPI documentation for these endpoints" \
+  -f "src/api/routes/*.ts" \
+  --output api-docs.yaml
+
+# Generate README for a specific module
+promptcode expert "Write comprehensive documentation for this module" \
+  -f "src/modules/payment/**/*.ts" \
+  --output modules/payment/README.md
+```
+
+### Migration Planning
+
+```bash
+# Analyze code before framework migration
+promptcode preset create legacy-code
+promptcode expert "What needs to be refactored for React 18 migration?" \
+  --preset legacy-code \
+  --model gpt-4o
+
+# Get specific migration steps
+promptcode generate --preset legacy-code \
+  --instructions "Create step-by-step migration plan from Express to Fastify"
+```
+
 ### Code Review Workflow
+
 ```bash
 # Create preset for feature
 promptcode preset --create feature-auth
@@ -162,6 +255,7 @@ promptcode expert "Review this auth implementation" -p feature-auth
 ```
 
 ### Debugging Workflow
+
 ```bash
 # Analyze specific files
 promptcode generate -f "src/api/*.ts" "logs/*.log" -o debug-context.md
@@ -171,14 +265,62 @@ promptcode expert "Why is the API returning 500 errors?" -f "src/api/*.ts"
 ```
 
 ### Refactoring Workflow
+
 ```bash
 # Create preset for refactoring target
-promptcode preset --create old-components
+promptcode preset create old-components
 
-# Get suggestions
+# Get AI-powered refactoring suggestions
+promptcode expert "How should I refactor these components for better performance?" \
+  --preset old-components \
+  --model claude-3-5-sonnet
+
+# Generate refactoring prompt for external AI tools
 promptcode generate -p old-components -t refactor | your-ai-tool
 
 # Review and apply suggestions using your IDE or VCS
+```
+
+### Test Coverage Analysis
+
+```bash
+# Identify untested code
+promptcode expert "What critical paths lack test coverage?" \
+  -f "src/**/*.ts" "!src/**/*.test.ts" \
+  --instructions "Compare implementation files with test files"
+
+# Generate test cases
+promptcode expert "Generate comprehensive test cases for this module" \
+  -f "src/services/payment.ts" \
+  --output tests/payment.test.ts
+```
+
+### Architecture Review
+
+```bash
+# Analyze current architecture
+promptcode generate \
+  -f "src/**/*.ts" "package.json" "tsconfig.json" \
+  --instructions "Analyze architecture and identify anti-patterns" \
+  --output architecture-review.md
+
+# Get improvement suggestions
+promptcode expert "How can we improve our microservices architecture?" \
+  --preset backend \
+  --model gpt-4o
+```
+
+### Quick Fixes
+
+```bash
+# Fix a specific error
+promptcode expert "How do I fix this TypeScript error?" \
+  -f "src/components/UserProfile.tsx" \
+  --instructions "Error: Property 'id' does not exist on type 'User'"
+
+# Optimize a slow function
+promptcode expert "Optimize this function for better performance" \
+  -f "src/utils/dataProcessor.ts"
 ```
 
 ## Tips
