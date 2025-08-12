@@ -1,0 +1,50 @@
+# VS Code Extension Review - File Search & Filter Implementation
+# Focus: File search/filter bugs, core package integration, DRY principles
+
+# Core Package - Shared functionality
+packages/core/src/**/*.ts
+
+# Extension Core Files
+src/extension.ts
+src/promptGenerator.ts
+src/tokenCounter.ts
+
+# File Explorer & Search/Filter Implementation
+src/fileExplorer.ts
+src/fileSelector.ts
+src/utils/fileUtils.ts
+src/utils/gitignore.ts
+
+# Webview System & UI Components
+src/webviewProvider.ts
+src/webview/selectFiles.ts
+src/webview/instructionsTab.ts
+src/webview/generatePrompt.ts
+src/webview/applyReviewTab.ts
+src/webview/utils.ts
+
+# Webview Styles (UI/UX consistency)
+src/webview/styles/selectFiles.css
+src/webview/styles/layout.css
+src/webview/styles/tabs.css
+src/webview/styles/index.css
+
+# Configuration & Types
+src/types.ts
+src/config.ts
+
+# Build Configuration
+package.json
+tsconfig.json
+webpack.config.js
+esbuild.config.js
+
+# Tests (if any exist for file operations)
+test/**/*.ts
+src/**/*.test.ts
+src/**/*.spec.ts
+
+# Documentation for context
+README.md
+CLAUDE.md
+.cursor/rules/*.md

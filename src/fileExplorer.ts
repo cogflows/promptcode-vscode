@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import { IgnoreHelper } from './ignoreHelper';
 
 // Map to keep track of checked items
-export const checkedItems = new Map<string, boolean>();
+export const checkedItems = new Map<string, vscode.TreeItemCheckboxState>();
 // Map to track expanded nodes
 export const expandedItems = new Map<string, boolean>();
 
@@ -27,7 +27,7 @@ export class FileItem extends vscode.TreeItem {
     this.contextValue = isDirectory ? 'directory' : 'file';
 
     // Set checkbox state
-    this.checkboxState = checkedItems.get(fullPath) ? vscode.TreeItemCheckboxState.Checked : vscode.TreeItemCheckboxState.Unchecked;
+    this.checkboxState = checkedItems.get(fullPath) ?? vscode.TreeItemCheckboxState.Unchecked;
 
     // Use relative path for tooltip when possible
     const workspaceFolder = vscode.workspace.getWorkspaceFolder(resourceUri);
@@ -66,6 +66,8 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
   private workspaceRoots: Map<string, string> = new Map(); // Uri string -> fsPath
   private includedPaths: Set<string> = new Set();
   private checkboxQueue: Promise<void> = Promise.resolve(); // Added queue field
+  private searchSequence: number = 0; // For search cancellation
+  private searchTimer: NodeJS.Timeout | null = null; // For debouncing
 
   constructor() {
     // ... (constructor initialization remains the same) ...
@@ -261,25 +263,45 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
   async setSearchTerm(term: string): Promise<void> {
     console.log(`FileExplorer: Setting search term to "${term}"`);
 
-    const previousTerm = this.searchTerm;
     this.searchTerm = term;
+    const sequence = ++this.searchSequence;
+    
+    // Clear existing timer
+    if (this.searchTimer) {
+      clearTimeout(this.searchTimer);
+    }
+
+    // Debounce the search
+    await new Promise<void>(resolve => {
+      this.searchTimer = setTimeout(resolve, 200);
+    });
+
+    // Check if this search has been superseded
+    if (sequence !== this.searchSequence) {
+      return; // A newer search has started
+    }
 
     if (term.trim() !== '') {
       // When searching, first build the search paths
-      await this.rebuildSearchPaths(); // Wait for this to complete
+      await this.rebuildSearchPaths();
+      
+      // Check again if superseded
+      if (sequence !== this.searchSequence) {
+        return;
+      }
 
       // Then refresh the tree to show matching items
       this.refresh();
 
       // After refreshing, expand all matching directories
-      // Small delay to ensure the tree has updated with search results
-      setTimeout(() => {
-        if (this._treeView) {
+      // Using queueMicrotask for better performance than setTimeout
+      queueMicrotask(() => {
+        if (this._treeView && sequence === this.searchSequence) {
           this.expandMatchingDirectories().catch(error => {
             console.error('Error expanding search matches:', error);
           });
         }
-      }, 100);
+      });
     } else {
       // Clear the included paths when search is cleared for better performance
       this.includedPaths.clear();
@@ -329,12 +351,13 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
     }
 
     const normalizedSearchTerm = this.searchTerm.trim().toLowerCase();
+    const isPathSearch = normalizedSearchTerm.includes('/') || normalizedSearchTerm.includes('\\');
     const globRegex = this.globToRegex(normalizedSearchTerm);
-    console.log(`[Debug] rebuildSearchPaths: Normalized term: "${normalizedSearchTerm}", Glob regex:`, globRegex);
+    console.log(`[Debug] rebuildSearchPaths: Normalized term: "${normalizedSearchTerm}", Is path search: ${isPathSearch}, Glob regex:`, globRegex);
 
-    // --- PASS 1: Find Direct Matches (by name) --- 
-    console.log("[Debug] rebuildSearchPaths: Starting Pass 1 (Finding direct matches by name)");
-    const findDirectMatchesRecursive = async (dirPath: string): Promise<void> => {
+    // --- PASS 1: Find Direct Matches (by name or path) --- 
+    console.log("[Debug] rebuildSearchPaths: Starting Pass 1 (Finding direct matches)");
+    const findDirectMatchesRecursive = async (dirPath: string, rootPath: string): Promise<void> => {
       try {
         const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
 
@@ -348,11 +371,18 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
             continue;
           }
 
-          // Check if entry name matches
+          // Check if entry matches
           let isMatch = false;
-          if (globRegex) {
+          
+          if (isPathSearch) {
+            // For path searches, check the relative path from workspace root
+            const relativePath = path.relative(rootPath, fullPath).replace(/\\/g, '/').toLowerCase();
+            isMatch = relativePath.includes(normalizedSearchTerm.replace(/\\/g, '/'));
+          } else if (globRegex) {
+            // For glob patterns, test against the file name
             isMatch = globRegex.test(entryName);
           } else {
+            // For simple searches, check if name contains the search term
             isMatch = entryNameLower.includes(normalizedSearchTerm);
           }
 
@@ -362,7 +392,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
 
           // Recurse into directories
           if (entry.isDirectory()) {
-            await findDirectMatchesRecursive(fullPath);
+            await findDirectMatchesRecursive(fullPath, rootPath);
           }
         }
       } catch (error) {
@@ -375,7 +405,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
 
     // Run Pass 1 for each workspace root
     for (const rootPath of this.workspaceRoots.values()) {
-      await findDirectMatchesRecursive(rootPath);
+      await findDirectMatchesRecursive(rootPath, rootPath);
     }
 
     // Print sorted direct matches
@@ -744,9 +774,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
 
         // Ensure checkbox state is preserved
         if (checkedItems.has(fullPath)) {
-          fileItem.checkboxState = checkedItems.get(fullPath)
-            ? vscode.TreeItemCheckboxState.Checked
-            : vscode.TreeItemCheckboxState.Unchecked;
+          fileItem.checkboxState = checkedItems.get(fullPath) ?? vscode.TreeItemCheckboxState.Unchecked;
         }
 
         return fileItem;
@@ -765,9 +793,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
 
       // Ensure checkbox state is preserved
       if (checkedItems.has(fullPath)) {
-        fileItem.checkboxState = checkedItems.get(fullPath)
-          ? vscode.TreeItemCheckboxState.Checked
-          : vscode.TreeItemCheckboxState.Unchecked;
+        fileItem.checkboxState = checkedItems.get(fullPath) ?? vscode.TreeItemCheckboxState.Unchecked;
       }
 
       return fileItem;
@@ -776,10 +802,8 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
 
   // Handle checkbox state changes
   handleCheckboxToggle(item: FileItem, state: vscode.TreeItemCheckboxState): void {
-    const isChecked = state === vscode.TreeItemCheckboxState.Checked;
-
     // Ignore no-ops – saves queue slots
-    if (checkedItems.get(item.fullPath) === isChecked) { return; }
+    if (checkedItems.get(item.fullPath) === state) { return; }
 
     this.checkboxQueue = this.checkboxQueue
       .then(() => vscode.window.withProgress({
@@ -787,7 +811,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
           location: vscode.ProgressLocation.Window,
           title: 'Updating selection…'
         }, async () => {
-          await this.processCheckboxChange(item, isChecked);
+          await this.processCheckboxChange(item, state);
           this.refresh();
           await vscode.commands.executeCommand('promptcode.getSelectedFiles');
         }))
@@ -798,12 +822,13 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
   }
 
   // Process checkbox changes synchronously to avoid race conditions
-  private async processCheckboxChange(item: FileItem, isChecked: boolean): Promise<void> {
+  private async processCheckboxChange(item: FileItem, state: vscode.TreeItemCheckboxState): Promise<void> {
     // Step 1: Update the current item's state
-    checkedItems.set(item.fullPath, isChecked);
+    checkedItems.set(item.fullPath, state);
 
     // Step 2: If it's a directory, update all children
     if (item.isDirectory) {
+      const isChecked = state === vscode.TreeItemCheckboxState.Checked;
       await this.setAllChildrenState(item.fullPath, isChecked);
     }
 
@@ -815,6 +840,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
   private async setAllChildrenState(dirPath: string, isChecked: boolean): Promise<void> {
     try {
       const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
+      const state = isChecked ? vscode.TreeItemCheckboxState.Checked : vscode.TreeItemCheckboxState.Unchecked;
 
       for (const entry of entries) {
         const fullPath = path.join(dirPath, entry.name);
@@ -825,7 +851,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
         }
 
         // Set the state
-        checkedItems.set(fullPath, isChecked);
+        checkedItems.set(fullPath, state);
 
         // Recursively process subdirectories
         if (entry.isDirectory()) {
@@ -847,33 +873,37 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
         return;
     }
 
-
     try {
       // Check if dirPath is a workspace root itself
-        let isWorkspaceRoot = false;
-        for(const root of this.workspaceRoots.values()) {
-            if(dirPath === root) {
-                isWorkspaceRoot = true;
-                break;
-            }
-        }
+      let isWorkspaceRoot = false;
+      for(const root of this.workspaceRoots.values()) {
+          if(dirPath === root) {
+              isWorkspaceRoot = true;
+              break;
+          }
+      }
 
       // Get child states for this directory
       const childStates = await this.getChildrenStates(dirPath);
 
       // Determine parent state based on children
       if (childStates.length === 0) {
-          // No visible children means indeterminate state or unchecked if previously set
-          // Let's default to unchecked unless it was explicitly checked before (which shouldn't happen for empty dir)
-          if (checkedItems.has(dirPath)) { // Only modify if it exists in the map
-             checkedItems.set(dirPath, false);
-          }
-      } else if (childStates.every(state => state === false)) {
-        // All children unchecked -> parent unchecked
-        checkedItems.set(dirPath, false);
+          // No visible children - unchecked
+          checkedItems.set(dirPath, vscode.TreeItemCheckboxState.Unchecked);
       } else {
-        // Any child is checked -> parent checked
-        checkedItems.set(dirPath, true);
+        const allChecked = childStates.every(state => state === vscode.TreeItemCheckboxState.Checked);
+        const allUnchecked = childStates.every(state => state === vscode.TreeItemCheckboxState.Unchecked);
+        
+        if (allChecked) {
+          // All children checked -> parent checked
+          checkedItems.set(dirPath, vscode.TreeItemCheckboxState.Checked);
+        } else if (allUnchecked) {
+          // All children unchecked -> parent unchecked
+          checkedItems.set(dirPath, vscode.TreeItemCheckboxState.Unchecked);
+        } else {
+          // Mixed state -> parent is mixed/indeterminate
+          checkedItems.set(dirPath, vscode.TreeItemCheckboxState.Mixed);
+        }
       }
 
       // Continue up the chain if not a workspace root
@@ -890,7 +920,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
   }
 
   // Get the state of all visible children in a directory
-  private async getChildrenStates(dirPath: string): Promise<boolean[]> {
+  private async getChildrenStates(dirPath: string): Promise<vscode.TreeItemCheckboxState[]> {
     // Return empty array if path is empty
     if (!dirPath || dirPath === '') {
       console.warn('Empty directory path passed to getChildrenStates');
@@ -899,7 +929,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
 
     try {
       const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
-      const states: boolean[] = [];
+      const states: vscode.TreeItemCheckboxState[] = [];
 
       for (const entry of entries) {
         const fullPath = path.join(dirPath, entry.name);
@@ -910,7 +940,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
         }
 
         // Add the state to our collection
-        const state = checkedItems.get(fullPath) || false;
+        const state = checkedItems.get(fullPath) ?? vscode.TreeItemCheckboxState.Unchecked;
         states.push(state);
       }
 
@@ -1084,6 +1114,8 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
       return;
     }
 
+    const state = checked ? vscode.TreeItemCheckboxState.Checked : vscode.TreeItemCheckboxState.Unchecked;
+
     // Recursive function to process directories
     const processDirectory = async (dirPath: string): Promise<void> => {
       try {
@@ -1097,7 +1129,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
             continue;
           }
 
-          checkedItems.set(fullPath, checked);
+          checkedItems.set(fullPath, state);
 
           if (entry.isDirectory()) {
             await processDirectory(fullPath);
@@ -1137,17 +1169,26 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
       const directories = await this.getAllDirectories(); // This already respects ignore filters
       console.log(`Found ${directories.length} potentially visible directories to check for expansion`);
 
+      // Get workspace roots as a Set of paths for checking when to stop
+      const rootPaths = new Set(Array.from(this.workspaceRoots.values()));
+      
       // Filter directories based on whether they or their ancestors are in the includedPaths set
       const directoriesToExpand = directories.filter(dir => {
          // Check if the directory itself or any of its ancestors are in the inclusion set
          let currentPath = dir.fullPath;
-         while (currentPath && currentPath !== path.dirname(currentPath) && this.workspaceRoots.has(vscode.Uri.file(currentPath).toString())) {
-            if (this.includedPaths.has(currentPath) || this.includedPaths.has(`${currentPath}:DIR_MATCH`)) {
+         while (currentPath && currentPath !== path.dirname(currentPath)) {
+            if (this.includedPaths.has(currentPath)) {
                 return true; // Expand if the directory or an ancestor matches
             }
-             const parentPath = path.dirname(currentPath);
-             if (parentPath === currentPath) {break;}
-             currentPath = parentPath;
+            // Stop when we reach a workspace root
+            if (rootPaths.has(currentPath)) {
+              break;
+            }
+            const parentPath = path.dirname(currentPath);
+            if (parentPath === currentPath) {
+              break;
+            }
+            currentPath = parentPath;
          }
          return false;
       });
@@ -1224,7 +1265,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
             // Verify the file exists and is a file before checking it
             const stats = await fs.promises.stat(filePath);
             if (stats.isFile()) {
-                checkedItems.set(filePath, true);
+                checkedItems.set(filePath, vscode.TreeItemCheckboxState.Checked);
                 checkedCount++;
             } else {
                  console.warn(`Path from list is not a file, skipping: ${filePath}`);
@@ -1284,8 +1325,8 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
     const selectedPaths: string[] = [];
     const workspaceRootPaths = Array.from(this.workspaceRoots.values());
 
-    for (const [fullPath, isChecked] of checkedItems.entries()) {
-      if (isChecked) {
+    for (const [fullPath, state] of checkedItems.entries()) {
+      if (state === vscode.TreeItemCheckboxState.Checked) {
         // Check if it's a file (or handle directories if needed)
         try {
           // Only include files, not directories, in the path list

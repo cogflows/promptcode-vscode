@@ -539,9 +539,9 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 
 
-	// Register save ignore config command (now only saves the respectGitignore setting)
+	// Register save ignore config command
 	const saveIgnoreConfigCommand = vscode.commands.registerCommand('promptcode.saveIgnoreConfig', async (ignorePatterns: string | undefined, respectGitignore: boolean) => {
-		console.log('Saving ignore configuration', { respectGitignore }); // Removed ignorePatterns logging
+		console.log('Saving ignore configuration', { ignorePatterns, respectGitignore });
 
 		// Save the respectGitignore setting
 		const configTarget = vscode.workspace.workspaceFolders
@@ -549,18 +549,35 @@ export function activate(context: vscode.ExtensionContext) {
 			: vscode.ConfigurationTarget.Global;
 
 		const config = vscode.workspace.getConfiguration('promptcode');
-		const oldValue = config.get('respectGitignore');
-		console.log('Current respectGitignore setting:', oldValue);
-
 		await config.update('respectGitignore', respectGitignore, configTarget);
 		console.log('Updated respectGitignore setting to:', respectGitignore);
 
-		// Immediately read back the value to confirm it was saved
-		const newValue = vscode.workspace.getConfiguration('promptcode').get('respectGitignore');
-		console.log('Read back respectGitignore value:', newValue);
+		// Save ignore patterns to .promptcode_ignore file
+		if (typeof ignorePatterns === 'string') {
+			const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+			if (workspaceFolder) {
+				const ignoreFilePath = path.join(workspaceFolder.uri.fsPath, '.promptcode_ignore');
+				try {
+					await fs.promises.writeFile(ignoreFilePath, ignorePatterns, 'utf8');
+					console.log('Saved ignore patterns to', ignoreFilePath);
+				} catch (error) {
+					console.error('Failed to save ignore patterns:', error);
+					vscode.window.showErrorMessage('Failed to save ignore patterns: ' + error);
+				}
+			}
+		}
 
         // Refresh the ignore helper in the FileExplorerProvider
-        fileExplorerProvider.refreshIgnoreHelper();
+        await fileExplorerProvider.refreshIgnoreHelper();
+        
+        // Send updated patterns back to the webview
+        if (promptCodeProvider._panel) {
+            promptCodeProvider._panel.webview.postMessage({
+                command: 'updateIgnoreConfig',
+                respectGitignore,
+                ignorePatterns: ignorePatterns || ''
+            });
+        }
 
 
 		// Send an update back to the webview to ensure it's in sync
@@ -684,7 +701,7 @@ export function activate(context: vscode.ExtensionContext) {
 		// Exit early if no panel exists to receive the updates
 		if (!promptCodeProvider._panel) {
 			console.log('No webview panel available to send selected files to');
-			return;
+			return [];
 		}
 
 		// Ensure empty state is handled properly when no workspace is open
@@ -697,7 +714,7 @@ export function activate(context: vscode.ExtensionContext) {
                     totalTokens: 0
                 });
             }
-			return;
+			return [];
 		}
 
 		const commandStartTime = Date.now();
@@ -887,9 +904,13 @@ export function activate(context: vscode.ExtensionContext) {
 					totalTokens: totalTokens
 				});
 			}
+			
+			// Return the selected files for testing purposes
+			return selectedFiles;
 			} catch (error) {
 				console.error('Error getting selected files:', error);
 				vscode.window.showErrorMessage('Error processing selected files');
+				return [];
 			}
 		});
 	});

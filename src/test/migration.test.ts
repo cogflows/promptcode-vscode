@@ -6,20 +6,20 @@ suite('Core Migration Test', () => {
     test('buildPrompt should generate correct output with tag compatibility', async () => {
         const selectedFiles: SelectedFile[] = [
             {
-                path: '/test/file1.ts',
-                name: 'file1.ts',
+                path: 'file1.ts',
+                absolutePath: '/test/file1.ts',
                 content: 'const hello = "world";',
-                relativePath: 'file1.ts',
-                rootPath: '/test',
-                tokens: 10
+                workspaceFolderRootPath: '/test',
+                workspaceFolderName: 'test',
+                tokenCount: 10
             },
             {
-                path: '/test/dir/file2.ts',
-                name: 'file2.ts',
+                path: 'dir/file2.ts',
+                absolutePath: '/test/dir/file2.ts',
                 content: 'export function test() { return true; }',
-                relativePath: 'dir/file2.ts',
-                rootPath: '/test',
-                tokens: 15
+                workspaceFolderRootPath: '/test',
+                workspaceFolderName: 'test',
+                tokenCount: 15
             }
         ];
 
@@ -48,28 +48,28 @@ suite('Core Migration Test', () => {
     test('buildTreeFromSelection should generate correct tree structure', () => {
         const selectedFiles: SelectedFile[] = [
             {
-                path: '/test/src/index.ts',
-                name: 'index.ts',
+                path: 'src/index.ts',
+                absolutePath: '/test/src/index.ts',
                 content: '',
-                relativePath: 'src/index.ts',
-                rootPath: '/test',
-                tokens: 0
+                workspaceFolderRootPath: '/test',
+                workspaceFolderName: 'test',
+                tokenCount: 0
             },
             {
-                path: '/test/src/utils/helper.ts',
-                name: 'helper.ts',
+                path: 'src/utils/helper.ts',
+                absolutePath: '/test/src/utils/helper.ts',
                 content: '',
-                relativePath: 'src/utils/helper.ts',
-                rootPath: '/test',
-                tokens: 0
+                workspaceFolderRootPath: '/test',
+                workspaceFolderName: 'test',
+                tokenCount: 0
             },
             {
-                path: '/test/README.md',
-                name: 'README.md',
+                path: 'README.md',
+                absolutePath: '/test/README.md',
                 content: '',
-                relativePath: 'README.md',
-                rootPath: '/test',
-                tokens: 0
+                workspaceFolderRootPath: '/test',
+                workspaceFolderName: 'test',
+                tokenCount: 0
             }
         ];
 
@@ -86,28 +86,28 @@ suite('Core Migration Test', () => {
     test('generatePatternsFromSelection should create correct patterns', () => {
         const selectedFiles: SelectedFile[] = [
             {
-                path: '/test/src/components/Button.tsx',
-                name: 'Button.tsx',
+                path: 'src/components/Button.tsx',
+                absolutePath: '/test/src/components/Button.tsx',
                 content: '',
-                relativePath: 'src/components/Button.tsx',
-                rootPath: '/test',
-                tokens: 0
+                workspaceFolderRootPath: '/test',
+                workspaceFolderName: 'test',
+                tokenCount: 0
             },
             {
-                path: '/test/src/components/Input.tsx',
-                name: 'Input.tsx',
+                path: 'src/components/Input.tsx',
+                absolutePath: '/test/src/components/Input.tsx',
                 content: '',
-                relativePath: 'src/components/Input.tsx',
-                rootPath: '/test',
-                tokens: 0
+                workspaceFolderRootPath: '/test',
+                workspaceFolderName: 'test',
+                tokenCount: 0
             },
             {
-                path: '/test/src/utils/helper.ts',
-                name: 'helper.ts',
+                path: 'src/utils/helper.ts',
+                absolutePath: '/test/src/utils/helper.ts',
                 content: '',
-                relativePath: 'src/utils/helper.ts',
-                rootPath: '/test',
-                tokens: 0
+                workspaceFolderRootPath: '/test',
+                workspaceFolderName: 'test',
+                tokenCount: 0
             }
         ];
 

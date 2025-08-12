@@ -8,7 +8,7 @@ import {
   listFilesByPattern,
   listFilesByPatternsFile,
   ParsedPatterns 
-} from '../utils/filePattern';
+} from '@promptcode/core';
 
 suite('File Pattern Tests', () => {
   suite('parsePatternLines', () => {
