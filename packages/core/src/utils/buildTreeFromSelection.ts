@@ -19,9 +19,12 @@ export function buildTreeFromSelection(selected: SelectedFile[]): string {
     // file.path is already relative, so use it directly (just normalize separators)
     const relativePath = file.path.replace(/\\/g, '/');
     
-    // Guard against paths that try to escape the workspace root
-    if (relativePath.startsWith('../')) {
-      console.warn(`Skipping file with path that escapes workspace root: ${relativePath}`);
+    // Guard against paths that try to escape the workspace root or use absolute paths
+    if (relativePath.startsWith('../') || 
+        relativePath.startsWith('/') || 
+        path.isAbsolute(file.path) ||
+        relativePath.includes('/../')) {
+      console.warn(`Skipping file with invalid relative path: ${relativePath}`);
       continue;
     }
 

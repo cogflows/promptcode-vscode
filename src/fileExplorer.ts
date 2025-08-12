@@ -321,6 +321,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
       return null; // Not a glob pattern or empty
     }
 
+    // Don't lowercase the pattern here - preserve original case for the regex
     // Escape characters with special meaning in regex.
     let escapedPattern = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&'); 
     // Convert glob * and ? to regex equivalents.
@@ -330,6 +331,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
 
     try {
       // Create case-insensitive regex (anchored to match the whole name)
+      // The 'i' flag makes it case-insensitive
       return new RegExp(`^${regexString}$`, 'i');
     } catch (e) {
       console.error(`Invalid regex generated from glob pattern: ${pattern}`, e);
@@ -352,7 +354,8 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
 
     const normalizedSearchTerm = this.searchTerm.trim().toLowerCase();
     const isPathSearch = normalizedSearchTerm.includes('/') || normalizedSearchTerm.includes('\\');
-    const globRegex = this.globToRegex(normalizedSearchTerm);
+    // Use original search term for glob to preserve case for the pattern
+    const globRegex = this.globToRegex(this.searchTerm.trim());
     console.log(`[Debug] rebuildSearchPaths: Normalized term: "${normalizedSearchTerm}", Is path search: ${isPathSearch}, Glob regex:`, globRegex);
 
     // --- PASS 1: Find Direct Matches (by name or path) --- 
@@ -811,13 +814,22 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
           location: vscode.ProgressLocation.Window,
           title: 'Updating selection…'
         }, async () => {
-          await this.processCheckboxChange(item, state);
-          this.refresh();
-          await vscode.commands.executeCommand('promptcode.getSelectedFiles');
+          try {
+            await this.processCheckboxChange(item, state);
+            this.refresh();
+            await vscode.commands.executeCommand('promptcode.getSelectedFiles');
+          } catch (error) {
+            // Propagate error to be caught by outer catch
+            console.error('Error processing checkbox change:', error);
+            vscode.window.showErrorMessage(`Failed to update selection: ${error}`);
+            throw error;
+          }
         }))
       .catch(err => {
         console.error('Checkbox queue error:', err);
         this.refresh(); // Still refresh on error to potentially clear bad state
+        // Return resolved promise to keep queue going
+        return Promise.resolve();
       });
   }
 
@@ -888,8 +900,12 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
 
       // Determine parent state based on children
       if (childStates.length === 0) {
-          // No visible children - unchecked
-          checkedItems.set(dirPath, vscode.TreeItemCheckboxState.Unchecked);
+          // No visible children - preserve existing state if it was explicitly set
+          // Only set to unchecked if it wasn't previously in the map
+          if (!checkedItems.has(dirPath)) {
+            checkedItems.set(dirPath, vscode.TreeItemCheckboxState.Unchecked);
+          }
+          // Otherwise keep the existing state (user may have explicitly checked an empty dir)
       } else {
         const allChecked = childStates.every(state => state === vscode.TreeItemCheckboxState.Checked);
         const allUnchecked = childStates.every(state => state === vscode.TreeItemCheckboxState.Unchecked);

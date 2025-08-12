@@ -552,18 +552,25 @@ export function activate(context: vscode.ExtensionContext) {
 		await config.update('respectGitignore', respectGitignore, configTarget);
 		console.log('Updated respectGitignore setting to:', respectGitignore);
 
-		// Save ignore patterns to .promptcode_ignore file
-		if (typeof ignorePatterns === 'string') {
-			const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-			if (workspaceFolder) {
-				const ignoreFilePath = path.join(workspaceFolder.uri.fsPath, '.promptcode_ignore');
+		// Save ignore patterns to .promptcode_ignore file in all workspace folders
+		if (typeof ignorePatterns === 'string' && vscode.workspace.workspaceFolders) {
+			const savePromises = vscode.workspace.workspaceFolders.map(async (workspaceFolder) => {
+				const ignoreFileUri = vscode.Uri.joinPath(workspaceFolder.uri, '.promptcode_ignore');
 				try {
-					await fs.promises.writeFile(ignoreFilePath, ignorePatterns, 'utf8');
-					console.log('Saved ignore patterns to', ignoreFilePath);
+					const encoder = new TextEncoder();
+					await vscode.workspace.fs.writeFile(ignoreFileUri, encoder.encode(ignorePatterns));
+					console.log('Saved ignore patterns to', ignoreFileUri.fsPath);
 				} catch (error) {
-					console.error('Failed to save ignore patterns:', error);
-					vscode.window.showErrorMessage('Failed to save ignore patterns: ' + error);
+					console.error(`Failed to save ignore patterns to ${ignoreFileUri.fsPath}:`, error);
+					// Don't show error for each workspace, collect them
+					return error;
 				}
+			});
+			
+			const results = await Promise.allSettled(savePromises);
+			const failures = results.filter(r => r.status === 'rejected' || r.value);
+			if (failures.length > 0) {
+				vscode.window.showErrorMessage(`Failed to save ignore patterns to ${failures.length} workspace(s)`);
 			}
 		}
 
