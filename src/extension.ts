@@ -9,7 +9,6 @@ import { PromptCodeWebViewProvider } from './webviewProvider';
 import { countTokensInFile, countTokensWithCache, countTokensWithCacheDetailed, clearTokenCache, initializeTokenCounter, tokenCache, countTokens, buildPrompt } from '@promptcode/core';
 import * as path from 'path';
 import * as fs from 'fs';
-import { IgnoreHelper } from './ignoreHelper';
 import * as os from 'os';
 import { DEFAULT_IGNORE_PATTERNS } from './constants';
 import { TelemetryService } from './telemetry';
@@ -39,9 +38,6 @@ export let fileExplorerProvider: FileExplorerProvider;
 // Export the map itself, consumers can use it directly
 export const checkedItems = checkedItemsMap;
 // --- End Exported Variables ---
-
-let lastGeneratedTokenCount: number | null = null;
-let webviewProvider: PromptCodeWebViewProvider | null = null;
 let lastSaveUri: vscode.Uri | undefined = undefined; // Store the last used save URI
 
 // Cache for file types to avoid repeated stat() calls
@@ -118,7 +114,6 @@ export function activate(context: vscode.ExtensionContext) {
 
 	// Create the file explorer provider and assign to exported variable
 	fileExplorerProvider = new FileExplorerProvider();
-	// const ignoreHelper = new IgnoreHelper(); // ignoreHelper is now internal to fileExplorerProvider
 
 	// Register the tree data provider
 	const treeView = vscode.window.createTreeView('promptcodeExplorer', {
@@ -179,9 +174,6 @@ export function activate(context: vscode.ExtensionContext) {
 	const filterFilesCommand = vscode.commands.registerCommand('promptcode.filterFiles', async (searchTerm: string) => {
 		await fileExplorerProvider.setSearchTerm(searchTerm);
 	});
-
-	// Register the command to show when the view container is activated
-	context.subscriptions.push(showPromptCodeViewCommand);
 
 	// If tree view is already visible on activation, show the webview
 	if (treeView.visible) {
@@ -577,28 +569,15 @@ export function activate(context: vscode.ExtensionContext) {
         // Refresh the ignore helper in the FileExplorerProvider
         await fileExplorerProvider.refreshIgnoreHelper();
         
-        // Send updated patterns back to the webview
+        // Load the effective patterns back from disk once, then send a single update
+        const currentIgnorePatterns = await loadIgnorePatterns();
         if (promptCodeProvider._panel) {
             promptCodeProvider._panel.webview.postMessage({
                 command: 'updateIgnoreConfig',
                 respectGitignore,
-                ignorePatterns: ignorePatterns || ''
+                ignorePatterns: currentIgnorePatterns
             });
         }
-
-
-		// Send an update back to the webview to ensure it's in sync
-        // Let the loadIgnoreConfig command handle sending the update
-		// No, let's send it back immediately to confirm the save
-		if (promptCodeProvider._panel) {
-            // We still need to load the current patterns to send back
-            const currentIgnorePatterns = await loadIgnorePatterns();
-			promptCodeProvider._panel.webview.postMessage({
-				command: 'updateIgnoreConfig',
-				respectGitignore: newValue,
-				ignorePatterns: currentIgnorePatterns // Send back the patterns currently in use
-			});
-		}
 	});
 
 	// Register save prompts config command
@@ -731,7 +710,7 @@ export function activate(context: vscode.ExtensionContext) {
 		let cacheMisses = 0;
 
 		// Show progress indicator
-		await vscode.window.withProgress({
+		const result = await vscode.window.withProgress({
 			location: vscode.ProgressLocation.Window,
 			title: "Processing selected files...",
 			cancellable: false
@@ -920,6 +899,8 @@ export function activate(context: vscode.ExtensionContext) {
 				return [];
 			}
 		});
+		
+		return result;
 	});
 
 

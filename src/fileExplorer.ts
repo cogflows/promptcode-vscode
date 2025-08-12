@@ -212,15 +212,18 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
   }
 
   // Method to refresh the ignore helper
-  refreshIgnoreHelper(): void {
-    if (this.ignoreHelper) {
-      this.ignoreHelper.initialize().then(() => {
-        // After ignore patterns are reloaded, clean up any selected files that are now ignored
-        this.cleanupSelectedFiles();
-        this.refresh();
-      }).catch(error => {
-        console.error('Error refreshing ignore helper:', error);
-      });
+  async refreshIgnoreHelper(): Promise<void> {
+    if (!this.ignoreHelper) {
+      return;
+    }
+    
+    try {
+      await this.ignoreHelper.initialize();
+      // After ignore patterns are reloaded, clean up any selected files that are now ignored
+      this.cleanupSelectedFiles();
+      this.refresh();
+    } catch (error) {
+      console.error('Error refreshing ignore helper:', error);
     }
   }
 
@@ -1162,7 +1165,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
     // Process each workspace root
     for (const rootPath of this.workspaceRoots.values()) {
       // Add the root directory itself to checkedItems
-      checkedItems.set(rootPath, checked);
+      checkedItems.set(rootPath, state);
       await processDirectory(rootPath);
     }
 
