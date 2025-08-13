@@ -26,7 +26,7 @@ describe('expert command', () => {
   it('should require a question', async () => {
     const result = await runCLI(['expert'], { cwd: fixture.dir });
     
-    expect(result.exitCode).toBe(1);
+    expect(result.exitCode).toBe(3); // EXIT_CODES.INVALID_INPUT
     expect(result.stderr).toContain('I need a question to ask the AI expert');
   });
   
@@ -47,7 +47,7 @@ describe('expert command', () => {
       }
     });
     
-    expect(result.exitCode).toBe(1);
+    expect(result.exitCode).toBe(4); // EXIT_CODES.MISSING_API_KEY
     expect(result.stderr).toContain('API key');
   });
   

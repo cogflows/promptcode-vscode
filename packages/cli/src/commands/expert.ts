@@ -14,6 +14,7 @@ import {
   shouldSkipConfirmation,
   isInteractive
 } from '../utils/environment';
+import { EXIT_CODES, exitWithCode } from '../utils/exit-codes';
 
 interface ExpertOptions {
   path?: string;
@@ -31,6 +32,7 @@ interface ExpertOptions {
   reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
   serviceTier?: 'auto' | 'flex' | 'priority';
   json?: boolean;
+  estimateCost?: boolean;
 }
 
 const SYSTEM_PROMPT = `You are an expert software engineer helping analyze and improve code. Provide constructive, actionable feedback.
@@ -42,58 +44,107 @@ Focus on:
 4. Performance and security considerations
 5. Clear, concise explanations`;
 
-function listAvailableModels() {
-  console.log(chalk.bold('\n📋 Available Models:\n'));
-  
+function listAvailableModels(jsonOutput: boolean = false) {
   const availableModels = getAvailableModels();
-  const modelsByProvider: Record<string, typeof MODELS[string][]> = {};
   
-  // Group by provider
-  Object.entries(MODELS).forEach(([key, config]) => {
-    if (!modelsByProvider[config.provider]) {
-      modelsByProvider[config.provider] = [];
-    }
-    modelsByProvider[config.provider].push({ ...config, key } as any);
-  });
-  
-  // Display by provider
-  Object.entries(modelsByProvider).forEach(([provider, models]) => {
-    const hasKey = models.some(m => availableModels.includes((m as any).key));
-    const providerName = provider.charAt(0).toUpperCase() + provider.slice(1);
+  if (jsonOutput) {
+    // JSON output for programmatic use
+    const modelsData = Object.entries(MODELS).map(([key, config]) => ({
+      key,
+      name: config.name,
+      provider: config.provider,
+      modelId: config.modelId,
+      description: config.description,
+      contextWindow: config.contextWindow,
+      pricing: {
+        inputPerMillion: config.pricing.input,
+        outputPerMillion: config.pricing.output
+      },
+      supportsWebSearch: config.supportsWebSearch,
+      available: availableModels.includes(key)
+    }));
     
-    console.log(chalk.blue(`${providerName}:`));
-    
-    models.forEach(model => {
-      const isAvailable = availableModels.includes((model as any).key);
-      const status = isAvailable ? chalk.green('✓') : chalk.gray('✗');
-      const name = isAvailable ? chalk.cyan((model as any).key) : chalk.gray((model as any).key);
-      const pricing = `$${model.pricing.input}/$${model.pricing.output}/M`;
+    const providers = ['openai', 'anthropic', 'google', 'xai'].reduce((acc, provider) => {
+      const providerModels = modelsData.filter(m => m.provider === provider);
+      const hasAvailable = providerModels.some(m => m.available);
       
-      console.log(`  ${status} ${name.padEnd(20)} ${model.description.padEnd(50)} ${chalk.gray(pricing)}`);
+      acc[provider] = {
+        available: hasAvailable,
+        models: providerModels.map(m => m.key),
+        envVars: {
+          openai: ['OPENAI_API_KEY', 'OPENAI_KEY'],
+          anthropic: ['ANTHROPIC_API_KEY', 'CLAUDE_API_KEY'],
+          google: ['GOOGLE_API_KEY', 'GOOGLE_CLOUD_API_KEY', 'GEMINI_API_KEY'],
+          xai: ['XAI_API_KEY', 'GROK_API_KEY']
+        }[provider]
+      };
+      return acc;
+    }, {} as Record<string, any>);
+    
+    const output = {
+      schemaVersion: 1,
+      generatedAt: new Date().toISOString(),
+      models: modelsData,
+      providers,
+      defaultModel: DEFAULT_MODEL,
+      availableCount: availableModels.length,
+      totalCount: modelsData.length
+    };
+    
+    console.log(JSON.stringify(output, null, 2));
+  } else {
+    // Human-readable output
+    console.log(chalk.bold('\n📋 Available Models:\n'));
+    
+    const modelsByProvider: Record<string, typeof MODELS[string][]> = {};
+    
+    // Group by provider
+    Object.entries(MODELS).forEach(([key, config]) => {
+      if (!modelsByProvider[config.provider]) {
+        modelsByProvider[config.provider] = [];
+      }
+      modelsByProvider[config.provider].push({ ...config, key } as any);
     });
     
-    if (!hasKey) {
-      // Show all supported env vars for this provider
-      const envVars = {
-        openai: 'OPENAI_API_KEY or OPENAI_KEY',
-        anthropic: 'ANTHROPIC_API_KEY or CLAUDE_API_KEY',
-        google: 'GOOGLE_API_KEY, GOOGLE_CLOUD_API_KEY, or GEMINI_API_KEY',
-        xai: 'XAI_API_KEY or GROK_API_KEY'
-      };
-      console.log(chalk.yellow(`     Set ${envVars[provider as keyof typeof envVars]} to enable these models\n`));
-    } else {
-      console.log();
-    }
-  });
-  
-  console.log(chalk.gray('✓ = Available (API key configured)'));
-  console.log(chalk.gray('✗ = Unavailable (missing API key)\n'));
+    // Display by provider
+    Object.entries(modelsByProvider).forEach(([provider, models]) => {
+      const hasKey = models.some(m => availableModels.includes((m as any).key));
+      const providerName = provider.charAt(0).toUpperCase() + provider.slice(1);
+      
+      console.log(chalk.blue(`${providerName}:`));
+      
+      models.forEach(model => {
+        const isAvailable = availableModels.includes((model as any).key);
+        const status = isAvailable ? chalk.green('✓') : chalk.gray('✗');
+        const name = isAvailable ? chalk.cyan((model as any).key) : chalk.gray((model as any).key);
+        const pricing = `$${model.pricing.input}/$${model.pricing.output}/M`;
+        
+        console.log(`  ${status} ${name.padEnd(20)} ${model.description.padEnd(50)} ${chalk.gray(pricing)}`);
+      });
+      
+      if (!hasKey) {
+        // Show all supported env vars for this provider
+        const envVars = {
+          openai: 'OPENAI_API_KEY or OPENAI_KEY',
+          anthropic: 'ANTHROPIC_API_KEY or CLAUDE_API_KEY',
+          google: 'GOOGLE_API_KEY, GOOGLE_CLOUD_API_KEY, or GEMINI_API_KEY',
+          xai: 'XAI_API_KEY or GROK_API_KEY'
+        };
+        console.log(chalk.yellow(`     Set ${envVars[provider as keyof typeof envVars]} to enable these models\n`));
+      } else {
+        console.log();
+      }
+    });
+    
+    console.log(chalk.gray('✓ = Available (API key configured)'));
+    console.log(chalk.gray('✗ = Unavailable (missing API key)\n'));
+  }
 }
 
 export async function expertCommand(question: string | undefined, options: ExpertOptions): Promise<void> {
   // Handle --models flag
   if (options.models) {
-    listAvailableModels();
+    listAvailableModels(options.json || false);
     return;
   }
   
@@ -103,14 +154,14 @@ export async function expertCommand(question: string | undefined, options: Exper
     const promptFilePath = path.resolve(options.promptFile);
     if (!fs.existsSync(promptFilePath)) {
       console.error(chalk.red(`❌ Prompt file not found: ${options.promptFile}`));
-      process.exit(1);
+      exitWithCode(EXIT_CODES.FILE_NOT_FOUND);
     }
     try {
       finalQuestion = await fs.promises.readFile(promptFilePath, 'utf8');
       console.log(chalk.gray(`📄 Using prompt from: ${options.promptFile}`));
     } catch (error) {
       console.error(chalk.red(`❌ Error reading prompt file: ${(error as Error).message}`));
-      process.exit(1);
+      exitWithCode(EXIT_CODES.FILE_NOT_FOUND);
     }
   }
   
@@ -123,7 +174,7 @@ export async function expertCommand(question: string | undefined, options: Exper
     console.error(chalk.gray('  promptcode expert "What are the security risks?" --preset api'));
     console.error(chalk.gray('  promptcode expert --prompt-file analysis.md --preset backend\n'));
     console.error(chalk.gray('To list available models: promptcode expert --models'));
-    process.exit(1);
+    exitWithCode(EXIT_CODES.INVALID_INPUT);
   }
   
   question = finalQuestion;
@@ -140,7 +191,7 @@ export async function expertCommand(question: string | undefined, options: Exper
   if (!modelConfig) {
     const available = getAvailableModels();
     console.error(chalk.red(`Unknown model: ${modelKey}. Available models: ${available.join(', ')}`));
-    process.exit(1);
+    exitWithCode(EXIT_CODES.INVALID_INPUT);
   }
   
   // Check if API key is configured for the provider
@@ -156,7 +207,7 @@ export async function expertCommand(question: string | undefined, options: Exper
     console.error(chalk.yellow(`\nTo use ${modelConfig.name}, set the environment variable:`));
     console.error(chalk.gray(`  export ${envVars[modelConfig.provider as keyof typeof envVars]}=<your-key>`));
     console.error(chalk.gray(`\nOr use a different model with --model flag. Run 'promptcode expert --models' to see available options.`));
-    process.exit(1);
+    exitWithCode(EXIT_CODES.MISSING_API_KEY);
   }
   
   const spin = (!options.stream && !options.json) ? spinner() : null;
@@ -243,7 +294,7 @@ export async function expertCommand(question: string | undefined, options: Exper
         console.error(chalk.gray('  - Check if the path exists: ' + patterns.join(', ')));
         console.error(chalk.gray('  - Try using absolute paths or glob patterns'));
         console.error(chalk.gray('  - Make sure .gitignore is not excluding your files'));
-        return;
+        exitWithCode(EXIT_CODES.FILE_NOT_FOUND);
       }
       
       // Build context with files
@@ -282,7 +333,7 @@ export async function expertCommand(question: string | undefined, options: Exper
         );
         spin.stop(); // Ensure cleanup
       }
-      return;
+      exitWithCode(EXIT_CODES.CONTEXT_TOO_LARGE);
     }
 
     if (availableTokens < modelConfig.contextWindow * 0.2) {
@@ -300,6 +351,58 @@ export async function expertCommand(question: string | undefined, options: Exper
     const estimatedInputCost = (result.tokenCount / 1_000_000) * modelConfig.pricing.input;
     const estimatedOutputCost = (expectedOutput / 1_000_000) * modelConfig.pricing.output;
     
+    // Handle --estimate-cost flag (dry-run mode)
+    if (options.estimateCost) {
+      if (options.json) {
+        // JSON output for programmatic use
+        const costEstimate = {
+          schemaVersion: 1,
+          estimatedAt: new Date().toISOString(),
+          model: modelKey,
+          modelName: modelConfig.name,
+          provider: modelConfig.provider,
+          contextWindow: modelConfig.contextWindow,
+          pricing: {
+            inputPerMillion: modelConfig.pricing.input,
+            outputPerMillion: modelConfig.pricing.output
+          },
+          tokens: {
+            input: result.tokenCount,
+            expectedOutput: expectedOutput,
+            availableForOutput: availableTokens,
+            total: result.tokenCount + expectedOutput
+          },
+          cost: {
+            input: estimatedInputCost,
+            output: estimatedOutputCost,
+            total: estimatedTotalCost
+          },
+          fileCount: files.length,
+          patterns: patterns.length > 0 ? patterns : undefined,
+          preset: options.preset || undefined,
+          webSearchEnabled: modelConfig.supportsWebSearch && options.webSearch !== false
+        };
+        console.log(JSON.stringify(costEstimate, null, 2));
+      } else {
+        // Human-readable output
+        console.log(chalk.blue('\n📊 Cost Estimate (Dry Run):'));
+        console.log(chalk.gray(`  Model:  ${modelConfig.name} (${modelKey})`));
+        console.log(chalk.gray(`  Input:  ${result.tokenCount.toLocaleString()} tokens × $${modelConfig.pricing.input}/M = $${estimatedInputCost.toFixed(4)}`));
+        console.log(chalk.gray(`  Output: ~${expectedOutput.toLocaleString()} tokens × $${modelConfig.pricing.output}/M = $${estimatedOutputCost.toFixed(4)}`));
+        console.log(chalk.bold(`  Total:  ~$${estimatedTotalCost.toFixed(4)}`));
+        console.log(chalk.gray(`\n  Files:  ${files.length} files included`));
+        console.log(chalk.gray(`  Context: ${result.tokenCount.toLocaleString()}/${modelConfig.contextWindow.toLocaleString()} tokens used`));
+        if (modelConfig.supportsWebSearch && options.webSearch !== false) {
+          console.log(chalk.cyan('  Web:    Search enabled'));
+        }
+        console.log(chalk.yellow('\n💡 This is a cost estimate only. No API call was made.'));
+        console.log(chalk.gray('Remove --estimate-cost to run the actual query.'));
+      }
+      
+      // Exit with success code
+      exitWithCode(EXIT_CODES.SUCCESS);
+    }
+
     // Show cost info (skip in JSON mode - it will be in the JSON output)
     if (!options.json) {
       console.error(chalk.blue('\n📊 Cost Breakdown:'));
@@ -317,7 +420,7 @@ export async function expertCommand(question: string | undefined, options: Exper
         console.error(chalk.yellow('\n⚠️  Cost approval required for expensive operation (~$' + estimatedTotalCost.toFixed(2) + ')'));
         console.error(chalk.yellow('\nNon-interactive environment detected.'));
         console.error(chalk.yellow('Use --yes to proceed with approval after getting user confirmation.'));
-        process.exit(1);
+        exitWithCode(EXIT_CODES.APPROVAL_REQUIRED);
       }
       
       console.log(chalk.yellow(`\n⚠️  This consultation will cost approximately $${estimatedTotalCost.toFixed(2)}`));
@@ -339,7 +442,7 @@ export async function expertCommand(question: string | undefined, options: Exper
       
       if (answer.toLowerCase() !== 'yes' && answer.toLowerCase() !== 'y') {
         console.log(chalk.gray('\nCancelled.'));
-        process.exit(0);
+        exitWithCode(EXIT_CODES.OPERATION_CANCELLED);
       }
     }
 
@@ -467,7 +570,7 @@ export async function expertCommand(question: string | undefined, options: Exper
   } catch (error) {
     if (options.json) {
       console.log(JSON.stringify({ error: (error as Error).message }, null, 2));
-      process.exit(1);
+      exitWithCode(EXIT_CODES.GENERAL_ERROR);
     }
     
     if (spin) {
@@ -491,6 +594,8 @@ export async function expertCommand(question: string | undefined, options: Exper
             ' • Increase the SAFETY_MARGIN only if you know what you are doing\n',
         ),
       );
+      exitWithCode(EXIT_CODES.CONTEXT_TOO_LARGE);
+      return; // This won't be reached but helps TypeScript
     }
     
     // Helpful error messages
@@ -501,8 +606,11 @@ export async function expertCommand(question: string | undefined, options: Exper
       console.log('   export ANTHROPIC_API_KEY="sk-ant-..."  # or CLAUDE_API_KEY');
       console.log('   export GOOGLE_API_KEY="..."            # or GOOGLE_CLOUD_API_KEY, GEMINI_API_KEY');
       console.log('   export XAI_API_KEY="..."               # or GROK_API_KEY');
+      exitWithCode(EXIT_CODES.MISSING_API_KEY);
+      return; // This won't be reached but helps TypeScript
     }
     
-    process.exit(1);
+    // Default to general error for other cases
+    exitWithCode(EXIT_CODES.GENERAL_ERROR);
   }
 }

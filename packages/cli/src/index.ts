@@ -212,6 +212,7 @@ Examples:
   .option('--reasoning-effort <level>', 'reasoning depth: minimal, low, medium, high (default)', 'high')
   .option('--service-tier <tier>', 'service tier: auto, flex (50% cheaper), priority (enterprise)')
   .option('--json', 'output response in JSON format with usage stats')
+  .option('--estimate-cost', 'estimate cost without running the query (dry-run)')
   .allowExcessArguments(false)
   .action(async (question, options) => {
     await expertCommand(question, options);

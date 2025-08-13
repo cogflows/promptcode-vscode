@@ -42,7 +42,7 @@ describe('CLI argument parsing', () => {
       cwd: fixture.dir,
       env: { ...process.env, OPENAI_API_KEY: '', ANTHROPIC_API_KEY: '', GOOGLE_API_KEY: '', XAI_API_KEY: '', GROK_API_KEY: '' }
     });
-    expect(result.exitCode).toBe(1);
+    expect(result.exitCode).toBe(4); // EXIT_CODES.MISSING_API_KEY
     expect(result.stdout + result.stderr).toContain('API key');
   });
   

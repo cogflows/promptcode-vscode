@@ -11,7 +11,7 @@ Consult an expert about: $ARGUMENTS
    - Extract the main question/problem
    - Identify if code context would help (look for keywords matching our presets)
    - Check for multiple model requests (e.g., "compare using o3 and gpt-5", "ask o3, gpt-5, and gemini")
-   - Available models from our MODELS list: o3, o3-pro, o3-mini, gpt-5, gpt-5-mini, gpt-5-nano, sonnet-4, opus-4, gemini-2.5-pro, gemini-2.5-flash, grok-4
+   - Get available models dynamically: `promptcode expert --models --json` (parse the JSON for model list)
    - If 2+ models detected → use ensemble mode
    - For single model: determine preference (if user mentions "o3-pro" or "o3 pro", use o3-pro)
 
@@ -45,41 +45,40 @@ Consult an expert about: $ARGUMENTS
    ```
    
 5. Estimate cost and get approval:
-   - Model costs (from our pricing):
-     - O3: $2/$8 per million tokens (input/output)
-     - O3-pro: $20/$80 per million tokens (input/output)
-     - GPT-5: $1.25/$10 per million tokens
-     - GPT-5-mini: $0.25/$2 per million tokens
-     - Sonnet-4: $5/$20 per million tokens
-     - Opus-4: $25/$100 per million tokens
-     - Gemini-2.5-pro: $3/$12 per million tokens
-     - Grok-4: $5/$15 per million tokens
-   - Calculate based on file size (roughly: file_size_bytes / 4 = tokens)
+   - Use the CLI's built-in cost estimation:
+     ```bash
+     promptcode expert "Question from file" --preset <preset> --model <model> --estimate-cost --json
+     ```
+   - Parse the JSON output to get the estimated cost
+   - Check the exit code: 0 = success, 2 = approval required (cost > $0.50)
    
    **For single model:**
-   - Say: "I've prepared the expert consultation (~{tokens} tokens). Model: {model}. You can edit the file to refine your question. Reply 'yes' to send to the expert (estimated cost: ${cost})."
+   - Say: "I've prepared the expert consultation (~{tokens} tokens). Model: {model}. You can edit the file to refine your question. Reply 'yes' to send to the expert (estimated cost: ${cost from CLI})."
    
    **For ensemble mode (multiple models):**
-   - Calculate total cost across all models
+   - Run --estimate-cost for each model in parallel to get costs
    - Say: "I've prepared an ensemble consultation (~{tokens} tokens) with {models}. Total estimated cost: ${total_cost} ({model1}: ${cost1}, {model2}: ${cost2}, ...). Reply 'yes' to proceed with all models in parallel."
 
 6. Execute based on mode:
 
    **Single Model Mode:**
+
    ```bash
    promptcode expert --prompt-file "/tmp/expert-consultation-{timestamp}.md" --model {model} --yes
    ```
-   
+
    **Ensemble Mode (Parallel Execution):**
    - Use Task tool to run multiple models in parallel
    - Each task runs the same consultation file with different models
    - Store each result in separate file: `/tmp/expert-{model}-{timestamp}.txt`
    - Example for 3 models (run these in PARALLEL using Task tool):
-     ```
+
+     ```bash
      Task 1: promptcode expert --prompt-file "/tmp/expert-consultation-{timestamp}.md" --model o3 --yes > /tmp/expert-o3-{timestamp}.txt
      Task 2: promptcode expert --prompt-file "/tmp/expert-consultation-{timestamp}.md" --model gpt-5 --yes > /tmp/expert-gpt5-{timestamp}.txt  
      Task 3: promptcode expert --prompt-file "/tmp/expert-consultation-{timestamp}.md" --model gemini-2.5-pro --yes > /tmp/expert-gemini-{timestamp}.txt
      ```
+
    - IMPORTANT: Launch all tasks at once for true parallel execution
    - Wait for all tasks to complete
    - Note: The --yes flag confirms we have user approval for the cost
@@ -135,7 +134,7 @@ Consult an expert about: $ARGUMENTS
    - Total Time: {total_time}s
    - Best Value: {model_with_best_cost_to_quality_ratio}
    ```
-   
+
    - Open synthesis in Cursor if available
    - IMPORTANT: Always declare a clear winner (or explicitly state if it's a tie)
    - Provide brief summary of which model performed best and why they won
@@ -144,18 +143,22 @@ Consult an expert about: $ARGUMENTS
    - If any model fails in ensemble mode, continue with successful ones
    - Report which models succeeded/failed
    - If OPENAI_API_KEY missing:
-     ```
+
+     ```bash
      To use expert consultation, set your OpenAI API key:
      export OPENAI_API_KEY=sk-...
      Get your key from: https://platform.openai.com/api-keys
      ```
+
    - For other errors: Report exact error message
 
-## Important:
+## Important
+
 - Default to O3 model unless O3-pro explicitly requested or needed for complex reasoning
 - For ensemble mode: limit to maximum 4 models to prevent resource exhaustion
 - Always show cost estimate before sending
 - Keep questions clear and specific
 - Include relevant code context when asking about specific functionality
 - NEVER automatically add --yes without user approval
+
 - Reasoning effort defaults to 'high' (set in CLI) - no need to specify
