@@ -1,6 +1,10 @@
 # PromptCode
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![GitHub release](https://img.shields.io/github/v/release/cogflows/promptcode-vscode)](https://github.com/cogflows/promptcode-vscode/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/cogflows/promptcode-vscode/total)](https://github.com/cogflows/promptcode-vscode/releases)
+[![VS Code Extension](https://img.shields.io/badge/VS%20Code-Extension-blue)](https://marketplace.visualstudio.com/items?itemName=promptcode.promptcode)
+[![CLI Tool](https://img.shields.io/badge/CLI-Available-green)](https://github.com/cogflows/promptcode-vscode/releases/latest)
 
 > **The ultimate rescue tool when AI code agents hit their limits**
 
