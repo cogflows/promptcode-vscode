@@ -4,7 +4,7 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import { FileExplorerProvider, checkedItems as checkedItemsMap, FileItem } from './fileExplorer';
-import { generatePrompt as generatePromptFromGenerator, copyToClipboard, processInstructionsAndResources } from './promptGenerator';
+import { generatePrompt as generatePromptFromGenerator, copyToClipboard } from './promptGenerator';
 import { PromptCodeWebViewProvider } from './webviewProvider';
 import { countTokensInFile, countTokensWithCache, countTokensWithCacheDetailed, clearTokenCache, initializeTokenCounter, tokenCache, countTokens, buildPrompt } from '@promptcode/core';
 import * as path from 'path';
@@ -171,8 +171,8 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 
 	// Register the command to filter files based on search term
-	const filterFilesCommand = vscode.commands.registerCommand('promptcode.filterFiles', async (searchTerm: string) => {
-		await fileExplorerProvider.setSearchTerm(searchTerm);
+	const filterFilesCommand = vscode.commands.registerCommand('promptcode.filterFiles', async (searchTerm: string, globPattern?: boolean, shouldIncludeFolders?: boolean) => {
+		await fileExplorerProvider.setSearchTerm(searchTerm, globPattern, shouldIncludeFolders);
 	});
 
 	// If tree view is already visible on activation, show the webview
@@ -949,7 +949,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 			// Uncheck the file in the checkedItems map
 			if (absoluteFilePath && checkedItems.has(absoluteFilePath)) {
-				checkedItems.set(absoluteFilePath, false);
+				checkedItems.set(absoluteFilePath, vscode.TreeItemCheckboxState.Unchecked);
 
 				// Update parent directories' checkbox states
 				await fileExplorerProvider.updateParentStates(absoluteFilePath);
@@ -1037,7 +1037,7 @@ export function activate(context: vscode.ExtensionContext) {
 			// Deselect each file
             let parentsToUpdate = new Set<string>();
 			for (const filePath of filesToDeselect) {
-				checkedItems.set(filePath, false);
+				checkedItems.set(filePath, vscode.TreeItemCheckboxState.Unchecked);
                 parentsToUpdate.add(path.dirname(filePath));
 			}
 
@@ -1226,8 +1226,8 @@ export function activate(context: vscode.ExtensionContext) {
             if (fileUris && fileUris.length > 0) {
                 // Get current selection
                 const currentSelection = new Set<string>();
-                for (const [path, isChecked] of checkedItems.entries()) {
-                    if (isChecked) {
+                for (const [path, state] of checkedItems.entries()) {
+                    if (state === vscode.TreeItemCheckboxState.Checked) {
                         currentSelection.add(path);
                     }
                 }
@@ -1258,7 +1258,14 @@ export function activate(context: vscode.ExtensionContext) {
                 await fileExplorerProvider.setCheckedItems(combinedSelection);
 
                 // Get the final count AFTER setCheckedItems has run
-                const finalSelectedCount = Array.from(checkedItems.values()).filter(Boolean).length;
+                const finalSelectedCount = [...checkedItems.entries()].reduce((acc, [path, state]) => {
+                    if (state === vscode.TreeItemCheckboxState.Checked) {
+                        try {
+                            if (fs.statSync(path).isFile()) { acc++; }
+                        } catch { /* ignore ENOENT */ }
+                    }
+                    return acc;
+                }, 0);
                 const addedCount = finalSelectedCount - initialSelectedCount;
 
                 // Send unmatched patterns back to the webview regardless
@@ -1319,8 +1326,8 @@ export function activate(context: vscode.ExtensionContext) {
         try {
             // Get current selection
             const currentSelection = new Set<string>();
-            for (const [path, isChecked] of checkedItems.entries()) {
-                if (isChecked) {
+            for (const [path, state] of checkedItems.entries()) {
+                if (state === vscode.TreeItemCheckboxState.Checked) {
                     currentSelection.add(path);
                 }
             }
@@ -1349,7 +1356,14 @@ export function activate(context: vscode.ExtensionContext) {
             await fileExplorerProvider.setCheckedItems(combinedSelection);
 
             // Get the final count AFTER setCheckedItems has run (it might filter some)
-            const finalSelectedCount = Array.from(checkedItems.values()).filter(Boolean).length;
+            const finalSelectedCount = [...checkedItems.entries()].reduce((acc, [path, state]) => {
+                if (state === vscode.TreeItemCheckboxState.Checked) {
+                    try {
+                        if (fs.statSync(path).isFile()) { acc++; }
+                    } catch { /* ignore ENOENT */ }
+                }
+                return acc;
+            }, 0);
             const addedCount = finalSelectedCount - initialSelectedCount;
 
             // Send unmatched patterns back to the webview regardless
