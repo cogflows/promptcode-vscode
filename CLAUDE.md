@@ -133,3 +133,76 @@ After recent changes:
 - All tests pass - run with `cd packages/cli && bun test`
 - To release: Create a tag and push to trigger GitHub Actions
 - DO NOT make shortcuts, always use the most idiomatic and generic solution
+
+<!-- PROMPTCODE-CLI-START -->
+# PromptCode CLI Integration
+
+This project has PromptCode CLI integrated for AI-assisted code analysis. The CLI provides structured access to the codebase through presets and intelligent commands.
+
+## Available Claude Commands
+
+The following commands are available to help you work with this codebase:
+
+- `/promptcode-preset-list` - List all available code presets
+- `/promptcode-preset-info <name>` - Show details and token count for a preset
+- `/promptcode-preset-create <description>` - Create a new preset from description
+- `/promptcode-preset-to-prompt <preset>` - Export preset to a file
+- `/promptcode-ask-expert <question>` - Consult AI expert with code context
+
+## Quick Examples
+
+```bash
+# See what presets are available
+/promptcode-preset-list
+
+# Get details about a specific preset
+/promptcode-preset-info auth-system
+
+# Create a preset for a feature
+/promptcode-preset-create authentication and authorization system
+
+# Ask an expert about the code
+/promptcode-ask-expert How does the authentication flow work?
+```
+
+## Direct CLI Usage
+
+For simple operations, you can also use the CLI directly:
+
+```bash
+# Generate a prompt from files
+promptcode generate -f "src/**/*.ts" -o analysis.txt
+
+# Quick expert consultation (requires API key)
+promptcode expert "Find security issues" --preset api --yes
+
+# View preset information with JSON output
+promptcode preset info backend --json
+```
+
+## Configuration
+
+Set API keys via environment variables for expert consultations:
+```bash
+export OPENAI_API_KEY=sk-...      # For O3/O3-pro models
+export ANTHROPIC_API_KEY=sk-...   # For Claude models
+export GOOGLE_API_KEY=...         # For Gemini models
+export XAI_API_KEY=...            # For Grok models
+```
+
+## Cost Protection
+
+The expert command has built-in cost protection:
+- Operations over $0.50 require explicit approval
+- Premium models (e.g., o3-pro) always require confirmation
+- Use `--yes` flag only after getting user approval
+
+<details>
+<summary>⚠️ Troubleshooting</summary>
+
+• **Command not found** – The CLI auto-installs to `~/.local/bin`. Ensure it's in PATH  
+• **Missing API key** – Set environment variables as shown above  
+• **Context too large** – Use more specific file patterns or focused presets  
+• **Preset not found** – Check `.promptcode/presets/` directory exists
+</details>
+<!-- PROMPTCODE-CLI-END -->
