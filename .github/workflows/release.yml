@@ -37,6 +37,7 @@ jobs:
         run: |
           cd packages/cli
           bun install
+          bun run build
           bun test
 
   build-extension:
