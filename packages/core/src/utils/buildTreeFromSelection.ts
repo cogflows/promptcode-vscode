@@ -15,7 +15,18 @@ export function buildTreeFromSelection(selected: SelectedFile[]): string {
     // Use POSIX paths internally for consistency building the structure
     // Normalize ensures consistent separator usage and resolves '..' etc.
     const root = path.posix.normalize(file.workspaceFolderRootPath.replace(/\\/g, '/'));
-    const relativePath = path.posix.relative(root, file.path.replace(/\\/g, '/'));
+    
+    // file.path is already relative, so use it directly (just normalize separators)
+    const relativePath = file.path.replace(/\\/g, '/');
+    
+    // Guard against paths that try to escape the workspace root or use absolute paths
+    if (relativePath.startsWith('../') || 
+        relativePath.startsWith('/') || 
+        path.isAbsolute(file.path) ||
+        relativePath.includes('/../')) {
+      console.warn(`Skipping file with invalid relative path: ${relativePath}`);
+      continue;
+    }
 
     groupedByRoot[root] ??= {};
     const parts = relativePath.split(path.posix.sep).filter(p => p.length > 0); // Filter empty strings from leading/trailing slashes

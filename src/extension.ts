@@ -4,12 +4,11 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import { FileExplorerProvider, checkedItems as checkedItemsMap, FileItem } from './fileExplorer';
-import { generatePrompt as generatePromptFromGenerator, copyToClipboard, processInstructionsAndResources } from './promptGenerator';
+import { generatePrompt as generatePromptFromGenerator, copyToClipboard } from './promptGenerator';
 import { PromptCodeWebViewProvider } from './webviewProvider';
 import { countTokensInFile, countTokensWithCache, countTokensWithCacheDetailed, clearTokenCache, initializeTokenCounter, tokenCache, countTokens, buildPrompt } from '@promptcode/core';
 import * as path from 'path';
 import * as fs from 'fs';
-import { IgnoreHelper } from './ignoreHelper';
 import * as os from 'os';
 import { DEFAULT_IGNORE_PATTERNS } from './constants';
 import { TelemetryService } from './telemetry';
@@ -39,9 +38,6 @@ export let fileExplorerProvider: FileExplorerProvider;
 // Export the map itself, consumers can use it directly
 export const checkedItems = checkedItemsMap;
 // --- End Exported Variables ---
-
-let lastGeneratedTokenCount: number | null = null;
-let webviewProvider: PromptCodeWebViewProvider | null = null;
 let lastSaveUri: vscode.Uri | undefined = undefined; // Store the last used save URI
 
 // Cache for file types to avoid repeated stat() calls
@@ -118,7 +114,6 @@ export function activate(context: vscode.ExtensionContext) {
 
 	// Create the file explorer provider and assign to exported variable
 	fileExplorerProvider = new FileExplorerProvider();
-	// const ignoreHelper = new IgnoreHelper(); // ignoreHelper is now internal to fileExplorerProvider
 
 	// Register the tree data provider
 	const treeView = vscode.window.createTreeView('promptcodeExplorer', {
@@ -176,12 +171,9 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 
 	// Register the command to filter files based on search term
-	const filterFilesCommand = vscode.commands.registerCommand('promptcode.filterFiles', async (searchTerm: string) => {
-		await fileExplorerProvider.setSearchTerm(searchTerm);
+	const filterFilesCommand = vscode.commands.registerCommand('promptcode.filterFiles', async (searchTerm: string, globPattern?: boolean, shouldIncludeFolders?: boolean) => {
+		await fileExplorerProvider.setSearchTerm(searchTerm, globPattern, shouldIncludeFolders);
 	});
-
-	// Register the command to show when the view container is activated
-	context.subscriptions.push(showPromptCodeViewCommand);
 
 	// If tree view is already visible on activation, show the webview
 	if (treeView.visible) {
@@ -539,9 +531,9 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 
 
-	// Register save ignore config command (now only saves the respectGitignore setting)
+	// Register save ignore config command
 	const saveIgnoreConfigCommand = vscode.commands.registerCommand('promptcode.saveIgnoreConfig', async (ignorePatterns: string | undefined, respectGitignore: boolean) => {
-		console.log('Saving ignore configuration', { respectGitignore }); // Removed ignorePatterns logging
+		console.log('Saving ignore configuration', { ignorePatterns, respectGitignore });
 
 		// Save the respectGitignore setting
 		const configTarget = vscode.workspace.workspaceFolders
@@ -549,32 +541,43 @@ export function activate(context: vscode.ExtensionContext) {
 			: vscode.ConfigurationTarget.Global;
 
 		const config = vscode.workspace.getConfiguration('promptcode');
-		const oldValue = config.get('respectGitignore');
-		console.log('Current respectGitignore setting:', oldValue);
-
 		await config.update('respectGitignore', respectGitignore, configTarget);
 		console.log('Updated respectGitignore setting to:', respectGitignore);
 
-		// Immediately read back the value to confirm it was saved
-		const newValue = vscode.workspace.getConfiguration('promptcode').get('respectGitignore');
-		console.log('Read back respectGitignore value:', newValue);
+		// Save ignore patterns to .promptcode_ignore file in all workspace folders
+		if (typeof ignorePatterns === 'string' && vscode.workspace.workspaceFolders) {
+			const savePromises = vscode.workspace.workspaceFolders.map(async (workspaceFolder) => {
+				const ignoreFileUri = vscode.Uri.joinPath(workspaceFolder.uri, '.promptcode_ignore');
+				try {
+					const encoder = new TextEncoder();
+					await vscode.workspace.fs.writeFile(ignoreFileUri, encoder.encode(ignorePatterns));
+					console.log('Saved ignore patterns to', ignoreFileUri.fsPath);
+				} catch (error) {
+					console.error(`Failed to save ignore patterns to ${ignoreFileUri.fsPath}:`, error);
+					// Don't show error for each workspace, collect them
+					return error;
+				}
+			});
+			
+			const results = await Promise.allSettled(savePromises);
+			const failures = results.filter(r => r.status === 'rejected' || r.value);
+			if (failures.length > 0) {
+				vscode.window.showErrorMessage(`Failed to save ignore patterns to ${failures.length} workspace(s)`);
+			}
+		}
 
         // Refresh the ignore helper in the FileExplorerProvider
-        fileExplorerProvider.refreshIgnoreHelper();
-
-
-		// Send an update back to the webview to ensure it's in sync
-        // Let the loadIgnoreConfig command handle sending the update
-		// No, let's send it back immediately to confirm the save
-		if (promptCodeProvider._panel) {
-            // We still need to load the current patterns to send back
-            const currentIgnorePatterns = await loadIgnorePatterns();
-			promptCodeProvider._panel.webview.postMessage({
-				command: 'updateIgnoreConfig',
-				respectGitignore: newValue,
-				ignorePatterns: currentIgnorePatterns // Send back the patterns currently in use
-			});
-		}
+        await fileExplorerProvider.refreshIgnoreHelper();
+        
+        // Load the effective patterns back from disk once, then send a single update
+        const currentIgnorePatterns = await loadIgnorePatterns();
+        if (promptCodeProvider._panel) {
+            promptCodeProvider._panel.webview.postMessage({
+                command: 'updateIgnoreConfig',
+                respectGitignore,
+                ignorePatterns: currentIgnorePatterns
+            });
+        }
 	});
 
 	// Register save prompts config command
@@ -684,7 +687,7 @@ export function activate(context: vscode.ExtensionContext) {
 		// Exit early if no panel exists to receive the updates
 		if (!promptCodeProvider._panel) {
 			console.log('No webview panel available to send selected files to');
-			return;
+			return [];
 		}
 
 		// Ensure empty state is handled properly when no workspace is open
@@ -697,7 +700,7 @@ export function activate(context: vscode.ExtensionContext) {
                     totalTokens: 0
                 });
             }
-			return;
+			return [];
 		}
 
 		const commandStartTime = Date.now();
@@ -707,7 +710,7 @@ export function activate(context: vscode.ExtensionContext) {
 		let cacheMisses = 0;
 
 		// Show progress indicator
-		await vscode.window.withProgress({
+		const result = await vscode.window.withProgress({
 			location: vscode.ProgressLocation.Window,
 			title: "Processing selected files...",
 			cancellable: false
@@ -887,11 +890,17 @@ export function activate(context: vscode.ExtensionContext) {
 					totalTokens: totalTokens
 				});
 			}
+			
+			// Return the selected files for testing purposes
+			return selectedFiles;
 			} catch (error) {
 				console.error('Error getting selected files:', error);
 				vscode.window.showErrorMessage('Error processing selected files');
+				return [];
 			}
 		});
+		
+		return result;
 	});
 
 
@@ -940,7 +949,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 			// Uncheck the file in the checkedItems map
 			if (absoluteFilePath && checkedItems.has(absoluteFilePath)) {
-				checkedItems.set(absoluteFilePath, false);
+				checkedItems.set(absoluteFilePath, vscode.TreeItemCheckboxState.Unchecked);
 
 				// Update parent directories' checkbox states
 				await fileExplorerProvider.updateParentStates(absoluteFilePath);
@@ -1028,7 +1037,7 @@ export function activate(context: vscode.ExtensionContext) {
 			// Deselect each file
             let parentsToUpdate = new Set<string>();
 			for (const filePath of filesToDeselect) {
-				checkedItems.set(filePath, false);
+				checkedItems.set(filePath, vscode.TreeItemCheckboxState.Unchecked);
                 parentsToUpdate.add(path.dirname(filePath));
 			}
 
@@ -1217,8 +1226,8 @@ export function activate(context: vscode.ExtensionContext) {
             if (fileUris && fileUris.length > 0) {
                 // Get current selection
                 const currentSelection = new Set<string>();
-                for (const [path, isChecked] of checkedItems.entries()) {
-                    if (isChecked) {
+                for (const [path, state] of checkedItems.entries()) {
+                    if (state === vscode.TreeItemCheckboxState.Checked) {
                         currentSelection.add(path);
                     }
                 }
@@ -1249,7 +1258,14 @@ export function activate(context: vscode.ExtensionContext) {
                 await fileExplorerProvider.setCheckedItems(combinedSelection);
 
                 // Get the final count AFTER setCheckedItems has run
-                const finalSelectedCount = Array.from(checkedItems.values()).filter(Boolean).length;
+                const finalSelectedCount = [...checkedItems.entries()].reduce((acc, [path, state]) => {
+                    if (state === vscode.TreeItemCheckboxState.Checked) {
+                        try {
+                            if (fs.statSync(path).isFile()) { acc++; }
+                        } catch { /* ignore ENOENT */ }
+                    }
+                    return acc;
+                }, 0);
                 const addedCount = finalSelectedCount - initialSelectedCount;
 
                 // Send unmatched patterns back to the webview regardless
@@ -1310,8 +1326,8 @@ export function activate(context: vscode.ExtensionContext) {
         try {
             // Get current selection
             const currentSelection = new Set<string>();
-            for (const [path, isChecked] of checkedItems.entries()) {
-                if (isChecked) {
+            for (const [path, state] of checkedItems.entries()) {
+                if (state === vscode.TreeItemCheckboxState.Checked) {
                     currentSelection.add(path);
                 }
             }
@@ -1340,7 +1356,14 @@ export function activate(context: vscode.ExtensionContext) {
             await fileExplorerProvider.setCheckedItems(combinedSelection);
 
             // Get the final count AFTER setCheckedItems has run (it might filter some)
-            const finalSelectedCount = Array.from(checkedItems.values()).filter(Boolean).length;
+            const finalSelectedCount = [...checkedItems.entries()].reduce((acc, [path, state]) => {
+                if (state === vscode.TreeItemCheckboxState.Checked) {
+                    try {
+                        if (fs.statSync(path).isFile()) { acc++; }
+                    } catch { /* ignore ENOENT */ }
+                }
+                return acc;
+            }, 0);
             const addedCount = finalSelectedCount - initialSelectedCount;
 
             // Send unmatched patterns back to the webview regardless

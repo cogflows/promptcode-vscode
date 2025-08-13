@@ -1,7 +1,7 @@
 /**
  * Embedded templates for compiled binaries.
  * This file is auto-generated during build - DO NOT EDIT MANUALLY.
- * Generated at: 2025-08-12T13:49:42.078Z
+ * Generated at: 2025-08-12T15:35:45.074Z
  */
 
 // Template contents embedded at build time
