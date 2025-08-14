@@ -1,0 +1,77 @@
+# Installation and Update Flow Implementation
+# Captures the complete smart integration setup system with diff detection
+# Created: 2025-08-14
+# Purpose: Document the enhanced DX for automatic integration detection and updates
+
+# === Core Integration Commands ===
+# Commands that handle CC and Cursor integrations
+packages/cli/src/commands/cc.ts
+packages/cli/src/commands/cursor.ts
+packages/cli/src/commands/integrate.ts
+packages/cli/src/commands/update.ts
+packages/cli/src/commands/uninstall.ts
+
+# === Smart Update Utilities ===
+# New utilities for canonicalization and checksums
+packages/cli/src/utils/canonicalize.ts
+packages/cli/src/utils/template-checksums.ts
+packages/cli/src/utils/integration-detector.ts
+
+# === Integration Support Utilities ===
+packages/cli/src/utils/claude-integration.ts
+packages/cli/src/utils/cursor-integration.ts
+packages/cli/src/utils/integration-helper.ts
+packages/cli/src/utils/environment.ts
+packages/cli/src/utils/paths.ts
+packages/cli/src/utils/spinner.ts
+packages/cli/src/utils/update-checker.ts
+
+# === Build Scripts ===
+# Scripts that generate checksums and embed templates
+packages/cli/scripts/generate-checksums.js
+packages/cli/scripts/embed-templates.js
+packages/cli/scripts/inject-version.js
+packages/cli/scripts/previous-checksums.json
+
+# === Installation Scripts ===
+packages/cli/scripts/install.sh
+packages/cli/scripts/install.ps1
+
+# === Main Entry Point ===
+packages/cli/src/index.ts
+
+# === Generated Files ===
+# Auto-generated files from build process
+packages/cli/src/embedded-templates.ts
+packages/cli/src/version.ts
+
+# === Templates ===
+# All Claude and Cursor templates
+packages/cli/src/claude-templates/*.md
+packages/cli/src/claude-templates/*.template
+packages/cli/src/cursor-templates/*.mdc
+
+# === Package Configuration ===
+packages/cli/package.json
+packages/cli/tsconfig.json
+packages/cli/bunfig.toml
+
+# === Documentation ===
+packages/cli/README.md
+packages/cli/CLAUDE.md
+packages/cli/INSTALLATION.md
+CLAUDE.md
+
+# === Tests (if any exist) ===
+packages/cli/test/commands/cc.test.ts
+packages/cli/test/commands/cursor.test.ts
+packages/cli/test/commands/integrate.test.ts
+packages/cli/test/integration.test.ts
+
+# === Exclusions ===
+!**/node_modules/**
+!**/dist/**
+!**/build/**
+!**/.git/**
+!**/__pycache__/**
+!**/*.pyc

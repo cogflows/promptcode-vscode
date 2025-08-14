@@ -6,6 +6,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { spinner } from '../utils/spinner';
 import { BUILD_VERSION } from '../version';
+import { integrateCommand } from './integrate';
 
 const execAsync = promisify(exec);
 const REPO = 'cogflows/promptcode-vscode';
@@ -326,6 +327,14 @@ export const updateCommand = program
       
       spin.succeed(`Successfully updated to version ${latestVersion}`);
       console.log(chalk.green('\n✨ Update complete! The new version will be used on the next run.'));
+      
+      // Check for integration updates
+      console.log(chalk.cyan('\nChecking for integration updates...'));
+      await integrateCommand({ 
+        autoDetect: true, 
+        path: process.cwd(),
+        skipModified: true
+      });
       
     } catch (error) {
       spin.fail(`Update failed: ${error instanceof Error ? error.message : String(error)}`);

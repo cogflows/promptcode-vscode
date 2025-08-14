@@ -1,19 +1,103 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import chalk from 'chalk';
+import { createTwoFilesPatch } from 'diff';
+import inquirer from 'inquirer';
 import { getClaudeTemplatesDir } from '../utils/paths';
 import { spinner } from '../utils/spinner';
-import { shouldSkipConfirmation } from '../utils/environment';
+import { shouldSkipConfirmation, isInteractive } from '../utils/environment';
 import { findClaudeFolder, findClaudeMd, removeFromClaudeMd, removePromptCodeCommands, PROMPTCODE_CLAUDE_COMMANDS, LEGACY_CLAUDE_COMMANDS } from '../utils/claude-integration';
 import { findOrCreateIntegrationDir } from '../utils/integration-helper';
+import { calculateChecksum, areContentsEquivalent } from '../utils/canonicalize';
+import { isKnownTemplateVersion } from '../utils/template-checksums';
 
 interface CcOptions {
   path?: string;
   force?: boolean;
   yes?: boolean;
   uninstall?: boolean;
+  skipModified?: boolean;
 }
 
+/**
+ * Update a single template file with smart conflict detection
+ */
+async function updateTemplateFile(
+  templatePath: string,
+  targetPath: string,
+  fileName: string,
+  options?: { skipModified?: boolean }
+): Promise<'created' | 'updated' | 'unchanged' | 'kept' | 'replaced'> {
+  const newContent = await fs.promises.readFile(templatePath, 'utf8');
+  
+  if (!fs.existsSync(targetPath)) {
+    await fs.promises.writeFile(targetPath, newContent);
+    return 'created';
+  }
+  
+  const existingContent = await fs.promises.readFile(targetPath, 'utf8');
+  
+  // Check if identical
+  if (existingContent === newContent) {
+    return 'unchanged';
+  }
+  
+  // Check if only formatting differs
+  const fileExt = path.extname(fileName).toLowerCase();
+  if (areContentsEquivalent(existingContent, newContent, fileExt)) {
+    await fs.promises.writeFile(targetPath, newContent);
+    return 'updated';
+  }
+  
+  // Calculate checksum to see if it's a known version
+  const existingChecksum = calculateChecksum(existingContent, fileExt);
+  
+  if (isKnownTemplateVersion(fileName, existingChecksum)) {
+    // File matches a known version - safe to auto-update
+    await fs.promises.writeFile(targetPath, newContent);
+    return 'updated';
+  }
+  
+  // File has user modifications
+  if (options?.skipModified) {
+    console.log(chalk.yellow(`  ⚠️  Skipping ${fileName} (contains local changes)`));
+    return 'kept';
+  }
+  
+  if (!isInteractive()) {
+    console.log(chalk.yellow(`  ⚠️  Skipping ${fileName} (contains local changes, non-interactive)`));
+    return 'kept';
+  }
+  
+  // Show diff
+  const patch = createTwoFilesPatch(
+    fileName, fileName,
+    existingContent, newContent,
+    'Current', 'New'
+  );
+  
+  console.log(chalk.yellow(`\n📝 File has local changes: ${fileName}`));
+  console.log(patch);
+  
+  const { action } = await inquirer.prompt([{
+    type: 'list',
+    name: 'action',
+    message: 'What would you like to do?',
+    choices: [
+      { name: 'Keep my version', value: 'keep' },
+      { name: 'Use new version (discard my changes)', value: 'replace' },
+      { name: 'Skip for now', value: 'skip' }
+    ],
+    default: 'keep'
+  }]);
+  
+  if (action === 'replace') {
+    await fs.promises.writeFile(targetPath, newContent);
+    return 'replaced';
+  }
+  
+  return 'kept';
+}
 
 /**
  * Add PromptCode section to CLAUDE.md or create it
@@ -59,7 +143,7 @@ async function updateClaudeMd(claudeDir: string): Promise<void> {
 /**
  * Set up Claude commands
  */
-async function setupClaudeCommands(projectPath: string): Promise<{ claudeDir: string | null; isNew: boolean }> {
+async function setupClaudeCommands(projectPath: string, options?: CcOptions): Promise<{ claudeDir: string | null; isNew: boolean; stats: { created: number; updated: number; kept: number; unchanged: number } }> {
   // Find or create .claude directory
   const { dir: claudeDir, isNew } = await findOrCreateIntegrationDir(
     projectPath,
@@ -69,7 +153,7 @@ async function setupClaudeCommands(projectPath: string): Promise<{ claudeDir: st
   
   if (!claudeDir) {
     console.log(chalk.red('Cannot setup Claude integration without .claude directory'));
-    return { claudeDir: null, isNew: false };
+    return { claudeDir: null, isNew: false, stats: { created: 0, updated: 0, kept: 0, unchanged: 0 } };
   }
   
   const commandsDir = path.join(claudeDir, 'commands');
@@ -90,38 +174,36 @@ async function setupClaudeCommands(projectPath: string): Promise<{ claudeDir: st
   const commands = PROMPTCODE_CLAUDE_COMMANDS;
   
   const templatesDir = getClaudeTemplatesDir();
-  let installedCount = 0;
-  let updatedCount = 0;
-  let skippedCount = 0;
+  const stats = { created: 0, updated: 0, kept: 0, unchanged: 0 };
   
   for (const command of commands) {
     const templatePath = path.join(templatesDir, command);
     const commandPath = path.join(commandsDir, command);
     
     if (fs.existsSync(templatePath)) {
-      const newContent = await fs.promises.readFile(templatePath, 'utf8');
+      const result = await updateTemplateFile(
+        templatePath,
+        commandPath,
+        command,
+        { skipModified: options?.skipModified }
+      );
       
-      // Check if file exists and has same content
-      if (fs.existsSync(commandPath)) {
-        const existingContent = await fs.promises.readFile(commandPath, 'utf8');
-        if (existingContent === newContent) {
-          skippedCount++;
-          continue; // Skip if content is identical
-        }
-        updatedCount++;
-      } else {
-        installedCount++;
+      switch (result) {
+        case 'created': stats.created++; break;
+        case 'updated': stats.updated++; break;
+        case 'kept': stats.kept++; break;
+        case 'replaced': stats.updated++; break;
+        case 'unchanged': stats.unchanged++; break;
       }
-      
-      await fs.promises.writeFile(commandPath, newContent);
     }
   }
   
   // Report what was done
   const actions = [];
-  if (installedCount > 0) actions.push(`${installedCount} new`);
-  if (updatedCount > 0) actions.push(`${updatedCount} updated`);
-  if (skippedCount > 0) actions.push(`${skippedCount} unchanged`);
+  if (stats.created > 0) actions.push(`${stats.created} new`);
+  if (stats.updated > 0) actions.push(`${stats.updated} updated`);
+  if (stats.kept > 0) actions.push(`${stats.kept} kept`);
+  if (stats.unchanged > 0) actions.push(`${stats.unchanged} unchanged`);
   
   if (actions.length > 0) {
     console.log(chalk.green(`✓ Claude commands: ${actions.join(', ')}`));
@@ -190,7 +272,7 @@ tmp/
     );
   }
   
-  return { claudeDir, isNew };
+  return { claudeDir, isNew, stats };
 }
 
 /**
@@ -236,7 +318,7 @@ export async function ccCommand(options: CcOptions & { detect?: boolean }): Prom
   try {
     // Set up Claude commands and get the directory
     spin.text = 'Setting up Claude integration...';
-    const { claudeDir, isNew } = await setupClaudeCommands(projectPath);
+    const { claudeDir, isNew, stats } = await setupClaudeCommands(projectPath, options);
     
     if (!claudeDir) {
       spin.fail(chalk.red('Setup cancelled'));

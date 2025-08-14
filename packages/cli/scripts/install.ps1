@@ -7,7 +7,9 @@
 #   Invoke-WebRequest ... | Invoke-Expression
 
 param(
-    [switch]$Uninstall
+    [switch]$Uninstall,
+    [switch]$Insecure,
+    [switch]$NoPathChanges
 )
 
 # Configuration
@@ -40,11 +42,13 @@ function Write-Error($message) {
 
 # Detect architecture
 function Get-Architecture {
-    $arch = [System.Environment]::Is64BitOperatingSystem
-    if ($arch) {
+    $arch = $env:PROCESSOR_ARCHITECTURE
+    if ($arch -eq "ARM64") {
+        return "arm64"
+    } elseif ($arch -eq "AMD64") {
         return "x64"
     } else {
-        Write-Error "32-bit Windows is not supported"
+        Write-Error "Unsupported Windows architecture: $arch"
     }
 }
 
@@ -90,7 +94,12 @@ function Download-Binary($version, $arch) {
             Write-Success "Checksum verified successfully"
         }
         catch {
-            Write-Warning "Could not verify checksum (checksum file may not be available). Proceeding with caution."
+            if (-not $Insecure) {
+                Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
+                Write-Error "Checksum verification unavailable. Re-run with -Insecure to override (NOT RECOMMENDED)."
+            } else {
+                Write-Warning "Proceeding without checksum verification due to -Insecure flag."
+            }
         }
         
         return $tempFile
@@ -119,9 +128,25 @@ function Install-Binary($sourcePath) {
 
 # Add to PATH
 function Update-Path {
+    if ($NoPathChanges) {
+        Write-Info "Skipping PATH modification due to -NoPathChanges flag"
+        Write-Info "To add to PATH manually, run:"
+        Write-Host "  [Environment]::SetEnvironmentVariable('Path', `$env:Path + ';$INSTALL_DIR', 'User')" -ForegroundColor Yellow
+        return
+    }
+    
     $currentPath = [Environment]::GetEnvironmentVariable("Path", "User")
     
     if ($currentPath -notlike "*$INSTALL_DIR*") {
+        # Prompt for PATH modification
+        Write-Host ""
+        $response = Read-Host "Add $INSTALL_DIR to your user PATH? [Y/n]"
+        if ($response -match '^[Nn]') {
+            Write-Info "PATH not modified. To add to PATH manually, run:"
+            Write-Host "  [Environment]::SetEnvironmentVariable('Path', `$env:Path + ';$INSTALL_DIR', 'User')" -ForegroundColor Yellow
+            return
+        }
+        
         Write-Info "Adding $INSTALL_DIR to PATH..."
         
         $newPath = "$currentPath;$INSTALL_DIR"

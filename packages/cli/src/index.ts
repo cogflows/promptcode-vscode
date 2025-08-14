@@ -13,8 +13,58 @@ import { ccCommand } from './commands/cc';
 import { cursorCommand } from './commands/cursor';
 import { updateCommand } from './commands/update';
 import { uninstallCommand } from './commands/uninstall';
+import { integrateCommand } from './commands/integrate';
 import { BUILD_VERSION } from './version';
 import { startUpdateCheck } from './utils/update-checker';
+import { exitWithCode, EXIT_CODES } from './utils/exit-codes';
+
+// Windows update auto-finalization
+// Completes pending update by swapping .new binary on startup
+(async function completePendingWindowsUpdate() {
+  if (process.platform !== 'win32') return;
+  
+  try {
+    const currentBinary = process.execPath;
+    const stagedBinary = `${currentBinary}.new`;
+    
+    // Check if there's a pending update
+    if (fs.existsSync(stagedBinary)) {
+      const backupPath = `${currentBinary}.bak`;
+      
+      try {
+        // Try atomic replacement
+        // First backup current binary
+        fs.renameSync(currentBinary, backupPath);
+        
+        // Move staged binary to current location
+        fs.renameSync(stagedBinary, currentBinary);
+        
+        // Clean up backup after successful swap
+        try { 
+          fs.unlinkSync(backupPath); 
+        } catch {
+          // Ignore cleanup errors
+        }
+        
+        // Notify user (to stderr to avoid polluting stdout)
+        console.error(chalk.green('[promptcode] Applied pending update successfully.'));
+        
+      } catch (err) {
+        // If swap failed, try to restore backup
+        if (fs.existsSync(backupPath) && !fs.existsSync(currentBinary)) {
+          try {
+            fs.renameSync(backupPath, currentBinary);
+          } catch {
+            // Can't restore, leave .new file for manual intervention
+          }
+        }
+        // Silent failure - don't break normal operation
+      }
+    }
+  } catch {
+    // Ignore all errors - don't interfere with normal CLI operation
+  }
+})();
 
 
 /**
@@ -42,7 +92,7 @@ function showHelpOrError(args: string[]): void {
   console.error(chalk.gray('  promptcode expert "Why is this slow?" -f "src/**/*.ts"'));
   console.error(chalk.gray('  promptcode preset create backend\n'));
   console.error(chalk.gray('For more help: promptcode --help'));
-  process.exit(1);
+  exitWithCode(EXIT_CODES.INVALID_INPUT);
 }
 
 const program = new Command()
@@ -278,6 +328,27 @@ Examples:
     await cursorCommand(options);
   });
 
+// Integrate command - Unified integration setup
+program
+  .command('integrate')
+  .description('Automatically detect and set up AI environment integrations')
+  .addHelpText('after', `
+This command detects Claude Code and Cursor environments and offers to set them up.
+Used automatically after install/update, or can be run manually.
+
+Examples:
+  $ promptcode integrate              # Detect and set up integrations
+  $ promptcode integrate --auto-detect # Offer setup only if environments found
+  $ promptcode integrate --skip-modified # Skip files with local changes`)
+  .option('--path <dir>', 'project directory', process.cwd())
+  .option('--auto-detect', 'automatically detect and offer integrations')
+  .option('-y, --yes', 'skip confirmation prompts')
+  .option('--skip-modified', 'skip files that have local modifications')
+  .option('--force', 'force overwrite all files')
+  .action(async (options) => {
+    await integrateCommand(options);
+  });
+
 // Stats command (quick stats about current directory)
 program
   .command('stats')
@@ -452,7 +523,7 @@ if (args[0] && args[0].startsWith('--')) {
 
 const knownCommands = [
   'generate', 'cache', 'templates', 'list-templates', 'preset', 
-  'expert', 'config', 'cc', 'cursor', 'stats', 'history', 'update', 'uninstall',
+  'expert', 'config', 'cc', 'cursor', 'integrate', 'stats', 'history', 'update', 'uninstall',
   '--help', '-h', '--version', '-V', '--detailed'
 ];
 

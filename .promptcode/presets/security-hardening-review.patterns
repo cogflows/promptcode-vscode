@@ -1,0 +1,24 @@
+# Security Hardening Review Preset
+# Created for reviewing the domain boundary security implementation
+# Focuses on the expert command security enhancements
+
+# Main implementation file with security helpers
+packages/cli/src/commands/expert.ts
+
+# Test file with security boundary tests
+packages/cli/test/commands/expert.test.ts
+
+# Index file with consistent exit codes
+packages/cli/src/index.ts
+
+# Claude command with macOS guard
+.claude/commands/promptcode-ask-expert.md
+
+# Environment and exit code utilities
+packages/cli/src/utils/environment.ts
+packages/cli/src/utils/exit-codes.ts
+
+# Exclude build artifacts and dependencies
+!**/node_modules/**
+!**/dist/**
+!**/.cache/**

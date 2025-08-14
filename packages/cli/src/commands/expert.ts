@@ -1,5 +1,6 @@
 import * as path from 'path';
 import * as fs from 'fs';
+import * as os from 'os';
 import chalk from 'chalk';
 import { scanFiles, buildPrompt, initializeTokenCounter } from '@promptcode/core';
 import { AIProvider } from '../providers/ai-provider';
@@ -44,6 +45,117 @@ Focus on:
 3. Potential issues or edge cases
 4. Performance and security considerations
 5. Clear, concise explanations`;
+
+/* ──────────────────────────────────────────────────────────
+ *  Helpers (refactor for readability + safety)
+ * ────────────────────────────────────────────────────────── */
+function safeDefaultPatterns(): string[] {
+  return [
+    '**/*',
+    '!**/node_modules/**',
+    '!**/.git/**',
+    '!**/.svn/**',
+    '!**/.hg/**',
+    '!**/dist/**',
+    '!**/build/**',
+    '!**/.cache/**',
+    '!**/.DS_Store',
+    '!**/.env*',
+    '!**/*.pem',
+    '!**/*.key',
+    '!**/.ssh/**',
+  ];
+}
+
+function validatePatternsWithinProject(patterns: string[]): void {
+  const invalid = patterns.find((p) => path.isAbsolute(p) || p.includes('..'));
+  if (invalid) {
+    throw new Error(
+      `Invalid file pattern detected: "${invalid}". Absolute paths and ".." segments are not allowed.`
+    );
+  }
+}
+
+async function loadPreset(projectPath: string, presetName: string): Promise<string[]> {
+  const presetPath = path.join(projectPath, '.promptcode', 'presets', `${presetName}.patterns`);
+  if (!fs.existsSync(presetPath)) {
+    throw new Error(`Preset not found: ${presetName}\nCreate it with: promptcode preset --create ${presetName}`);
+  }
+  const content = await fs.promises.readFile(presetPath, 'utf8');
+  return content
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('#'));
+}
+
+async function savePresetSafely(
+  projectPath: string,
+  presetName: string,
+  patterns: string[],
+  options: ExpertOptions
+): Promise<void> {
+  if (!/^[a-z0-9_-]+$/i.test(presetName)) {
+    throw new Error('Invalid preset name. Use only letters, numbers, hyphens, and underscores.');
+  }
+  const presetDir = path.join(projectPath, '.promptcode', 'presets');
+  await fs.promises.mkdir(presetDir, { recursive: true });
+  const presetPath = path.join(presetDir, `${presetName}.patterns`);
+
+  // Additional path traversal check
+  const resolvedPresetDir = path.resolve(presetDir);
+  const resolvedPresetPath = path.resolve(presetPath);
+  if (!resolvedPresetPath.startsWith(resolvedPresetDir + path.sep)) {
+    throw new Error('Invalid preset path detected.');
+  }
+
+  if (fs.existsSync(presetPath)) {
+    if (!shouldSkipConfirmation(options)) {
+      if (!isInteractive()) {
+        throw new Error(`Preset '${presetName}' already exists. Re-run with --yes/--force to overwrite.`);
+      } else {
+        const readline = await import('readline');
+        const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+        const ans = await new Promise<string>((resolve) =>
+          rl.question(chalk.bold(`Preset '${presetName}' exists. Overwrite? (y/N): `), resolve)
+        );
+        rl.close();
+        if (!['y', 'yes'].includes(ans.trim().toLowerCase())) {
+          throw new Error('Operation cancelled by user.');
+        }
+      }
+    }
+  }
+
+  const presetContent = `# ${presetName} preset\n# Created: ${new Date().toISOString()}\n\n${patterns.join('\n')}\n`;
+  await fs.promises.writeFile(presetPath, presetContent);
+  console.log(chalk.green(`✓ Saved file patterns to preset: ${presetName}`));
+}
+
+async function scanProject(projectPath: string, patterns: string[]) {
+  const files = await scanFiles({
+    cwd: projectPath,
+    patterns,
+    respectGitignore: true,
+    workspaceName: path.basename(projectPath),
+  });
+  return files;
+}
+
+function assertFilesInsideProject(projectPath: string, files: any[]): void {
+  const projectRoot = path.resolve(projectPath) + path.sep;
+  const escaped = files.find((f) => {
+    const abs = path.resolve((f as any).fullPath || path.join(projectPath, f.path));
+    return !abs.startsWith(projectRoot);
+  });
+  if (escaped) {
+    throw new Error(`Refusing to include file outside project root: ${escaped.path}`);
+  }
+}
+
+function getCacheDir(): string {
+  const cacheBase = process.env.XDG_CACHE_HOME || path.join(os.homedir(), '.cache');
+  return path.join(cacheBase, 'promptcode');
+}
 
 function listAvailableModels(jsonOutput: boolean = false) {
   const availableModels = getAvailableModels();
@@ -227,72 +339,30 @@ export async function expertCommand(question: string | undefined, options: Exper
     const aiProvider = new AIProvider();
     
     // Initialize token counter
-    const cacheDir = process.env.XDG_CACHE_HOME || path.join(process.env.HOME || '', '.cache', 'promptcode');
+    const cacheDir = getCacheDir();
     initializeTokenCounter(cacheDir, '0.1.0');
     
     const projectPath = path.resolve(options.path || process.cwd());
     
-    // Determine patterns - prioritize files, then preset, then default
-    let patterns: string[];
-    
+    // Determine patterns - prioritize files, then preset, then default (safe)
+    let patterns: string[] = [];
     if (options.files && options.files.length > 0) {
-      // Direct files provided - strip @ prefix if present
-      patterns = options.files.map(f => f.startsWith('@') ? f.slice(1) : f);
+      patterns = options.files.map((f) => (f.startsWith('@') ? f.slice(1) : f));
+      validatePatternsWithinProject(patterns);
     } else if (options.preset) {
-      // Load preset
-      const presetPath = path.join(projectPath, '.promptcode', 'presets', `${options.preset}.patterns`);
-      if (fs.existsSync(presetPath)) {
-        const content = await fs.promises.readFile(presetPath, 'utf8');
-        patterns = content
-          .split('\n')
-          .map(line => line.trim())
-          .filter(line => line && !line.startsWith('#'));
-      } else {
-        throw new Error(`Preset not found: ${options.preset}\nCreate it with: promptcode preset --create ${options.preset}`);
-      }
+      patterns = await loadPreset(projectPath, options.preset);
     } else if (options.promptFile) {
-      // When using prompt-file without files/preset, don't scan any files by default
-      // The user can specify files/preset if they want context
+      // Prompt-file only: no files by default
       patterns = [];
       console.log(chalk.gray('💡 No files specified. Use -f or --preset to include code context.'));
     } else {
-      // Default to all files only when not using prompt-file
-      patterns = ['**/*'];
+      // Safe default include set (respects .gitignore + conservative excludes)
+      patterns = safeDefaultPatterns();
     }
     
     // Save preset if requested
     if (options.savePreset && patterns.length > 0) {
-      // Validate preset name to prevent path traversal
-      const presetName = options.savePreset;
-      if (!/^[a-z0-9_-]+$/i.test(presetName)) {
-        throw new Error('Invalid preset name. Use only letters, numbers, hyphens, and underscores.');
-      }
-      
-      const presetDir = path.join(projectPath, '.promptcode', 'presets');
-      await fs.promises.mkdir(presetDir, { recursive: true });
-      const presetPath = path.join(presetDir, `${presetName}.patterns`);
-      
-      // Additional path traversal check
-      const resolvedPresetDir = path.resolve(presetDir);
-      const resolvedPresetPath = path.resolve(presetPath);
-      if (!resolvedPresetPath.startsWith(resolvedPresetDir + path.sep)) {
-        throw new Error('Invalid preset path detected.');
-      }
-      
-      // Check if preset exists
-      if (fs.existsSync(presetPath)) {
-        // In non-interactive environments, fail to avoid accidental overwrites
-        if (!isInteractive()) {
-          throw new Error(`Preset '${presetName}' already exists. Remove it first or choose a different name.`);
-        }
-        // In TTY, we could ask for confirmation, but for now just notify
-        console.log(chalk.yellow(`⚠️  Overwriting existing preset: ${presetName}`));
-      }
-      
-      // Write the preset file (exclude question to avoid potential secret leaks)
-      const presetContent = `# ${presetName} preset\n# Created: ${new Date().toISOString()}\n\n${patterns.join('\n')}\n`;
-      await fs.promises.writeFile(presetPath, presetContent);
-      console.log(chalk.green(`✓ Saved file patterns to preset: ${presetName}`));
+      await savePresetSafely(projectPath, options.savePreset, patterns, options);
     }
     
     // Scan files only if patterns exist
@@ -300,12 +370,9 @@ export async function expertCommand(question: string | undefined, options: Exper
     let result: any;
     
     if (patterns.length > 0) {
-      files = await scanFiles({
-        cwd: projectPath,
-        patterns,
-        respectGitignore: true,
-        workspaceName: path.basename(projectPath)
-      });
+      files = await scanProject(projectPath, patterns);
+      // Defense in depth: assert files remain within project
+      assertFilesInsideProject(projectPath, files);
       
       if (files.length === 0) {
         if (spin) {
@@ -522,6 +589,10 @@ export async function expertCommand(question: string | undefined, options: Exper
         // User explicitly requested web search but model doesn't support it
         console.log(chalk.yellow(`⚠️  ${modelConfig.name} does not support web search. Proceeding without web search.\n`));
       }
+      // Warn if we auto-included a very large set
+      if (!options.files?.length && !options.preset && files.length > 200) {
+        console.log(chalk.yellow(`⚠️  Including ${files.length} files by default. Consider --preset or -f to narrow scope.`));
+      }
     }
     
     // Call AI
@@ -636,6 +707,9 @@ export async function expertCommand(question: string | undefined, options: Exper
     if (spin) {
       spin.fail(chalk.red(`Error: ${err.message}`));
       spin.stop(); // Ensure cleanup
+    } else {
+      // Output error to stderr when no spinner
+      console.error(chalk.red(`Error: ${err.message}`));
     }
 
     // Helpful message for context-length overflows

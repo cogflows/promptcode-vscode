@@ -1,0 +1,39 @@
+{
+  "comment": "Historical checksums from previous versions - maintain this file to track known versions",
+  "promptcode-ask-expert.md": [
+    "11c4de5e1055bd8427d2a4ef48b56177f63b71eecc7057fb4bd51b8246c45991"
+  ],
+  "promptcode-preset-list.md": [
+    "e1481e4750c5a72d966720803e291b098bb4d41010b814fda034a1406b5b197c"
+  ],
+  "promptcode-preset-info.md": [
+    "da52a33a0efdf19fbad0559babc0844e48d93ed8eef00afb83e8cf7f054a1d7f"
+  ],
+  "promptcode-preset-create.md": [
+    "5fe5043502b273103d422a945c6181b9136d6ea97e9cfd2282eaa1b96c7c2766"
+  ],
+  "promptcode-preset-to-prompt.md": [
+    "dc46c41019c808d95fddfa5c6149ce01b117be03ac0b277fc50f61c92c5dedda"
+  ],
+  "CLAUDE.md.template": [
+    "3266e9ac87845042d919de13e44c073d3845ed598badcde86074073311f67fc1"
+  ],
+  "promptcode-usage.mdc": [
+    "9019a9270e0f4afc993445f7c5fdd26c981cc172d1cd97a8a317f5e60b3e0a66"
+  ],
+  "promptcode-ask-expert.mdc": [
+    "009542c1063fe7bdd0b6d4338ce68d01a7a87ee11310265920c04bc2a0682238"
+  ],
+  "promptcode-preset-list.mdc": [
+    "97269f790001e7382a80d61a8cfd4177016bb2d4da936bb4eebcec6057caa68a"
+  ],
+  "promptcode-preset-info.mdc": [
+    "5555e6b91c8b80ea7a2033248c108b11b11a7839bf881c12947e38dbbb25d5f0"
+  ],
+  "promptcode-preset-create.mdc": [
+    "0e49b39aa98c8ff8128de86d9369224d896a8b30b072e9d43ba984b94a80a6f6"
+  ],
+  "promptcode-preset-to-prompt.mdc": [
+    "3fa2fe13533614b14d869e2397e2982e6412704ca16c241a9b528a4373fd1f62"
+  ]
+}
