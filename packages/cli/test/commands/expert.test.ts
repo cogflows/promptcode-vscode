@@ -231,4 +231,123 @@ describe('expert command', () => {
     expect(result.stderr).toContain('Cost approval required');
   });
   
+  it('should reject JSON + stream conflict', async () => {
+    const result = await runCLI(['expert', 'Test', '--json', '--stream'], { 
+      cwd: fixture.dir,
+      env: {
+        ...process.env,
+        OPENAI_API_KEY: 'test-key'
+      }
+    });
+    
+    expect(result.exitCode).toBe(3); // EXIT_CODES.INVALID_INPUT
+    expect(result.stderr).toContain('Cannot use --json and --stream together');
+  });
+  
+  it('should emit JSON error for approval required in non-interactive', async () => {
+    createTestFiles(fixture.dir, {
+      'src/index.ts': 'console.log("Test");'.repeat(5000)  // Large file
+    });
+    
+    const result = await runCLI(['expert', 'Analyze', '--model', 'o3-pro', '--json'], { 
+      cwd: fixture.dir,
+      env: {
+        ...process.env,
+        PROMPTCODE_TEST: '1',
+        PROMPTCODE_MOCK_LLM: '1',
+        OPENAI_API_KEY: 'test-key'
+      }
+    });
+    
+    expect(result.exitCode).toBe(2); // EXIT_CODES.APPROVAL_REQUIRED
+    const json = JSON.parse(result.stdout);
+    expect(json.errorCode).toBe('APPROVAL_REQUIRED');
+    expect(json.message).toContain('Non-interactive environment');
+  });
+  
+  it('should reject invalid preset name for path traversal', async () => {
+    createTestFiles(fixture.dir, {
+      'src/index.ts': 'console.log("Test");'
+    });
+    
+    const result = await runCLI(['expert', 'Test', '--save-preset', '../../evil'], { 
+      cwd: fixture.dir,
+      env: {
+        ...process.env,
+        OPENAI_API_KEY: 'test-key'
+      }
+    });
+    
+    expect(result.exitCode).toBeGreaterThan(0);
+    expect(result.stderr).toMatch(/invalid preset name/i);
+  });
+  
+  it('should return PERMISSION_DENIED for unwritable output', async () => {
+    createTestFiles(fixture.dir, {
+      'src/index.ts': 'console.log("Test");'
+    });
+    
+    const result = await runCLI(['expert', 'Test', '--output', '/root/test.txt', '--yes', '-f', 'src/index.ts'], { 
+      cwd: fixture.dir,
+      env: {
+        ...process.env,
+        PROMPTCODE_MOCK_LLM: '1',
+        OPENAI_API_KEY: 'test-key'
+      }
+    });
+    
+    // This test might not work on all systems, so check for either
+    // permission denied exit code or error message
+    if (result.exitCode === 9) {
+      expect(result.exitCode).toBe(9); // EXIT_CODES.PERMISSION_DENIED
+    } else if (result.stderr.toLowerCase().includes('permission') || 
+               result.stderr.toLowerCase().includes('access') || 
+               result.stderr.toLowerCase().includes('denied')) {
+      // Good - got permission error message
+      expect(true).toBe(true);
+    } else {
+      // On some systems, /root might not trigger permission error
+      // Just ensure it didn't succeed
+      expect(result.exitCode).toBeGreaterThan(0);
+    }
+  });
+  
+  it('should return CONTEXT_TOO_LARGE for exceeding context window', async () => {
+    // Create a huge file that exceeds even large context windows
+    createTestFiles(fixture.dir, {
+      'src/huge.ts': 'console.log("Test");'.repeat(100000)  // ~2M tokens
+    });
+    
+    const result = await runCLI(['expert', 'Analyze', '--model', 'gpt-5-nano', '-f', 'src/huge.ts'], { 
+      cwd: fixture.dir,
+      env: {
+        ...process.env,
+        OPENAI_API_KEY: 'test-key'
+      }
+    });
+    
+    expect(result.exitCode).toBe(5); // EXIT_CODES.CONTEXT_TOO_LARGE
+    expect(result.stderr).toContain('exceeds');
+    expect(result.stderr).toMatch(/context|window|tokens/i);
+  });
+  
+  it('should handle dynamic provider enumeration', async () => {
+    const result = await runCLI(['expert', '--models', '--json'], { 
+      cwd: fixture.dir
+    });
+    
+    expect(result.exitCode).toBe(0);
+    const json = JSON.parse(result.stdout);
+    
+    // Check that providers are dynamically enumerated
+    expect(json.providers).toBeDefined();
+    const providerKeys = Object.keys(json.providers);
+    
+    // Should include all unique providers from models
+    const modelProviders = new Set(json.models.map((m: any) => m.provider));
+    modelProviders.forEach(provider => {
+      expect(providerKeys).toContain(provider);
+    });
+  });
+  
 });

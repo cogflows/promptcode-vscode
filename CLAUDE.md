@@ -61,7 +61,8 @@ promptocode-vscode/
 
 ### CLI Tool
 - **Entry Point**: `packages/cli/src/index.ts`
-- **Commands**: generate, expert, preset, stats, diff, extract
+- **Commands**: generate, expert, preset, stats
+  > Note: `diff`, `watch`, `validate`, and `extract` were removed in v0.3.x.
 - **AI Providers**: OpenAI, Anthropic, Google, xAI
 - **Build System**: Bun for fast compilation to standalone binary
 
@@ -193,9 +194,11 @@ export XAI_API_KEY=...            # For Grok models
 ## Cost Protection
 
 The expert command has built-in cost protection:
-- Operations over $0.50 require explicit approval
-- Premium models (e.g., o3-pro) always require confirmation
-- Use `--yes` flag only after getting user approval
+- Operations above a threshold require explicit approval (default **$0.50**)
+- Configure via `--cost-threshold <usd>` or `PROMPTCODE_COST_THRESHOLD`
+- Use `--yes`/`--force` only after getting user approval
+
+Models and pricing are provided by the CLI; do **not** hardcode them in templates.
 
 ## Exit Codes
 

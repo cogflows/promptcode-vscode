@@ -10,7 +10,8 @@ import { estimateCost, formatCost } from '../utils/cost';
 import { DEFAULT_EXPECTED_COMPLETION } from '../utils/constants';
 import { 
   shouldSkipConfirmation,
-  isInteractive
+  isInteractive,
+  shouldShowSpinner
 } from '../utils/environment';
 import { EXIT_CODES, exitWithCode } from '../utils/exit-codes';
 
@@ -64,7 +65,8 @@ function listAvailableModels(jsonOutput: boolean = false) {
       available: availableModels.includes(key)
     }));
     
-    const providers = ['openai', 'anthropic', 'google', 'xai'].reduce((acc, provider) => {
+    const providerSet = new Set(Object.values(MODELS).map(m => m.provider));
+    const providers = Array.from(providerSet).reduce((acc, provider) => {
       const providerModels = modelsData.filter(m => m.provider === provider);
       const hasAvailable = providerModels.some(m => m.available);
       
@@ -187,7 +189,7 @@ export async function expertCommand(question: string | undefined, options: Exper
   question = finalQuestion;
   
   // In non-interactive agent environments, provide additional guidance
-  if (process.env.CLAUDE_PROJECT_DIR && !options.yes) {
+  if (process.env.CLAUDE_PROJECT_DIR && !(options.yes || options.force)) {
     console.log(chalk.gray('💡 In non-interactive agent environments, ask the user for cost approval before re-running with --yes.'));
   }
   
@@ -217,7 +219,7 @@ export async function expertCommand(question: string | undefined, options: Exper
     exitWithCode(EXIT_CODES.MISSING_API_KEY);
   }
   
-  const spin = (!options.stream && !options.json) ? spinner() : null;
+  const spin = (!options.stream && !options.json && shouldShowSpinner({ json: options.json })) ? spinner() : null;
   if (spin) {spin.start('Preparing context...');}
   
   try {
@@ -376,6 +378,19 @@ export async function expertCommand(question: string | undefined, options: Exper
       options.webSearch !== undefined
         ? Boolean(options.webSearch)
         : Boolean(modelConfig.supportsWebSearch);
+    
+    // Parse cost threshold once and reuse
+    const envThreshold = process.env.PROMPTCODE_COST_THRESHOLD;
+    const resolvedCostThreshold = (() => {
+      if (options.costThreshold !== undefined) return options.costThreshold;
+      if (!envThreshold) return 0.50;
+      const parsed = parseFloat(envThreshold);
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        console.error(chalk.yellow(`Warning: Invalid PROMPTCODE_COST_THRESHOLD value "${envThreshold}". Using default $0.50.`));
+        return 0.50;
+      }
+      return parsed;
+    })();
 
     // Calculate estimated costs using total input tokens
     const expectedOutput = Math.min(availableTokens, DEFAULT_EXPECTED_COMPLETION);
@@ -413,7 +428,7 @@ export async function expertCommand(question: string | undefined, options: Exper
           patterns: patterns.length > 0 ? patterns : undefined,
           preset: options.preset || undefined,
           webSearchEnabled: webSearchEnabled && modelConfig.supportsWebSearch,
-          costThreshold: options.costThreshold ?? parseFloat(process.env.PROMPTCODE_COST_THRESHOLD || '0.50')
+          costThreshold: resolvedCostThreshold
         };
         console.log(JSON.stringify(costEstimate, null, 2));
       } else {
@@ -446,27 +461,7 @@ export async function expertCommand(question: string | undefined, options: Exper
 
     // Check if approval is needed
     const skipConfirm = shouldSkipConfirmation(options);
-    
-    // Parse cost threshold with validation
-    const envThreshold = process.env.PROMPTCODE_COST_THRESHOLD;
-    let parsedEnvThreshold = 0.50;
-    if (envThreshold) {
-      const parsed = parseFloat(envThreshold);
-      if (!Number.isFinite(parsed) || parsed < 0) {
-        console.error(chalk.yellow(`Warning: Invalid PROMPTCODE_COST_THRESHOLD value "${envThreshold}". Using default $0.50.`));
-      } else {
-        parsedEnvThreshold = parsed;
-      }
-    }
-    
-    const costThreshold = options.costThreshold ?? parsedEnvThreshold;
-    // Additional validation for CLI option
-    if (!Number.isFinite(costThreshold) || costThreshold < 0) {
-      console.error(chalk.red(`Invalid cost threshold: ${options.costThreshold}`));
-      exitWithCode(EXIT_CODES.INVALID_INPUT);
-    }
-    
-    const isExpensive = estimatedTotalCost > costThreshold;
+    const isExpensive = estimatedTotalCost > resolvedCostThreshold;
     
     if (!skipConfirm && isExpensive) {
       if (!isInteractive()) {

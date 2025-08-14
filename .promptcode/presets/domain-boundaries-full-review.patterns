@@ -1,0 +1,33 @@
+# Domain Boundaries Issue #8 - Complete Implementation Review
+# Full context for reviewing all 11 fixes + security improvements
+# Branch: fix/domain-boundaries-issue-8
+# Created: 2025-08-14
+
+# Core implementation files with all the fixes
+packages/cli/src/commands/expert.ts
+packages/cli/src/utils/environment.ts
+packages/cli/src/utils/exit-codes.ts
+packages/cli/src/index.ts
+
+# Test files showing comprehensive coverage
+packages/cli/test/commands/expert.test.ts
+packages/cli/test/test-utils.ts
+
+# Documentation updates
+packages/cli/README.md
+CLAUDE.md
+
+# Command template showing model default update
+.claude/commands/promptcode-ask-expert.md
+
+# Package info
+packages/cli/package.json
+
+# Exclude patterns
+!**/node_modules/**
+!**/dist/**
+!**/.git/**
+!**/coverage/**
+!**/*.log
+!**/embedded-templates.ts
+!**/*.pyc

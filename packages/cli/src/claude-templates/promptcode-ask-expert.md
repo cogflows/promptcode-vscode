@@ -1,6 +1,6 @@
 ---
 allowed-tools: Bash(promptcode expert:*), Bash(promptcode preset list:*), Bash(promptcode generate:*), Bash(open -a Cursor:*), Read(/tmp/expert-*:*), Write(/tmp/expert-consultation-*.md), Task
-description: Consult AI expert (O3/O3-pro) for complex problems with code context - supports ensemble mode for multiple models
+description: Consult AI expert for complex problems with code context - supports ensemble mode for multiple models
 ---
 
 Consult an expert about: $ARGUMENTS

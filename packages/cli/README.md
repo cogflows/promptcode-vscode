@@ -234,7 +234,7 @@ promptcode expert "Write comprehensive documentation for this module" \
 promptcode preset create legacy-code
 promptcode expert "What needs to be refactored for React 18 migration?" \
   --preset legacy-code \
-  --model gpt-4o
+  --model gpt-5
 
 # Get specific migration steps
 promptcode generate --preset legacy-code \
@@ -273,7 +273,7 @@ promptcode preset create old-components
 # Get AI-powered refactoring suggestions
 promptcode expert "How should I refactor these components for better performance?" \
   --preset old-components \
-  --model claude-3-5-sonnet
+  --model sonnet-4
 
 # Generate refactoring prompt for external AI tools
 promptcode generate -p old-components -t refactor | your-ai-tool
@@ -307,7 +307,7 @@ promptcode generate \
 # Get improvement suggestions
 promptcode expert "How can we improve our microservices architecture?" \
   --preset backend \
-  --model gpt-4o
+  --model gpt-5
 ```
 
 ### Quick Fixes
@@ -322,6 +322,15 @@ promptcode expert "How do I fix this TypeScript error?" \
 promptcode expert "Optimize this function for better performance" \
   -f "src/utils/dataProcessor.ts"
 ```
+
+## Cost Threshold
+
+By default, operations estimated above **$0.50** require approval. Configure via:
+
+- CLI: `--cost-threshold <usd>`
+- Env: `PROMPTCODE_COST_THRESHOLD=<usd>`
+
+Use `--yes` or `--force` (alias) to bypass confirmation **only after user approval**.
 
 ## Exit Codes
 

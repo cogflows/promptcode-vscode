@@ -1,6 +1,6 @@
 ---
 allowed-tools: Bash(promptcode expert:*), Bash(promptcode preset list:*), Bash(promptcode generate:*), Bash(open -a Cursor:*), Read(/tmp/expert-*:*), Write(/tmp/expert-consultation-*.md), Task
-description: Consult AI expert (O3/O3-pro) for complex problems with code context - supports ensemble mode for multiple models
+description: Consult AI expert for complex problems with code context - supports ensemble mode for multiple models
 ---
 
 Consult an expert about: $ARGUMENTS
@@ -47,10 +47,12 @@ Consult an expert about: $ARGUMENTS
 5. Estimate cost and get approval:
    - Use the CLI's built-in cost estimation:
      ```bash
-     promptcode expert "Question from file" --preset <preset> --model <model> --estimate-cost --json
+     promptcode expert --prompt-file "/tmp/expert-consultation-{timestamp}.md" --model <model> --estimate-cost --json
      ```
-   - Parse the JSON output to get the estimated cost
-   - Check the exit code: 0 = success, 2 = approval required (cost > $0.50)
+   - Parse the JSON output to get:
+     - `tokens.input` - total input tokens
+     - `cost.total` - estimated total cost
+   - Check the exit code: 0 = success, 2 = approval required (cost > threshold)
    
    **For single model:**
    - Say: "I've prepared the expert consultation (~{tokens} tokens). Model: {model}. You can edit the file to refine your question. Reply 'yes' to send to the expert (estimated cost: ${cost from CLI})."
@@ -159,6 +161,6 @@ Consult an expert about: $ARGUMENTS
 - Always show cost estimate before sending
 - Keep questions clear and specific
 - Include relevant code context when asking about specific functionality
-- NEVER automatically add --yes without user approval
+- NEVER automatically add --yes/--force without user approval
 
 - Reasoning effort defaults to 'high' (set in CLI) - no need to specify
