@@ -8,7 +8,7 @@ function findCursorFolder(startPath) {
   console.log('Starting search from:', currentPath);
   console.log('Root is:', root);
   
-  while (currentPath \!== root) {
+  while (currentPath !== root) {
     const cursorPath = path.join(currentPath, '.cursor');
     console.log('Checking:', cursorPath);
     if (fs.existsSync(cursorPath) && fs.statSync(cursorPath).isDirectory()) {

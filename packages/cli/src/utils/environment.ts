@@ -54,14 +54,10 @@ export function shouldSkipConfirmation(options?: {
   yes?: boolean; 
   force?: boolean; 
   noConfirm?: boolean;
-  json?: boolean; 
 }): boolean {
-  return options?.yes || 
-         options?.force || 
-         options?.noConfirm ||
-         options?.json ||
-         isTestEnvironment() ||
-         isCIEnvironment();
+  return !!(options?.yes || 
+            options?.force || 
+            options?.noConfirm);
 }
 
 /**

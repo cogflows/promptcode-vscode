@@ -197,6 +197,20 @@ The expert command has built-in cost protection:
 - Premium models (e.g., o3-pro) always require confirmation
 - Use `--yes` flag only after getting user approval
 
+## Exit Codes
+
+The CLI returns standardized exit codes for programmatic usage:
+- `0` - Success
+- `1` - General error
+- `2` - Approval required (cost > $0.50 in non-interactive mode)
+- `3` - Invalid input/command
+- `4` - Missing API key
+- `5` - Context too large for model
+- `6` - File/preset not found
+- `7` - Operation cancelled by user
+- `8` - Network/API error
+- `9` - Permission denied
+
 <details>
 <summary>⚠️ Troubleshooting</summary>
 

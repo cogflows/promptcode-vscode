@@ -323,6 +323,23 @@ promptcode expert "Optimize this function for better performance" \
   -f "src/utils/dataProcessor.ts"
 ```
 
+## Exit Codes
+
+The CLI uses standardized exit codes for programmatic usage:
+
+| Code | Name | Description |
+|------|------|-------------|
+| 0 | SUCCESS | Operation completed successfully |
+| 1 | GENERAL_ERROR | General error |
+| 2 | APPROVAL_REQUIRED | Cost approval needed (non-interactive mode) |
+| 3 | INVALID_INPUT | Invalid command or arguments |
+| 4 | MISSING_API_KEY | API key not configured |
+| 5 | CONTEXT_TOO_LARGE | Context exceeds model limits |
+| 6 | FILE_NOT_FOUND | File or preset not found |
+| 7 | OPERATION_CANCELLED | User cancelled operation |
+| 8 | NETWORK_ERROR | Network or API error |
+| 9 | PERMISSION_DENIED | Permission denied for file operations |
+
 ## Tips
 
 1. **Use presets** for different parts of your codebase

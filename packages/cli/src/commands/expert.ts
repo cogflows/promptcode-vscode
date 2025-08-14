@@ -3,13 +3,11 @@ import * as fs from 'fs';
 import chalk from 'chalk';
 import { scanFiles, buildPrompt, initializeTokenCounter } from '@promptcode/core';
 import { AIProvider } from '../providers/ai-provider';
-import { MODELS, DEFAULT_MODEL, getAvailableModels } from '../providers/models';
+import { MODELS, DEFAULT_MODEL, getAvailableModels, ModelConfig } from '../providers/models';
 import { logRun } from '../services/history';
 import { spinner } from '../utils/spinner';
 import { estimateCost, formatCost } from '../utils/cost';
 import { DEFAULT_EXPECTED_COMPLETION } from '../utils/constants';
-// Cost threshold for requiring approval
-const APPROVAL_COST_THRESHOLD = parseFloat(process.env.PROMPTCODE_COST_THRESHOLD || '0.50');
 import { 
   shouldSkipConfirmation,
   isInteractive
@@ -27,12 +25,14 @@ interface ExpertOptions {
   models?: boolean;
   savePreset?: string;
   yes?: boolean;
+  force?: boolean;
   webSearch?: boolean;
   verbosity?: 'low' | 'medium' | 'high';
   reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
   serviceTier?: 'auto' | 'flex' | 'priority';
   json?: boolean;
   estimateCost?: boolean;
+  costThreshold?: number;
 }
 
 const SYSTEM_PROMPT = `You are an expert software engineer helping analyze and improve code. Provide constructive, actionable feedback.
@@ -96,27 +96,28 @@ function listAvailableModels(jsonOutput: boolean = false) {
     // Human-readable output
     console.log(chalk.bold('\n📋 Available Models:\n'));
     
-    const modelsByProvider: Record<string, typeof MODELS[string][]> = {};
+    type ModelRow = ModelConfig & { key: string };
+    const modelsByProvider: Record<string, ModelRow[]> = {};
     
     // Group by provider
     Object.entries(MODELS).forEach(([key, config]) => {
       if (!modelsByProvider[config.provider]) {
         modelsByProvider[config.provider] = [];
       }
-      modelsByProvider[config.provider].push({ ...config, key } as any);
+      modelsByProvider[config.provider].push({ ...config, key });
     });
     
     // Display by provider
     Object.entries(modelsByProvider).forEach(([provider, models]) => {
-      const hasKey = models.some(m => availableModels.includes((m as any).key));
+      const hasKey = models.some(m => availableModels.includes(m.key));
       const providerName = provider.charAt(0).toUpperCase() + provider.slice(1);
       
       console.log(chalk.blue(`${providerName}:`));
       
       models.forEach(model => {
-        const isAvailable = availableModels.includes((model as any).key);
+        const isAvailable = availableModels.includes(model.key);
         const status = isAvailable ? chalk.green('✓') : chalk.gray('✗');
-        const name = isAvailable ? chalk.cyan((model as any).key) : chalk.gray((model as any).key);
+        const name = isAvailable ? chalk.cyan(model.key) : chalk.gray(model.key);
         const pricing = `$${model.pricing.input}/$${model.pricing.output}/M`;
         
         console.log(`  ${status} ${name.padEnd(20)} ${model.description.padEnd(50)} ${chalk.gray(pricing)}`);
@@ -142,6 +143,12 @@ function listAvailableModels(jsonOutput: boolean = false) {
 }
 
 export async function expertCommand(question: string | undefined, options: ExpertOptions): Promise<void> {
+  // Validate conflicting options
+  if (options.json && options.stream) {
+    console.error(chalk.red('❌ Cannot use --json and --stream together. Choose one output format.'));
+    exitWithCode(EXIT_CODES.INVALID_INPUT);
+  }
+  
   // Handle --models flag
   if (options.models) {
     listAvailableModels(options.json || false);
@@ -189,8 +196,8 @@ export async function expertCommand(question: string | undefined, options: Exper
   const modelConfig = MODELS[modelKey];
   
   if (!modelConfig) {
-    const available = getAvailableModels();
-    console.error(chalk.red(`Unknown model: ${modelKey}. Available models: ${available.join(', ')}`));
+    const known = Object.keys(MODELS);
+    console.error(chalk.red(`Unknown model: ${modelKey}. Known models: ${known.join(', ')}`));
     exitWithCode(EXIT_CODES.INVALID_INPUT);
   }
   
@@ -253,24 +260,37 @@ export async function expertCommand(question: string | undefined, options: Exper
     
     // Save preset if requested
     if (options.savePreset && patterns.length > 0) {
+      // Validate preset name to prevent path traversal
+      const presetName = options.savePreset;
+      if (!/^[a-z0-9_-]+$/i.test(presetName)) {
+        throw new Error('Invalid preset name. Use only letters, numbers, hyphens, and underscores.');
+      }
+      
       const presetDir = path.join(projectPath, '.promptcode', 'presets');
       await fs.promises.mkdir(presetDir, { recursive: true });
-      const presetPath = path.join(presetDir, `${options.savePreset}.patterns`);
+      const presetPath = path.join(presetDir, `${presetName}.patterns`);
+      
+      // Additional path traversal check
+      const resolvedPresetDir = path.resolve(presetDir);
+      const resolvedPresetPath = path.resolve(presetPath);
+      if (!resolvedPresetPath.startsWith(resolvedPresetDir + path.sep)) {
+        throw new Error('Invalid preset path detected.');
+      }
       
       // Check if preset exists
       if (fs.existsSync(presetPath)) {
         // In non-interactive environments, fail to avoid accidental overwrites
         if (!isInteractive()) {
-          throw new Error(`Preset '${options.savePreset}' already exists. Remove it first or choose a different name.`);
+          throw new Error(`Preset '${presetName}' already exists. Remove it first or choose a different name.`);
         }
         // In TTY, we could ask for confirmation, but for now just notify
-        console.log(chalk.yellow(`⚠️  Overwriting existing preset: ${options.savePreset}`));
+        console.log(chalk.yellow(`⚠️  Overwriting existing preset: ${presetName}`));
       }
       
-      // Write the preset file
-      const presetContent = `# ${options.savePreset} preset\n# Created: ${new Date().toISOString()}\n# Question: ${question || 'N/A'}\n\n${patterns.join('\n')}\n`;
+      // Write the preset file (exclude question to avoid potential secret leaks)
+      const presetContent = `# ${presetName} preset\n# Created: ${new Date().toISOString()}\n\n${patterns.join('\n')}\n`;
       await fs.promises.writeFile(presetPath, presetContent);
-      console.log(chalk.green(`✓ Saved file patterns to preset: ${options.savePreset}`));
+      console.log(chalk.green(`✓ Saved file patterns to preset: ${presetName}`));
     }
     
     // Scan files only if patterns exist
@@ -305,13 +325,9 @@ export async function expertCommand(question: string | undefined, options: Exper
       });
     } else {
       // No files to scan - create minimal result for prompt-only queries
-      // But we need to count tokens from the prompt/question itself
-      const { countTokens } = await import('@promptcode/core');
-      const promptTokens = countTokens(question || '');
-      
       result = {
         prompt: '',
-        tokenCount: promptTokens,
+        tokenCount: 0,  // File context tokens only
         fileCount: 0
       };
     }
@@ -321,14 +337,23 @@ export async function expertCommand(question: string | undefined, options: Exper
     /* ──────────────────────────────────────────────────────────
      *  Token-limit enforcement
      * ────────────────────────────────────────────────────────── */
+    // Import token counting utility
+    const { countTokens } = await import('@promptcode/core');
+    
+    // Calculate all token components
+    const systemPromptTokens = SYSTEM_PROMPT ? countTokens(SYSTEM_PROMPT) : 0;
+    const questionTokens = question ? countTokens(question) : 0;
+    const fileContextTokens = result.tokenCount || 0;
+    const totalInputTokens = systemPromptTokens + questionTokens + fileContextTokens;
+    
     const SAFETY_MARGIN = 256; // leave room for stop-tokens & metadata
     const availableTokens =
-      modelConfig.contextWindow - result.tokenCount - SAFETY_MARGIN;
+      modelConfig.contextWindow - totalInputTokens - SAFETY_MARGIN;
 
     if (availableTokens <= 0) {
       if (spin) {
         spin.fail(
-          `Prompt size (${result.tokenCount.toLocaleString()} tokens) exceeds the ${modelConfig.contextWindow.toLocaleString()}-token window of "${modelConfig.name}".\n` +
+          `Prompt size (${totalInputTokens.toLocaleString()} tokens) exceeds the ${modelConfig.contextWindow.toLocaleString()}-token window of "${modelConfig.name}".\n` +
             'Reduce the number of files or switch to a larger-context model.',
         );
         spin.stop(); // Ensure cleanup
@@ -339,16 +364,23 @@ export async function expertCommand(question: string | undefined, options: Exper
     if (availableTokens < modelConfig.contextWindow * 0.2) {
       if (spin) {
         spin.warn(
-          `Large context: ${result.tokenCount.toLocaleString()} tokens. ` +
+          `Large context: ${totalInputTokens.toLocaleString()} tokens. ` +
             `${availableTokens.toLocaleString()} tokens remain for the response.`,
         );
       }
     }
 
-    // Calculate estimated costs
+    // Determine web search setting
+    // Default: enabled if model supports and user didn't disable it.
+    const webSearchEnabled =
+      options.webSearch !== undefined
+        ? Boolean(options.webSearch)
+        : Boolean(modelConfig.supportsWebSearch);
+
+    // Calculate estimated costs using total input tokens
     const expectedOutput = Math.min(availableTokens, DEFAULT_EXPECTED_COMPLETION);
-    const estimatedTotalCost = estimateCost(modelKey, result.tokenCount, expectedOutput);
-    const estimatedInputCost = (result.tokenCount / 1_000_000) * modelConfig.pricing.input;
+    const estimatedTotalCost = estimateCost(modelKey, totalInputTokens, expectedOutput);
+    const estimatedInputCost = (totalInputTokens / 1_000_000) * modelConfig.pricing.input;
     const estimatedOutputCost = (expectedOutput / 1_000_000) * modelConfig.pricing.output;
     
     // Handle --estimate-cost flag (dry-run mode)
@@ -367,10 +399,10 @@ export async function expertCommand(question: string | undefined, options: Exper
             outputPerMillion: modelConfig.pricing.output
           },
           tokens: {
-            input: result.tokenCount,
+            input: totalInputTokens,
             expectedOutput: expectedOutput,
             availableForOutput: availableTokens,
-            total: result.tokenCount + expectedOutput
+            total: totalInputTokens + expectedOutput
           },
           cost: {
             input: estimatedInputCost,
@@ -380,18 +412,19 @@ export async function expertCommand(question: string | undefined, options: Exper
           fileCount: files.length,
           patterns: patterns.length > 0 ? patterns : undefined,
           preset: options.preset || undefined,
-          webSearchEnabled: modelConfig.supportsWebSearch && options.webSearch !== false
+          webSearchEnabled: webSearchEnabled && modelConfig.supportsWebSearch,
+          costThreshold: options.costThreshold ?? parseFloat(process.env.PROMPTCODE_COST_THRESHOLD || '0.50')
         };
         console.log(JSON.stringify(costEstimate, null, 2));
       } else {
         // Human-readable output
         console.log(chalk.blue('\n📊 Cost Estimate (Dry Run):'));
         console.log(chalk.gray(`  Model:  ${modelConfig.name} (${modelKey})`));
-        console.log(chalk.gray(`  Input:  ${result.tokenCount.toLocaleString()} tokens × $${modelConfig.pricing.input}/M = $${estimatedInputCost.toFixed(4)}`));
+        console.log(chalk.gray(`  Input:  ${totalInputTokens.toLocaleString()} tokens × $${modelConfig.pricing.input}/M = $${estimatedInputCost.toFixed(4)}`));
         console.log(chalk.gray(`  Output: ~${expectedOutput.toLocaleString()} tokens × $${modelConfig.pricing.output}/M = $${estimatedOutputCost.toFixed(4)}`));
         console.log(chalk.bold(`  Total:  ~$${estimatedTotalCost.toFixed(4)}`));
         console.log(chalk.gray(`\n  Files:  ${files.length} files included`));
-        console.log(chalk.gray(`  Context: ${result.tokenCount.toLocaleString()}/${modelConfig.contextWindow.toLocaleString()} tokens used`));
+        console.log(chalk.gray(`  Context: ${totalInputTokens.toLocaleString()}/${modelConfig.contextWindow.toLocaleString()} tokens used`));
         if (modelConfig.supportsWebSearch && options.webSearch !== false) {
           console.log(chalk.cyan('  Web:    Search enabled'));
         }
@@ -406,27 +439,54 @@ export async function expertCommand(question: string | undefined, options: Exper
     // Show cost info (skip in JSON mode - it will be in the JSON output)
     if (!options.json) {
       console.error(chalk.blue('\n📊 Cost Breakdown:'));
-      console.error(chalk.gray(`  Input:  ${result.tokenCount.toLocaleString()} tokens × $${modelConfig.pricing.input}/M = $${estimatedInputCost.toFixed(4)}`));
+      console.error(chalk.gray(`  Input:  ${totalInputTokens.toLocaleString()} tokens × $${modelConfig.pricing.input}/M = $${estimatedInputCost.toFixed(4)}`));
       console.error(chalk.gray(`  Output: ~${expectedOutput.toLocaleString()} tokens × $${modelConfig.pricing.output}/M = $${estimatedOutputCost.toFixed(4)}`));
       console.error(chalk.bold(`  Total:  ~$${estimatedTotalCost.toFixed(4)}`));
     }
 
     // Check if approval is needed
     const skipConfirm = shouldSkipConfirmation(options);
-    const isExpensive = estimatedTotalCost > APPROVAL_COST_THRESHOLD;
     
-    if (!skipConfirm && (isExpensive || modelKey.includes('pro'))) {
+    // Parse cost threshold with validation
+    const envThreshold = process.env.PROMPTCODE_COST_THRESHOLD;
+    let parsedEnvThreshold = 0.50;
+    if (envThreshold) {
+      const parsed = parseFloat(envThreshold);
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        console.error(chalk.yellow(`Warning: Invalid PROMPTCODE_COST_THRESHOLD value "${envThreshold}". Using default $0.50.`));
+      } else {
+        parsedEnvThreshold = parsed;
+      }
+    }
+    
+    const costThreshold = options.costThreshold ?? parsedEnvThreshold;
+    // Additional validation for CLI option
+    if (!Number.isFinite(costThreshold) || costThreshold < 0) {
+      console.error(chalk.red(`Invalid cost threshold: ${options.costThreshold}`));
+      exitWithCode(EXIT_CODES.INVALID_INPUT);
+    }
+    
+    const isExpensive = estimatedTotalCost > costThreshold;
+    
+    if (!skipConfirm && isExpensive) {
       if (!isInteractive()) {
-        console.error(chalk.yellow('\n⚠️  Cost approval required for expensive operation (~$' + estimatedTotalCost.toFixed(2) + ')'));
-        console.error(chalk.yellow('\nNon-interactive environment detected.'));
-        console.error(chalk.yellow('Use --yes to proceed with approval after getting user confirmation.'));
+        if (options.json) {
+          // Return JSON error for approval required
+          console.log(JSON.stringify({
+            error: 'Cost approval required',
+            errorCode: 'APPROVAL_REQUIRED',
+            estimatedCost: estimatedTotalCost,
+            message: 'Non-interactive environment detected. Use --yes to proceed with approval after getting user confirmation.'
+          }, null, 2));
+        } else {
+          console.error(chalk.yellow('\n⚠️  Cost approval required for expensive operation (~$' + estimatedTotalCost.toFixed(2) + ')'));
+          console.error(chalk.yellow('\nNon-interactive environment detected.'));
+          console.error(chalk.yellow('Use --yes to proceed with approval after getting user confirmation.'));
+        }
         exitWithCode(EXIT_CODES.APPROVAL_REQUIRED);
       }
       
-      console.log(chalk.yellow(`\n⚠️  This consultation will cost approximately $${estimatedTotalCost.toFixed(2)}`));
-      if (modelKey.includes('pro')) {
-        console.log(chalk.yellow('   Note: Using premium model with higher costs'));
-      }
+      console.log(chalk.yellow(`\n⚠️  This consultation will cost approximately $${estimatedTotalCost.toFixed(2)}`))
       
       const readline = await import('readline');
       const rl = readline.createInterface({
@@ -459,16 +519,11 @@ export async function expertCommand(question: string | undefined, options: Exper
       console.log(chalk.gray('⏳ This may take a moment...\n'));
     }
     
-    // Determine web search setting
-    // Commander.js sets webSearch to false when --no-web-search is used
-    // undefined means use default (enabled for supported models)
-    const webSearchEnabled = options.webSearch;
-    
     // Show web search status and warnings (skip in JSON mode)
     if (!options.json) {
-      if (modelConfig.supportsWebSearch && webSearchEnabled !== false) {
+      if (webSearchEnabled && modelConfig.supportsWebSearch) {
         console.log(chalk.cyan('🔍 Web search enabled for current information\n'));
-      } else if (webSearchEnabled === true && !modelConfig.supportsWebSearch) {
+      } else if (options.webSearch === true && !modelConfig.supportsWebSearch) {
         // User explicitly requested web search but model doesn't support it
         console.log(chalk.yellow(`⚠️  ${modelConfig.name} does not support web search. Proceeding without web search.\n`));
       }
@@ -483,7 +538,7 @@ export async function expertCommand(question: string | undefined, options: Exper
         systemPrompt: SYSTEM_PROMPT,
         maxTokens: availableTokens,
         onChunk: (chunk) => process.stdout.write(chunk),
-        webSearch: webSearchEnabled,
+        webSearch: webSearchEnabled && modelConfig.supportsWebSearch,
         textVerbosity: options.verbosity,
         reasoningEffort: options.reasoningEffort,
         serviceTier: options.serviceTier,
@@ -493,7 +548,7 @@ export async function expertCommand(question: string | undefined, options: Exper
       response = await aiProvider.generateText(modelKey, fullPrompt, {
         systemPrompt: SYSTEM_PROMPT,
         maxTokens: availableTokens,
-        webSearch: webSearchEnabled,
+        webSearch: webSearchEnabled && modelConfig.supportsWebSearch,
         textVerbosity: options.verbosity,
         reasoningEffort: options.reasoningEffort,
         serviceTier: options.serviceTier,
@@ -528,8 +583,8 @@ export async function expertCommand(question: string | undefined, options: Exper
         },
         responseTime: responseTime,
         fileCount: files.length,
-        contextTokens: result.tokenCount,
-        webSearchEnabled: modelConfig.supportsWebSearch && options.webSearch !== false
+        contextTokens: totalInputTokens,
+        webSearchEnabled: webSearchEnabled && modelConfig.supportsWebSearch
       };
       console.log(JSON.stringify(jsonResult, null, 2));
     } else {
@@ -544,8 +599,17 @@ export async function expertCommand(question: string | undefined, options: Exper
       
       // Save output if requested
       if (options.output) {
-        await fs.promises.writeFile(options.output, response.text);
-        console.log(chalk.green(`\n✓ Saved response to ${options.output}`));
+        try {
+          await fs.promises.writeFile(options.output, response.text);
+          console.log(chalk.green(`\n✓ Saved response to ${options.output}`));
+        } catch (writeError) {
+          const err = writeError as NodeJS.ErrnoException;
+          if (err.code === 'EACCES' || err.code === 'EPERM') {
+            console.error(chalk.red(`\n❌ Permission denied: Cannot write to ${options.output}`));
+            exitWithCode(EXIT_CODES.PERMISSION_DENIED);
+          }
+          throw writeError; // Re-throw for other errors
+        }
       }
       
       // Show statistics
@@ -563,23 +627,24 @@ export async function expertCommand(question: string | undefined, options: Exper
     await logRun('expert', patterns, projectPath, {
       question,
       fileCount: files.length,
-      tokenCount: result.tokenCount,
+      tokenCount: totalInputTokens,
       model: modelKey
     });
     
   } catch (error) {
+    const err = error as NodeJS.ErrnoException;
     if (options.json) {
-      console.log(JSON.stringify({ error: (error as Error).message }, null, 2));
+      console.log(JSON.stringify({ error: err.message }, null, 2));
       exitWithCode(EXIT_CODES.GENERAL_ERROR);
     }
     
     if (spin) {
-      spin.fail(chalk.red(`Error: ${(error as Error).message}`));
+      spin.fail(chalk.red(`Error: ${err.message}`));
       spin.stop(); // Ensure cleanup
     }
 
     // Helpful message for context-length overflows
-    const msg = (error as Error).message.toLowerCase();
+    const msg = err.message.toLowerCase();
     if (
       msg.includes('context_length_exceeded') ||
       msg.includes('maximum context length') ||
@@ -599,7 +664,7 @@ export async function expertCommand(question: string | undefined, options: Exper
     }
     
     // Helpful error messages
-    if ((error as Error).message.includes('API key')) {
+    if (err.message.includes('API key')) {
       console.log(chalk.yellow('\nTo configure API keys:'));
       console.log('1. Set environment variables (any of these):');
       console.log('   export OPENAI_API_KEY="sk-..."        # or OPENAI_KEY');
@@ -610,7 +675,29 @@ export async function expertCommand(question: string | undefined, options: Exper
       return; // This won't be reached but helps TypeScript
     }
     
-    // Default to general error for other cases
+    // Specific exit codes for network and permission errors
+    if (typeof err.code === 'string') {
+      const code = err.code.toUpperCase();
+      if (code === 'EACCES' || code === 'EPERM') {
+        exitWithCode(EXIT_CODES.PERMISSION_DENIED);
+      }
+      if (code === 'ECONNRESET' || code === 'ETIMEDOUT' || code === 'ENETUNREACH') {
+        exitWithCode(EXIT_CODES.NETWORK_ERROR);
+      }
+    }
+    // HTTP-ish provider failures surfaced as messages
+    const m = String(err.message).toLowerCase();
+    
+    // Check for specific HTTP status codes
+    const statusMatch = err.message.match(/\b(429|5\d{2})\b/);
+    if (statusMatch) {
+      exitWithCode(EXIT_CODES.NETWORK_ERROR);
+    }
+    
+    // Check for timeout errors
+    if (m.includes('timeout') || m.includes('etimedout') || m.includes('econnaborted')) {
+      exitWithCode(EXIT_CODES.NETWORK_ERROR);
+    }
     exitWithCode(EXIT_CODES.GENERAL_ERROR);
   }
 }

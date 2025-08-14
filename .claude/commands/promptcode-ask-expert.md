@@ -154,7 +154,7 @@ Consult an expert about: $ARGUMENTS
 
 ## Important
 
-- Default to O3 model unless O3-pro explicitly requested or needed for complex reasoning
+- Default to GPT-5 model unless another model is explicitly requested
 - For ensemble mode: limit to maximum 4 models to prevent resource exhaustion
 - Always show cost estimate before sending
 - Keep questions clear and specific

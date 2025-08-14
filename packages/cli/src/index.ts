@@ -206,6 +206,7 @@ Examples:
   .option('--stream', 'stream response in real-time')
   .option('--save-preset <name>', 'save file patterns as a preset')
   .option('-y, --yes', 'automatically confirm prompts')
+  .option('--force', 'alias for --yes (skip cost confirmation)')
   .option('--web-search', 'enable web search for current information (enabled by default for supported models)')
   .option('--no-web-search', 'disable web search even for supported models')
   .option('--verbosity <level>', 'response verbosity: low (concise), medium, high (detailed)', 'low')
@@ -213,6 +214,7 @@ Examples:
   .option('--service-tier <tier>', 'service tier: auto, flex (50% cheaper), priority (enterprise)')
   .option('--json', 'output response in JSON format with usage stats')
   .option('--estimate-cost', 'estimate cost without running the query (dry-run)')
+  .option('--cost-threshold <usd>', 'cost threshold for requiring approval (default: 0.50)', parseFloat)
   .allowExcessArguments(false)
   .action(async (question, options) => {
     await expertCommand(question, options);
