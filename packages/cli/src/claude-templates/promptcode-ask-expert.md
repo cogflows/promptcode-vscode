@@ -11,7 +11,7 @@ Consult an expert about: $ARGUMENTS
    - Extract the main question/problem
    - Identify if code context would help (look for keywords matching our presets)
    - Check for multiple model requests (e.g., "compare using o3 and gpt-5", "ask o3, gpt-5, and gemini")
-   - Available models from our MODELS list: o3, o3-pro, o3-mini, gpt-5, gpt-5-mini, gpt-5-nano, sonnet-4, opus-4, gemini-2.5-pro, gemini-2.5-flash, grok-4
+   - Get available models dynamically: `promptcode expert --models --json` (parse the JSON for model list)
    - If 2+ models detected → use ensemble mode
    - For single model: determine preference (if user mentions "o3-pro" or "o3 pro", use o3-pro)
 
@@ -39,28 +39,27 @@ Consult an expert about: $ARGUMENTS
      promptcode generate --preset "{preset_name}" >> "/tmp/expert-consultation-{timestamp}.md"
      ```
 
-4. Open consultation for user review (if Cursor is available):
+4. Open consultation for user review (optional, if Cursor is available):
    ```bash
    open -a Cursor "/tmp/expert-consultation-{timestamp}.md"
    ```
+   Note: This is for review only - no approval needed at this step.
    
 5. Estimate cost and get approval:
-   - Model costs (from our pricing):
-     - O3: $2/$8 per million tokens (input/output)
-     - O3-pro: $20/$80 per million tokens (input/output)
-     - GPT-5: $1.25/$10 per million tokens
-     - GPT-5-mini: $0.25/$2 per million tokens
-     - Sonnet-4: $5/$20 per million tokens
-     - Opus-4: $25/$100 per million tokens
-     - Gemini-2.5-pro: $3/$12 per million tokens
-     - Grok-4: $5/$15 per million tokens
-   - Calculate based on file size (roughly: file_size_bytes / 4 = tokens)
+   - Use the CLI's built-in cost estimation:
+     ```bash
+     promptcode expert --prompt-file "/tmp/expert-consultation-{timestamp}.md" --model <model> --estimate-cost --json
+     ```
+   - Parse the JSON output to get:
+     - `tokens.input` - total input tokens
+     - `cost.total` - estimated total cost
+   - Check the exit code: 0 = success, 2 = approval required (cost > threshold)
    
    **For single model:**
-   - Say: "I've prepared the expert consultation (~{tokens} tokens). Model: {model}. You can edit the file to refine your question. Reply 'yes' to send to the expert (estimated cost: ${cost})."
+   - Say: "I've prepared the expert consultation (~{tokens} tokens). Model: {model}. You can review/edit the file if opened in Cursor. Reply 'yes' to send to the expert (estimated cost: ${cost from CLI})."
    
    **For ensemble mode (multiple models):**
-   - Calculate total cost across all models
+   - Run --estimate-cost for each model in parallel to get costs
    - Say: "I've prepared an ensemble consultation (~{tokens} tokens) with {models}. Total estimated cost: ${total_cost} ({model1}: ${cost1}, {model2}: ${cost2}, ...). Reply 'yes' to proceed with all models in parallel."
 
 6. Execute based on mode:
@@ -157,5 +156,6 @@ Consult an expert about: $ARGUMENTS
 - Always show cost estimate before sending
 - Keep questions clear and specific
 - Include relevant code context when asking about specific functionality
-- NEVER automatically add --yes without user approval
+- NEVER automatically add --yes/--force without user approval
+- Only ask for approval ONCE before sending to expert (not for preparatory steps)
 - Reasoning effort defaults to 'high' (set in CLI) - no need to specify
