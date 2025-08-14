@@ -39,10 +39,11 @@ Consult an expert about: $ARGUMENTS
      promptcode generate --preset "{preset_name}" >> "/tmp/expert-consultation-{timestamp}.md"
      ```
 
-4. Open consultation for user review (if Cursor is available):
+4. Open consultation for user review (optional, if Cursor is available):
    ```bash
    open -a Cursor "/tmp/expert-consultation-{timestamp}.md"
    ```
+   Note: This is for review only - no approval needed at this step.
    
 5. Estimate cost and get approval:
    - Use the CLI's built-in cost estimation:
@@ -55,7 +56,7 @@ Consult an expert about: $ARGUMENTS
    - Check the exit code: 0 = success, 2 = approval required (cost > threshold)
    
    **For single model:**
-   - Say: "I've prepared the expert consultation (~{tokens} tokens). Model: {model}. You can edit the file to refine your question. Reply 'yes' to send to the expert (estimated cost: ${cost from CLI})."
+   - Say: "I've prepared the expert consultation (~{tokens} tokens). Model: {model}. You can review/edit the file if opened in Cursor. Reply 'yes' to send to the expert (estimated cost: ${cost from CLI})."
    
    **For ensemble mode (multiple models):**
    - Run --estimate-cost for each model in parallel to get costs
@@ -162,5 +163,6 @@ Consult an expert about: $ARGUMENTS
 - Keep questions clear and specific
 - Include relevant code context when asking about specific functionality
 - NEVER automatically add --yes/--force without user approval
+- Only ask for approval ONCE before sending to expert (not for preparatory steps)
 
 - Reasoning effort defaults to 'high' (set in CLI) - no need to specify
