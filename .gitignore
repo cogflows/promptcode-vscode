@@ -53,6 +53,17 @@ packages/core/dist/
 *.temp
 .cache/
 
+# Analysis and review files
+*-analysis.md
+*-review.md
+*-analysis.txt
+*-review.txt
+gpt*.md
+claude*.md
+!CLAUDE.md
+!packages/cli/src/claude-templates/**
+!.claude/**
+
 # TypeScript build info
 *.tsbuildinfo
 
