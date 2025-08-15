@@ -136,32 +136,77 @@ async function savePresetSafely(
 async function scanProject(projectPath: string, patterns: string[]) {
   // Use project root for scanning (where preset patterns are relative to)
   const projectRoot = getProjectRoot(projectPath);
-  const files = await scanFiles({
+  
+  // Separate absolute paths from relative patterns
+  const absolutePaths = patterns.filter(p => path.isAbsolute(p));
+  const relativePatterns = patterns.filter(p => !path.isAbsolute(p));
+  
+  // Scan relative patterns normally
+  let files = relativePatterns.length > 0 ? await scanFiles({
     cwd: projectRoot,
-    patterns,
+    patterns: relativePatterns,
     respectGitignore: true,
     workspaceName: path.basename(projectRoot),
     followSymlinks: false,  // Security: don't follow symlinks
-  });
+  }) : [];
+  
+  // Handle absolute paths directly
+  if (absolutePaths.length > 0) {
+    const { countTokensWithCacheDetailed } = await import('@promptcode/core');
+    for (const absPath of absolutePaths) {
+      try {
+        // Check if file exists
+        if (fs.existsSync(absPath) && fs.statSync(absPath).isFile()) {
+          const { count: tokenCount } = await countTokensWithCacheDetailed(absPath);
+          // For absolute paths, use just the filename as the "relative" path
+          // This prevents buildPrompt from skipping them
+          files.push({
+            path: path.basename(absPath),
+            absolutePath: absPath,
+            tokenCount,
+            workspaceFolderRootPath: path.dirname(absPath),
+            workspaceFolderName: 'external'
+          });
+        }
+      } catch (err) {
+        // Skip files that can't be read
+        console.warn(chalk.gray(`Skipping unreadable file: ${absPath}`));
+      }
+    }
+  }
+  
   return files;
 }
 
-function assertFilesInsideProject(projectPath: string, files: any[]): void {
+function warnIfFilesOutsideProject(projectPath: string, files: any[]): number {
   const projectRoot = fs.realpathSync(projectPath) + path.sep;
-  const escaped = files.find((f) => {
+  const externalFiles = files.filter((f) => {
     try {
       // Standardize on absolutePath field (consistent with generate.ts)
       const filePath = f.absolutePath || f.path;
       const abs = fs.realpathSync(filePath);
       return !abs.startsWith(projectRoot);
     } catch (err) {
-      // If realpath fails (e.g., broken symlink), treat as escape attempt
+      // If realpath fails (e.g., broken symlink), count as external
       return true;
     }
   });
-  if (escaped) {
-    throw new Error(`Refusing to include file outside project root: ${escaped.path}`);
+  
+  if (externalFiles.length > 0 && !process.env.PROMPTCODE_TEST) {
+    // Don't show warnings in JSON mode or during tests
+    const isJsonMode = process.argv.includes('--json');
+    if (!isJsonMode) {
+      console.warn(chalk.yellow(`\n⚠️  Note: Including ${externalFiles.length} file(s) from outside the project directory`));
+      if (process.env.VERBOSE) {
+        console.warn(chalk.gray('   External files:'));
+        externalFiles.forEach(f => {
+          console.warn(chalk.gray(`   - ${f.path || f.absolutePath}`));
+        });
+      }
+    }
   }
+  
+  return externalFiles.length;
 }
 
 function listAvailableModels(jsonOutput: boolean = false) {
@@ -382,8 +427,8 @@ export async function expertCommand(question: string | undefined, options: Exper
     
     if (patterns.length > 0) {
       files = await scanProject(projectPath, patterns);
-      // Defense in depth: assert files remain within project
-      assertFilesInsideProject(projectPath, files);
+      // Warn if files are outside project (informational, not blocking)
+      warnIfFilesOutsideProject(projectPath, files);
       
       if (files.length === 0) {
         if (spin) {

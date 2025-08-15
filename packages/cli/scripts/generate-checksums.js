@@ -183,10 +183,10 @@ console.log(`  Total checksums: ${Object.values(checksums).reduce((sum, arr) => 
 // Check if previous-checksums.json needs updating
 const previousData = fs.existsSync(previousChecksumsPath) 
   ? JSON.parse(fs.readFileSync(previousChecksumsPath, 'utf8'))
-  : {};
+  : { comment: "Historical checksums from previous versions - maintain this file to track known versions" };
 
 let needsUpdate = false;
-const newChecksums = {};
+const updatedPreviousData = { ...previousData };
 
 Object.keys(checksums).forEach(fileName => {
   const currentChecksum = checksums[fileName][0]; // First checksum is current version
@@ -200,6 +200,23 @@ Object.keys(checksums).forEach(fileName => {
     if (previousChecksums.length > 0) {
       console.log(`  Previous checksums: ${previousChecksums.length} known version(s)`);
     }
+    
+    // Automatically add the old checksum to previous-checksums.json if we're in a release
+    // The "old" checksum is what was in previous-checksums before this build
+    if (process.env.CI && process.env.GITHUB_REF_TYPE === 'tag') {
+      console.log(`  📝 Auto-preserving previous version checksum for backward compatibility`);
+      // Add the PREVIOUS current checksum (from last release) to the list
+      // This happens when we're building a new release
+      if (!updatedPreviousData[fileName]) {
+        updatedPreviousData[fileName] = [];
+      }
+      // The checksum that WAS current is now historical
+      // We get it from what was already in previous-checksums.json
+      const lastReleaseChecksum = previousChecksums[0];
+      if (lastReleaseChecksum && !updatedPreviousData[fileName].includes(lastReleaseChecksum)) {
+        updatedPreviousData[fileName].push(lastReleaseChecksum);
+      }
+    }
   }
 });
 
@@ -207,16 +224,37 @@ if (needsUpdate) {
   console.log('\n' + '='.repeat(60));
   console.log('⚠️  IMPORTANT: Template checksums have changed!');
   console.log('='.repeat(60));
-  console.log('\nTo preserve backward compatibility, you should:');
-  console.log('1. Update previous-checksums.json with the current checksums');
-  console.log('2. Keep existing checksums to recognize older versions');
-  console.log('\nRun this command to see the changes:');
-  console.log('  git diff scripts/previous-checksums.json');
   
-  // In CI, fail the build if checksums changed without updating previous-checksums.json
-  if (process.env.CI) {
-    console.error('\n❌ CI Build Failed: Template checksums changed without updating previous-checksums.json');
-    console.error('Please update the previous-checksums.json file and commit the changes.');
-    process.exit(1);
+  // In CI during a release, auto-update the previous-checksums.json
+  if (process.env.CI && process.env.GITHUB_REF_TYPE === 'tag') {
+    console.log('\n✅ CI Release Mode: Auto-updating previous-checksums.json');
+    
+    // Ensure all current checksums are preserved for the NEXT release
+    Object.keys(checksums).forEach(fileName => {
+      const currentChecksum = checksums[fileName][0];
+      if (!updatedPreviousData[fileName]) {
+        updatedPreviousData[fileName] = [];
+      }
+      // Add current checksum if not already there
+      if (currentChecksum && !updatedPreviousData[fileName].includes(currentChecksum)) {
+        updatedPreviousData[fileName].unshift(currentChecksum); // Add at beginning
+      }
+    });
+    
+    // Write the updated file
+    fs.writeFileSync(previousChecksumsPath, JSON.stringify(updatedPreviousData, null, 2) + '\n');
+    console.log('✅ Updated previous-checksums.json with current version checksums');
+    console.log('   These will be recognized as valid in future updates');
+  } else if (process.env.CI) {
+    // In CI but not a release - this is a regular build/test
+    console.log('\n⚠️  CI Build: Template checksums changed');
+    console.log('This is expected during development. Release builds will auto-preserve checksums.');
+  } else {
+    // Local development
+    console.log('\nTo preserve backward compatibility, you should:');
+    console.log('1. Update previous-checksums.json with the current checksums');
+    console.log('2. Keep existing checksums to recognize older versions');
+    console.log('\nRun this command to see the changes:');
+    console.log('  git diff scripts/previous-checksums.json');
   }
 }

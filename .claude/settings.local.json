@@ -115,7 +115,14 @@
       "Bash(/Users/aviv.s/.local/bin/promptcode:*)",
       "Bash(./packages/cli/dist/promptcode:*)",
       "Bash(PROMPTCODE_TEST=1 bun test test/commands/expert.test.ts)",
-      "Bash(../../dist/promptcode preset optimize cli-core-review:*)"
+      "Bash(../../dist/promptcode preset optimize cli-core-review:*)",
+      "Bash(sed:*)",
+      "WebFetch(domain:docs.cursor.com)",
+      "Bash(\"../../src/**/*.{ts,tsx,js,jsx}\" )",
+      "Bash(\"../../scripts/**/*.{js,ts}\" )",
+      "Bash(\"../../.github/workflows/*.{yml,yaml}\" )",
+      "Bash(\"../../.claude/**/*.{md,json}\" )",
+      "Bash(\"../../src/webview/**/*.{css,html}\" )"
     ],
     "deny": [],
     "defaultMode": "acceptEdits",

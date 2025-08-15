@@ -100,39 +100,74 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
     // Scan files
     spin.text = 'Scanning files...';
     
+    // Separate absolute paths from relative patterns
+    const absolutePaths = patterns.filter(p => path.isAbsolute(p));
+    const relativePatterns = patterns.filter(p => !path.isAbsolute(p));
+    
     // Use project root for scanning (where preset patterns are relative to)
     const scanRoot = getProjectRoot(projectPath);
-    const selectedFiles = await scanFiles({
+    
+    // Scan relative patterns normally
+    let selectedFiles = relativePatterns.length > 0 ? await scanFiles({
       cwd: scanRoot,
-      patterns,
+      patterns: relativePatterns,
       respectGitignore: !options.ignoreGitignore,
       customIgnoreFile: options.ignoreFile || path.join(scanRoot, IGNORE_FILE_NAME),
       workspaceName: path.basename(scanRoot),
       followSymlinks: false  // Security: don't follow symlinks
-    });
+    }) : [];
+    
+    // Handle absolute paths directly
+    if (absolutePaths.length > 0) {
+      const { countTokensWithCacheDetailed } = await import('@promptcode/core');
+      for (const absPath of absolutePaths) {
+        try {
+          // Check if file exists
+          if (fs.existsSync(absPath) && fs.statSync(absPath).isFile()) {
+            const { count: tokenCount } = await countTokensWithCacheDetailed(absPath);
+            // For absolute paths, use just the filename as the "relative" path
+            // This prevents buildPrompt from skipping them
+            selectedFiles.push({
+              path: path.basename(absPath),
+              absolutePath: absPath,
+              tokenCount,
+              workspaceFolderRootPath: path.dirname(absPath),
+              workspaceFolderName: 'external'
+            });
+          }
+        } catch (err) {
+          // Skip files that can't be read
+          console.warn(chalk.gray(`Skipping unreadable file: ${absPath}`));
+        }
+      }
+    }
     
     if (selectedFiles.length === 0) {
       throw new Error('No files found matching the specified patterns');
     }
     
-    // Validate all files are within project root (defense in depth)
-    // Use the actual project root (where .promptcode lives) for security check
+    // Check for files outside project root (informational warning)
+    // Use the actual project root (where .promptcode lives) for the check
     const projectRoot = fs.realpathSync(scanRoot) + path.sep;
-    const escapedFile = selectedFiles.find((f) => {
+    const externalFiles = selectedFiles.filter((f) => {
       try {
         const realPath = fs.realpathSync(f.absolutePath || f.path);
         return !realPath.startsWith(projectRoot);
       } catch {
-        // If realpath fails (e.g., broken symlink), treat as escape attempt
+        // If realpath fails (e.g., broken symlink), count as external
         return true;
       }
     });
     
-    if (escapedFile) {
-      throw new Error(
-        `Security violation: File outside project root detected. ` +
-        `Ensure all files are within the project directory.`
-      );
+    if (externalFiles.length > 0 && !options.json) {
+      console.warn(chalk.yellow(`\n⚠️  Note: Including ${externalFiles.length} file(s) from outside the project directory`));
+      if (process.env.VERBOSE || options.dryRun) {
+        console.warn(chalk.gray('   External files:'));
+        externalFiles.forEach(f => {
+          const relPath = path.relative(projectPath, f.absolutePath || f.path);
+          console.warn(chalk.gray(`   - ${relPath}`));
+        });
+      }
     }
     
     // Calculate total tokens for dry run or warning

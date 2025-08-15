@@ -22,13 +22,27 @@ promptcode generate -l <preset-name>      # Generate using preset
 Presets are reusable file patterns stored in `.promptcode/presets/*.patterns`:
 
 ```bash
-# Create a new preset
+# Create a basic preset
 promptcode preset create api-endpoints
 
-# Edit the preset file to add patterns
-# Then use it:
+# Create an optimized preset from existing files
+promptcode preset create api-endpoints --from-files "src/api/**/*.ts"
+
+# Optimize an existing preset
+promptcode preset optimize api-endpoints           # Preview changes
+promptcode preset optimize api-endpoints --write   # Apply changes
+
+# Use the preset
 promptcode generate -l api-endpoints
 ```
+
+### Optimization Levels
+When creating or optimizing presets, you can control the optimization level:
+- `minimal` - Light optimization, preserves most patterns
+- `balanced` - Default, good balance of pattern reduction
+- `aggressive` - Maximum reduction, fewer patterns
+
+Example: `promptcode preset create api --from-files "src/**/*.ts" --optimization-level aggressive`
 
 ## Common Workflows for AI Agents
 

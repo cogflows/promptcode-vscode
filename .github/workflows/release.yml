@@ -90,9 +90,14 @@ jobs:
             bun-target: bun-windows-x64
             
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
     
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
       
       - uses: actions/setup-node@v4
         with:
@@ -112,16 +117,46 @@ jobs:
           bun install
           
       - name: Inject version and build CLI binary
+        env:
+          CI: true
+          GITHUB_REF_TYPE: ${{ github.ref_type }}
+          PROD_BUILD: 1
         run: |
           cd packages/cli
           # Update version in package.json to match tag
           VERSION="${{ github.ref_name }}"
           VERSION="${VERSION#v}"  # Remove 'v' prefix if present
           npm version $VERSION --no-git-tag-version --allow-same-version
+          
           # Build with production flag and target architecture
-          PROD_BUILD=1 node scripts/inject-version.js
+          # First run the normal build to generate checksums and embed templates
+          npm run build
+          
+          # Only commit checksums from the Linux build to avoid race conditions
+          if [ "${{ matrix.target }}" = "linux-x64" ] && [ -n "$(git diff --name-only scripts/previous-checksums.json)" ]; then
+            echo "Checksums updated, committing changes..."
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add scripts/previous-checksums.json
+            git commit -m "chore: preserve ${{ github.ref_name }} template checksums [skip ci]
+          
+          Auto-generated commit to preserve template checksums for backward compatibility.
+          This ensures older installations can be updated without manual intervention."
+            
+            # Push with retry logic
+            for i in 1 2 3; do
+              if git push origin HEAD:main; then
+                echo "Successfully pushed checksum updates"
+                break
+              else
+                echo "Push attempt $i failed, retrying..."
+                sleep 2
+              fi
+            done
+          fi
+          
+          # Then recompile for the specific target
           bun build src/index.ts --compile --target=${{ matrix.bun-target }} --outfile dist/promptcode
-          npm run copy-templates
         shell: bash
           
       - name: Rename binary

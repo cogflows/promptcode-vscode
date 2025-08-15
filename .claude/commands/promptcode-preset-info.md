@@ -29,3 +29,13 @@ The output will show:
 - Pattern details
 - Sample files included
 - Usage instructions
+
+## Optimizing Presets
+
+If the preset has many patterns or includes too many files, you can optimize it:
+```bash
+promptcode preset optimize "{preset_name}"           # Preview optimization
+promptcode preset optimize "{preset_name}" --write   # Apply optimization
+```
+
+Optimization reduces pattern count while maintaining file coverage.
