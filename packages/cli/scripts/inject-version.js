@@ -12,7 +12,7 @@ const { execSync } = require('child_process');
 // Try monorepo path first, fall back to reading package.json directly
 let version;
 try {
-  version = execSync('node ../../../scripts/resolveVersion.js ../package.json', { encoding: 'utf8' }).trim();
+  version = execSync('node ../../scripts/resolveVersion.js ./package.json', { encoding: 'utf8' }).trim();
 } catch (error) {
   // Fallback: read version directly from package.json
   const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, '../package.json'), 'utf8'));

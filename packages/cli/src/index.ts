@@ -136,12 +136,13 @@ Examples:
   $ promptcode generate -f "src/**/*.ts"     # Specific patterns
   $ promptcode generate -p backend           # Use preset
   $ promptcode generate -t code-review       # Apply template
-  $ promptcode generate -p api -o prompt.md  # Save to file`)
+  $ promptcode generate -p api -o prompt.md  # Save to file
+  $ promptcode generate -p api -i "Review for security issues"  # Inline instructions`)
   .option('-p, --preset <name>', 'use a preset (shorthand for -l)')
   .option('-f, --files <patterns...>', 'file glob patterns')
   .option('-l, --list <file>', 'file list or preset name (deprecated, use -p)')
   .option('-t, --template <name>', 'apply a template')
-  .option('-i, --instructions <file>', 'custom instructions file')
+  .option('-i, --instructions <text|file>', 'instructions text or path to instructions file')
   .option('-o, --out <file>', 'output file (default: stdout)')
   .option('--output <file>', 'output file (alias for --out)')
   .option('--json', 'output JSON with metadata')
@@ -180,21 +181,28 @@ program
   .description('Manage file pattern presets for quick context switching')
   .addHelpText('after', `
 Actions:
-  list              List all presets (default)
-  create <name>     Create a new preset
-  info <name>       Show preset details and token count
-  search <query>    Search presets by name or content
-  edit <name>       Edit preset in your editor
-  delete <name>     Delete a preset
+  list                List all presets (default)
+  create <name>       Create a new preset (auto-optimizes with --from-files)
+  info <name>         Show preset details and token count
+  optimize <name>     Optimize existing preset patterns (dry-run by default)
+  search <query>      Search presets by name or content
+  edit <name>         Edit preset in your editor
+  delete <name>       Delete a preset
 
 Examples:
   $ promptcode preset list
-  $ promptcode preset create backend
+  $ promptcode preset create api --from-files "src/api/**/*.ts"
   $ promptcode preset info backend
+  $ promptcode preset optimize backend           # Preview changes
+  $ promptcode preset optimize backend --write   # Apply changes
   $ promptcode preset search "auth"
   $ promptcode generate -p backend
-  $ promptcode preset list --json        # JSON output
-  $ promptcode preset info backend --json # JSON with token counts
+
+Options:
+  --from-files <patterns...>     File patterns for create (auto-optimizes)
+  --optimization-level <level>   Optimization level: minimal|balanced|aggressive (default: balanced)
+  --write                        Apply optimization changes (for optimize command)
+  --json                         Output in JSON format
 
 Legacy flags (still supported):
   $ promptcode preset --create backend
@@ -203,13 +211,19 @@ Legacy flags (still supported):
   .option('--list', 'list all presets (legacy)')
   .option('--create <name>', 'create a new preset (legacy)')
   .option('--info <name>', 'show preset info (legacy)')
+  .option('--optimize <name>', 'optimize preset patterns (legacy)')
   .option('--edit <name>', 'edit preset (legacy)')
   .option('--delete <name>', 'delete a preset (legacy)')
   .option('--search <query>', 'search presets (legacy)')
+  .option('--from-files <patterns...>', 'file patterns (space/comma separated)')
+  .option('--optimization-level <level>', 'optimization level: minimal|balanced|aggressive', 'balanced')
+  .option('--level <level>', 'alias for --optimization-level')
+  .option('--write', 'apply optimization changes (for optimize command)')
+  .option('--dry-run', 'preview changes without writing')
   .option('--json', 'output in JSON format (for list and info)')
   .action(async (action, name, options) => {
     // Handle direct subcommand syntax
-    if (action && ['list', 'create', 'info', 'edit', 'delete', 'search'].includes(action)) {
+    if (action && ['list', 'create', 'info', 'optimize', 'edit', 'delete', 'search'].includes(action)) {
       if (action === 'list') {
         options.list = true;
       } else if (name) {

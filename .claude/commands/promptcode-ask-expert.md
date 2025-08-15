@@ -1,5 +1,5 @@
 ---
-allowed-tools: Bash(promptcode expert:*), Bash(promptcode preset:*), Bash(promptcode generate:*), Bash(open:*), Read(/tmp/*), Write(/tmp/*), Task, Bash(command -v:*), Bash(cursor:*), Bash(code:*), Bash(echo:*), Bash(cat:*), Bash(wait:*)
+allowed-tools: Bash(promptcode expert:*), Bash(promptcode preset:*), Bash(promptcode generate:*), Bash(open:*), Read(/tmp/*), Write(/tmp/*), Task, Bash(command -v:*), Bash(cursor:*), Bash(code:*), Bash(echo:*), Bash(cat:*), Bash(wait:*), Bash([ -n:*), Bash(test:*)
 description: Consult AI expert for complex problems with code context - supports ensemble mode for multiple models
 ---
 

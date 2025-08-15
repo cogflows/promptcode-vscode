@@ -41,10 +41,11 @@ export async function listFilesByPattern(
     cwd,
     onlyFiles: true,
     dot: true, // Match hidden files
-    followSymbolicLinks: true,
+    followSymbolicLinks: false, // Security: prevent symlink traversal
     absolute: false, // Return relative paths
   });
-  return files.sort();
+  // Normalize paths to be consistent across platforms
+  return files.map(f => f.replace(/\\/g, '/')).sort();
 }
 
 /**
@@ -89,19 +90,33 @@ export async function listFilesByPatternsFile(
   const content = await fs.readFile(patternFile, 'utf-8');
   const { includePatterns, excludePatterns } = parsePatterns(content);
 
+  // Security: reject absolute/traversal patterns early
+  const allPatterns = [
+    ...includePatterns,
+    ...excludePatterns.map((e) => '!' + e),
+  ];
+  for (const p of allPatterns) {
+    const raw = p.startsWith('!') ? p.slice(1) : p;
+    if (path.isAbsolute(raw) || raw.includes('..')) {
+      throw new Error(`Unsafe pattern in ${path.basename(patternFile)}: "${p}"`);
+    }
+  }
+
   if (includePatterns.length === 0) {
     return [];
   }
 
   // Use fast-glob with all patterns
+  // Security: Don't follow symlinks to prevent directory traversal
   const files = await fg(includePatterns, {
     cwd,
     onlyFiles: true,
     dot: true,
-    followSymbolicLinks: true,
+    followSymbolicLinks: false, // Security: prevent symlink traversal
     absolute: false,
     ignore: excludePatterns,
   });
 
-  return files.sort();
+  // Normalize paths to be consistent across platforms
+  return files.map(f => f.replace(/\\/g, '/')).sort();
 }

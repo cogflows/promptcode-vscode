@@ -77,15 +77,32 @@ promptcode generate -t code-review       # Apply template
 
 ### Preset Management
 
-Create and manage file pattern presets:
+Create and manage file pattern presets with automatic optimization:
 
 ```bash
-promptcode preset --list                 # List all presets
-promptcode preset --create api-routes    # Create new preset
-promptcode preset --info api-routes      # Show preset details
-promptcode preset --edit api-routes      # Edit in your editor
-promptcode preset --delete api-routes    # Delete preset
+# Basic commands
+promptcode preset list                         # List all presets
+promptcode preset create backend               # Create basic preset
+promptcode preset info backend                 # Show preset details
+promptcode preset edit backend                 # Edit in your editor
+promptcode preset delete backend               # Delete preset
+
+# Smart preset creation with auto-optimization
+promptcode preset create api --from-files "src/api/**/*.ts"  # Auto-optimized (balanced)
+promptcode preset create api --from-files "src/api/**/*.ts" --optimization-level aggressive
+
+# Optimize existing presets
+promptcode preset optimize backend             # Preview changes (dry-run)
+promptcode preset optimize backend --write     # Apply optimization
+
+# Search presets
+promptcode preset search "auth"                # Find presets by content
 ```
+
+**Optimization levels:**
+- `minimal` - Full directory coverage only (backwards-compatible)
+- `balanced` - Extension grouping + single-file exclusions (default)
+- `aggressive` - Maximum compression with brace notation
 
 ### Expert Consultation
 

@@ -180,26 +180,28 @@ async function verifyChecksum(filePath: string, checksumUrl: string): Promise<bo
 
 async function replaceBinary(newBinaryPath: string): Promise<void> {
   const currentBinary = process.execPath;
+  const dir = path.dirname(currentBinary);
+  const stagedPath = path.join(dir, path.basename(currentBinary) + '.new');
+  
+  // Always stage in the same directory to avoid cross-device moves
+  await fs.copyFile(newBinaryPath, stagedPath);
+  await fs.chmod(stagedPath, 0o755);
   
   // Windows requires special handling - can't replace running executable
   if (process.platform === 'win32') {
-    const updatePath = `${currentBinary}.new`;
-    const batchPath = path.join(path.dirname(currentBinary), 'update.bat');
-    
-    // Move new binary to .new location
-    await fs.rename(newBinaryPath, updatePath);
+    const batchPath = path.join(dir, 'update.bat');
     
     // Create batch script to replace binary after process exits
     const batchContent = `@echo off
 setlocal
 echo Waiting for PromptCode to exit...
 timeout /t 2 /nobreak >nul
-move /Y "${updatePath}" "${currentBinary}"
+move /Y "${stagedPath}" "${currentBinary}"
 if %ERRORLEVEL% EQU 0 (
   echo Update completed successfully.
   "${currentBinary}" --version
 ) else (
-  echo Update failed. Please manually rename ${updatePath} to ${currentBinary}
+  echo Update failed. Please manually rename ${stagedPath} to ${currentBinary}
 )
 del "%~f0"
 `;
@@ -214,33 +216,10 @@ del "%~f0"
     return;
   }
   
-  // Unix/macOS can replace binary directly
-  const backupPath = `${currentBinary}.backup`;
-  
-  try {
-    // Backup current binary
-    await fs.rename(currentBinary, backupPath);
-    
-    // Move new binary into place
-    await fs.rename(newBinaryPath, currentBinary);
-    
-    // Set executable permissions
-    await fs.chmod(currentBinary, 0o755);
-    
-    // Remove backup after successful replacement
-    await fs.unlink(backupPath);
-  } catch (error) {
-    // Restore backup on failure
-    try {
-      await fs.access(backupPath);
-      await fs.rename(backupPath, currentBinary);
-    } catch {
-      // Backup restore failed - binary is in inconsistent state
-      console.error(chalk.red('Failed to restore backup. Manual intervention required.'));
-      console.error(chalk.yellow(`Backup at: ${backupPath}`));
-    }
-    throw error;
-  }
+  // On Unix/macOS, also finalize on next run via the startup finalizer
+  // This keeps behavior consistent and avoids cross-device rename issues
+  console.log(chalk.green('\n✓ Update staged successfully'));
+  console.log(chalk.cyan('The update will be applied on next launch'));
 }
 
 function isNewerVersion(latest: string, current: string): boolean {
@@ -305,7 +284,7 @@ export const updateCommand = program
       const tempDir = await fs.mkdtemp(path.join(require('os').tmpdir(), 'promptcode-update-'));
       const tempBinary = path.join(tempDir, binaryName);
       
-      await downloadFile(asset.browser_download_url, tempBinary);
+      await downloadFile(asset.browser_download_url, tempBinary)
       
       // Verify checksum if available
       spin.text = 'Verifying download...';

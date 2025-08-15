@@ -1,9 +1,10 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import chalk from 'chalk';
-import { scanFiles, initializeTokenCounter } from '@promptcode/core';
-import { findPromptcodeFolder, ensureDirWithApproval } from '../utils/paths';
+import { scanFiles, initializeTokenCounter, listFilesByPatternsFile, optimizeSelection, type OptimizationLevel, type OptimizationResult } from '@promptcode/core';
+import { findPromptcodeFolder, ensureDirWithApproval, getProjectRoot, getPresetDir, getPresetPath, getCacheDir } from '../utils/paths';
 import { spinner } from '../utils/spinner';
+import { CACHE_VERSION } from '../utils/constants';
 
 interface PresetOptions {
   path?: string;
@@ -14,20 +15,15 @@ interface PresetOptions {
   edit?: string;
   search?: string;
   json?: boolean;
+  fromFiles?: string[];              // file globs (create only)
+  optimizationLevel?: OptimizationLevel; // preferred flag name
+  level?: OptimizationLevel;             // legacy alias
+  // optimize subcommand (existing presets only)
+  optimize?: string;                 // preset name to optimize
+  dryRun?: boolean;                  // preview only (default true for optimize)
+  write?: boolean;                   // apply changes
 }
 
-/**
- * Get the presets directory path
- * Now searches for existing .promptcode in parent directories
- */
-function getPresetsDir(projectPath: string): string {
-  const existingPromptcodeDir = findPromptcodeFolder(projectPath);
-  if (existingPromptcodeDir) {
-    return path.join(existingPromptcodeDir, 'presets');
-  }
-  // Default to creating in current project directory
-  return path.join(projectPath, '.promptcode', 'presets');
-}
 
 /**
  * Ensure presets directory exists with user approval
@@ -39,7 +35,8 @@ async function ensurePresetsDir(presetsDir: string): Promise<boolean> {
 /**
  * List all presets
  */
-async function listPresets(presetsDir: string, options: { json?: boolean } = {}): Promise<void> {
+async function listPresets(projectPath: string, options: { json?: boolean } = {}): Promise<void> {
+  const presetsDir = getPresetDir(projectPath);
   try {
     const files = await fs.promises.readdir(presetsDir);
     const presets = files.filter(f => f.endsWith('.patterns'));
@@ -115,11 +112,10 @@ async function showPresetInfo(presetName: string, projectPath: string, options: 
   
   try {
     // Initialize token counter
-    const cacheDir = process.env.XDG_CACHE_HOME || path.join(process.env.HOME || '', '.cache', 'promptcode');
-    initializeTokenCounter(cacheDir, '0.1.0');
+    const cacheDir = getCacheDir();
+    initializeTokenCounter(cacheDir, CACHE_VERSION);
     
-    const presetsDir = getPresetsDir(projectPath);
-    const presetPath = path.join(presetsDir, `${presetName}.patterns`);
+    const presetPath = getPresetPath(projectPath, presetName);
     
     if (!fs.existsSync(presetPath)) {
       if (options.json) {
@@ -137,12 +133,13 @@ async function showPresetInfo(presetName: string, projectPath: string, options: 
       .map(line => line.trim())
       .filter(line => line && !line.startsWith('#'));
     
-    // Scan files using patterns
+    // Scan files using patterns from project root
+    const projectRoot = getProjectRoot(projectPath);
     const files = await scanFiles({
-      cwd: projectPath,
+      cwd: projectRoot,
       patterns,
       respectGitignore: true,
-      workspaceName: path.basename(projectPath)
+      workspaceName: path.basename(projectRoot)
     });
     
     spin.stop();
@@ -214,10 +211,70 @@ async function showPresetInfo(presetName: string, projectPath: string, options: 
 }
 
 /**
- * Create a new preset interactively
+ * Render header + patterns with metadata
  */
-async function createPreset(presetName: string, projectPath: string): Promise<void> {
-  const presetsDir = getPresetsDir(projectPath);
+function renderPresetFile(
+  name: string,
+  patterns: string[],
+  meta?: {
+    level?: OptimizationLevel;
+    applied?: { rule: string; details: string; beforeCount: number; afterCount: number }[];
+    stats?: { inputFiles: number; finalPatterns: number; savedPatterns: number };
+    source?: string;
+  }
+): string {
+  const lines: string[] = [];
+  lines.push(`# ${name} preset`);
+  lines.push(`# Generated: ${new Date().toISOString()}`);
+  if (meta?.source) lines.push(`# Source: ${meta.source}`);
+  if (meta?.level) lines.push(`# Optimization: ${meta.level}`);
+  if (meta?.stats) {
+    lines.push(
+      `# Stats: files=${meta.stats.inputFiles}, patterns=${meta.stats.finalPatterns}, saved=${meta.stats.savedPatterns}`
+    );
+  }
+  if (meta?.applied?.length) {
+    lines.push('# Applied:');
+    for (const a of meta.applied) {
+      lines.push(`# - ${a.rule}: ${a.details} (from ${a.beforeCount} → ${a.afterCount})`);
+    }
+  }
+  lines.push('');
+  // Patterns (include first, excludes later already sorted by optimizer)
+  for (const p of patterns) lines.push(p);
+  // Common excludes at the end if not already present
+  const mustEnd = ['!**/node_modules/**', '!**/dist/**', '!**/build/**'];
+  for (const m of mustEnd) {
+    if (!patterns.includes(m)) lines.push(m);
+  }
+  lines.push('');
+  return lines.join('\n');
+}
+
+/**
+ * Convert --from-files args into a normalized array of globs
+ */
+function normalizeFromFiles(fromFiles?: string[] | string): string[] {
+  if (!fromFiles) return [];
+  const raw = Array.isArray(fromFiles) ? fromFiles : [fromFiles];
+  return raw
+    .flatMap((chunk) =>
+      chunk
+        .split(/\r?\n|,/g)
+        .map((s) => s.trim())
+        .filter(Boolean)
+    );
+}
+
+/**
+ * Create a new preset (optionally from files + optimization)
+ */
+async function createPreset(presetName: string, projectPath: string, opts?: {
+  fromFiles?: string[];
+  optimizationLevel?: OptimizationLevel;
+  level?: OptimizationLevel; // alias
+}): Promise<void> {
+  const presetsDir = getPresetDir(projectPath);
   const dirCreated = await ensurePresetsDir(presetsDir);
   
   if (!dirCreated) {
@@ -225,16 +282,19 @@ async function createPreset(presetName: string, projectPath: string): Promise<vo
     return;
   }
   
-  const presetPath = path.join(presetsDir, `${presetName}.patterns`);
+  const presetPath = getPresetPath(projectPath, presetName);
   
   if (fs.existsSync(presetPath)) {
     console.log(chalk.red(`Preset already exists: ${presetName}`));
     console.log(chalk.gray('Use --edit to modify it'));
     return;
   }
-  
-  // Create default content
-  const defaultContent = `# ${presetName} preset
+
+  const from = normalizeFromFiles(opts?.fromFiles);
+
+  // If no files provided, create the legacy default (no auto-optimization)
+  if (!from.length) {
+    const defaultContent = `# ${presetName} preset
 # Use gitignore syntax for patterns
 # Include patterns:
 **/*.ts
@@ -249,11 +309,41 @@ async function createPreset(presetName: string, projectPath: string): Promise<vo
 !**/dist/**
 !**/build/**
 `;
-  
-  await fs.promises.writeFile(presetPath, defaultContent);
+    await fs.promises.writeFile(presetPath, defaultContent);
+    console.log(chalk.green(`✓ Created preset: ${presetName}`));
+    console.log(chalk.gray(`  Path: ${presetPath}`));
+    console.log(chalk.gray(`  Edit the file to customize patterns`));
+    console.log(chalk.gray(`  Use: promptcode generate -p ${presetName}`));
+    return;
+  }
+
+  // Build selection from provided globs (auto-optimized)
+  // Use project root for consistent pattern resolution
+  const projectRoot = getProjectRoot(projectPath);
+  const files = await scanFiles({
+    cwd: projectRoot,
+    patterns: from,
+    respectGitignore: true,
+    workspaceName: path.basename(projectRoot)
+  });
+  const selection = files.map((f) => path.relative(projectRoot, f.path));
+
+  // AUTO: optimization on when --from-files is present
+  const level: OptimizationLevel = opts?.optimizationLevel || opts?.level || 'balanced';
+  const result = await optimizeSelection(selection, projectRoot, level);
+
+  const content = renderPresetFile(presetName, result.patterns, {
+    level,
+    applied: result.applied,
+    stats: result.stats,
+    source: `from-files (${from.join(', ')})`,
+  });
+
+  await fs.promises.writeFile(presetPath, content);
   console.log(chalk.green(`✓ Created preset: ${presetName}`));
   console.log(chalk.gray(`  Path: ${presetPath}`));
-  console.log(chalk.gray(`  Edit the file to customize patterns`));
+  console.log(chalk.gray(`  Patterns: ${result.patterns.length} (optimized from ${selection.length} files)`));
+  console.log(chalk.gray(`  Optimization: ${level} - saved ${result.stats.savedPatterns} patterns`));
   console.log(chalk.gray(`  Use: promptcode generate -p ${presetName}`));
 }
 
@@ -261,8 +351,7 @@ async function createPreset(presetName: string, projectPath: string): Promise<vo
  * Delete a preset
  */
 async function deletePreset(presetName: string, projectPath: string): Promise<void> {
-  const presetsDir = getPresetsDir(projectPath);
-  const presetPath = path.join(presetsDir, `${presetName}.patterns`);
+  const presetPath = getPresetPath(projectPath, presetName);
   
   if (!fs.existsSync(presetPath)) {
     console.log(chalk.red(`Preset not found: ${presetName}`));
@@ -274,10 +363,123 @@ async function deletePreset(presetName: string, projectPath: string): Promise<vo
 }
 
 /**
+ * Optimize an existing preset (dry-run by default)
+ */
+async function optimizePresetOrFiles(projectPath: string, args: {
+  presetName?: string;      // optimize this preset
+  level?: OptimizationLevel;
+  dryRun?: boolean;
+  json?: boolean;
+  write?: boolean;
+}): Promise<void> {
+  const spin = args.json ? { start: () => {}, stop: () => {}, succeed: () => {}, fail: () => {}, text: '' } : spinner();
+  if (!args.json) {
+    spin.start('Analyzing preset patterns...');
+  }
+
+  const level = args.level || 'balanced';
+  const shouldWrite = !!args.write && !args.dryRun;
+
+  try {
+    let selection: string[] = [];
+    let origin = '';
+
+    if (args.presetName) {
+      const presetPath = getPresetPath(projectPath, args.presetName);
+      if (!fs.existsSync(presetPath)) {
+        if (args.json) {
+          console.log(JSON.stringify({ error: `Preset not found: ${args.presetName}` }, null, 2));
+        } else {
+          spin.fail(chalk.red(`Preset not found: ${args.presetName}`));
+        }
+        return;
+      }
+      // Expand preset -> concrete file list
+      // Use project root for pattern matching (where .promptcode lives)
+      const projectRoot = getProjectRoot(projectPath);
+      const files = await listFilesByPatternsFile(presetPath, projectRoot);
+      selection = files;
+      origin = `preset:${args.presetName}`;
+    } else {
+      if (args.json) {
+        console.log(JSON.stringify({ error: 'Nothing to optimize. Provide a preset name.' }, null, 2));
+      } else {
+        spin.fail('Nothing to optimize. Provide a preset name.');
+      }
+      return;
+    }
+
+    // Use project root for optimization (patterns should be relative to project root)
+    const projectRoot = getProjectRoot(projectPath);
+    const result = await optimizeSelection(selection, projectRoot, level);
+
+    // If preset: prepare diff
+    let diffText = '';
+    if (args.presetName) {
+      const presetPath = getPresetPath(projectPath, args.presetName);
+      const before = await fs.promises.readFile(presetPath, 'utf8');
+      const after = renderPresetFile(args.presetName!, result.patterns, {
+        level,
+        applied: result.applied,
+        stats: result.stats,
+        source: origin,
+      });
+      const { createTwoFilesPatch } = await import('diff');
+      diffText = createTwoFilesPatch(
+        `${args.presetName}.patterns (before)`,
+        `${args.presetName}.patterns (after)`,
+        before,
+        after,
+        'current',
+        'proposed'
+      );
+      if (args.json) {
+        console.log(JSON.stringify({
+          schemaVersion: 1,
+          generatedAt: new Date().toISOString(),
+          level,
+          origin,
+          inputFiles: selection.length,
+          patterns: result.patterns,
+          applied: result.applied,
+          stats: result.stats,
+          dryRun: !shouldWrite,
+          diff: diffText,
+        }, null, 2));
+        return;
+      }
+      spin.stop();
+      // Default: show diff (dry-run)
+      console.log(diffText);
+      console.log(chalk.gray(`\nLevel: ${level}; Files: ${selection.length}; Patterns: ${result.patterns.length}; Saved: ${result.stats.savedPatterns}`));
+      if (!shouldWrite) {
+        console.log(chalk.yellow('\nDry-run complete. Re-run with --write to apply these changes.'));
+        return;
+      }
+      // Apply
+      await fs.promises.writeFile(presetPath, after);
+      console.log(chalk.green(`\n✓ Optimized preset written: ${args.presetName}`));
+      return;
+    }
+
+    // Fallback message
+    spin.stop();
+    console.log(chalk.yellow('Nothing to write.'));
+
+  } catch (err) {
+    if (args.json) {
+      console.log(JSON.stringify({ error: (err as Error).message }, null, 2));
+    } else {
+      spin.fail(chalk.red(`Error: ${(err as Error).message}`));
+    }
+  }
+}
+
+/**
  * Search presets by query string
  */
 async function searchPresets(query: string, projectPath: string): Promise<void> {
-  const presetsDir = getPresetsDir(projectPath);
+  const presetsDir = getPresetDir(projectPath);
   
   try {
     const files = await fs.promises.readdir(presetsDir);
@@ -363,8 +565,7 @@ async function searchPresets(query: string, projectPath: string): Promise<void> 
  * Edit a preset (open in editor)
  */
 async function editPreset(presetName: string, projectPath: string): Promise<void> {
-  const presetsDir = getPresetsDir(projectPath);
-  const presetPath = path.join(presetsDir, `${presetName}.patterns`);
+  const presetPath = getPresetPath(projectPath, presetName);
   
   if (!fs.existsSync(presetPath)) {
     console.log(chalk.red(`Preset not found: ${presetName}`));
@@ -415,13 +616,28 @@ async function editPreset(presetName: string, projectPath: string): Promise<void
  */
 export async function presetCommand(options: PresetOptions): Promise<void> {
   const projectPath = path.resolve(options.path || process.cwd());
-  const presetsDir = getPresetsDir(projectPath);
+  const presetsDir = getPresetDir(projectPath);
   
   try {
+    // Optimize existing preset (dry-run by default; --write applies)
+    if (options.optimize) {
+      await optimizePresetOrFiles(projectPath, {
+        presetName: options.optimize,
+        level: options.optimizationLevel || options.level || 'balanced',
+        dryRun: options.dryRun ?? !options.write, // default dry-run
+        write: options.write,
+        json: options.json,
+      });
+      return;
+    }
+
     if (options.list || (!options.create && !options.info && !options.delete && !options.edit && !options.search)) {
       await listPresets(presetsDir, { json: options.json });
     } else if (options.create) {
-      await createPreset(options.create, projectPath);
+      await createPreset(options.create, projectPath, {
+        fromFiles: normalizeFromFiles(options.fromFiles),
+        optimizationLevel: options.optimizationLevel || options.level || 'balanced'
+      });
     } else if (options.info) {
       await showPresetInfo(options.info, projectPath, { json: options.json });
     } else if (options.delete) {

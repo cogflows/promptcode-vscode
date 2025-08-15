@@ -1,6 +1,5 @@
 import * as path from 'path';
 import * as fs from 'fs';
-import * as os from 'os';
 import chalk from 'chalk';
 import { scanFiles, buildPrompt, initializeTokenCounter } from '@promptcode/core';
 import { AIProvider } from '../providers/ai-provider';
@@ -15,6 +14,9 @@ import {
   shouldShowSpinner
 } from '../utils/environment';
 import { EXIT_CODES, exitWithCode } from '../utils/exit-codes';
+import { findPromptcodeFolder, getProjectRoot, getPresetPath, getCacheDir } from '../utils/paths';
+import { validatePatterns, validatePresetName } from '../utils/validation';
+import { SAFE_DEFAULT_PATTERNS, DEFAULT_SAFETY_MARGIN } from '../utils/constants';
 
 interface ExpertOptions {
   path?: string;
@@ -49,43 +51,29 @@ Focus on:
 /* ──────────────────────────────────────────────────────────
  *  Helpers (refactor for readability + safety)
  * ────────────────────────────────────────────────────────── */
-function safeDefaultPatterns(): string[] {
-  return [
-    '**/*',
-    '!**/node_modules/**',
-    '!**/.git/**',
-    '!**/.svn/**',
-    '!**/.hg/**',
-    '!**/dist/**',
-    '!**/build/**',
-    '!**/.cache/**',
-    '!**/.DS_Store',
-    '!**/.env*',
-    '!**/*.pem',
-    '!**/*.key',
-    '!**/.ssh/**',
-  ];
-}
 
+// Use shared validation utility
 function validatePatternsWithinProject(patterns: string[]): void {
-  const invalid = patterns.find((p) => path.isAbsolute(p) || p.includes('..'));
-  if (invalid) {
-    throw new Error(
-      `Invalid file pattern detected: "${invalid}". Absolute paths and ".." segments are not allowed.`
-    );
-  }
+  validatePatterns(patterns);
 }
 
 async function loadPreset(projectPath: string, presetName: string): Promise<string[]> {
-  const presetPath = path.join(projectPath, '.promptcode', 'presets', `${presetName}.patterns`);
+  // Get preset path using helper
+  const presetPath = getPresetPath(projectPath, presetName);
+    
   if (!fs.existsSync(presetPath)) {
     throw new Error(`Preset not found: ${presetName}\nCreate it with: promptcode preset --create ${presetName}`);
   }
   const content = await fs.promises.readFile(presetPath, 'utf8');
-  return content
+  const patterns = content
     .split('\n')
     .map((line) => line.trim())
     .filter((line) => line && !line.startsWith('#'));
+  
+  // Validate preset patterns for security
+  validatePatternsWithinProject(patterns);
+  
+  return patterns;
 }
 
 async function savePresetSafely(
@@ -94,19 +82,33 @@ async function savePresetSafely(
   patterns: string[],
   options: ExpertOptions
 ): Promise<void> {
-  if (!/^[a-z0-9_-]+$/i.test(presetName)) {
-    throw new Error('Invalid preset name. Use only letters, numbers, hyphens, and underscores.');
-  }
+  // Use shared validation for preset name
+  validatePresetName(presetName);
+  
   const presetDir = path.join(projectPath, '.promptcode', 'presets');
-  await fs.promises.mkdir(presetDir, { recursive: true });
-  const presetPath = path.join(presetDir, `${presetName}.patterns`);
-
-  // Additional path traversal check
-  const resolvedPresetDir = path.resolve(presetDir);
-  const resolvedPresetPath = path.resolve(presetPath);
-  if (!resolvedPresetPath.startsWith(resolvedPresetDir + path.sep)) {
-    throw new Error('Invalid preset path detected.');
+  
+  // Reject symlinked .promptcode/presets for writes
+  const pcDir = path.join(projectPath, '.promptcode');
+  const pcStat = await fs.promises.lstat(pcDir).catch(() => null);
+  if (pcStat?.isSymbolicLink()) {
+    throw new Error('Refusing to write into a symlinked .promptcode directory.');
   }
+  
+  const presetsStat = await fs.promises.lstat(presetDir).catch(() => null);
+  if (presetsStat?.isSymbolicLink()) {
+    throw new Error('Refusing to write into a symlinked presets directory.');
+  }
+  
+  await fs.promises.mkdir(presetDir, { recursive: true });
+  
+  // Defense in depth: ensure realpaths are within real project root
+  const projectRootReal = fs.realpathSync(projectPath);
+  const presetDirReal = fs.realpathSync(presetDir);
+  if (!presetDirReal.startsWith(projectRootReal + path.sep)) {
+    throw new Error('Invalid preset directory location detected.');
+  }
+  
+  const presetPath = path.join(presetDirReal, `${presetName}.patterns`);
 
   if (fs.existsSync(presetPath)) {
     if (!shouldSkipConfirmation(options)) {
@@ -132,29 +134,34 @@ async function savePresetSafely(
 }
 
 async function scanProject(projectPath: string, patterns: string[]) {
+  // Use project root for scanning (where preset patterns are relative to)
+  const projectRoot = getProjectRoot(projectPath);
   const files = await scanFiles({
-    cwd: projectPath,
+    cwd: projectRoot,
     patterns,
     respectGitignore: true,
-    workspaceName: path.basename(projectPath),
+    workspaceName: path.basename(projectRoot),
+    followSymlinks: false,  // Security: don't follow symlinks
   });
   return files;
 }
 
 function assertFilesInsideProject(projectPath: string, files: any[]): void {
-  const projectRoot = path.resolve(projectPath) + path.sep;
+  const projectRoot = fs.realpathSync(projectPath) + path.sep;
   const escaped = files.find((f) => {
-    const abs = path.resolve((f as any).fullPath || path.join(projectPath, f.path));
-    return !abs.startsWith(projectRoot);
+    try {
+      // Standardize on absolutePath field (consistent with generate.ts)
+      const filePath = f.absolutePath || f.path;
+      const abs = fs.realpathSync(filePath);
+      return !abs.startsWith(projectRoot);
+    } catch (err) {
+      // If realpath fails (e.g., broken symlink), treat as escape attempt
+      return true;
+    }
   });
   if (escaped) {
     throw new Error(`Refusing to include file outside project root: ${escaped.path}`);
   }
-}
-
-function getCacheDir(): string {
-  const cacheBase = process.env.XDG_CACHE_HOME || path.join(os.homedir(), '.cache');
-  return path.join(cacheBase, 'promptcode');
 }
 
 function listAvailableModels(jsonOutput: boolean = false) {
@@ -279,7 +286,9 @@ export async function expertCommand(question: string | undefined, options: Exper
     }
     try {
       finalQuestion = await fs.promises.readFile(promptFilePath, 'utf8');
-      console.log(chalk.gray(`📄 Using prompt from: ${options.promptFile}`));
+      if (!options.json) {
+        console.log(chalk.gray(`📄 Using prompt from: ${options.promptFile}`));
+      }
     } catch (error) {
       console.error(chalk.red(`❌ Error reading prompt file: ${(error as Error).message}`));
       exitWithCode(EXIT_CODES.FILE_NOT_FOUND);
@@ -354,10 +363,12 @@ export async function expertCommand(question: string | undefined, options: Exper
     } else if (options.promptFile) {
       // Prompt-file only: no files by default
       patterns = [];
-      console.log(chalk.gray('💡 No files specified. Use -f or --preset to include code context.'));
+      if (!options.json) {
+        console.log(chalk.gray('💡 No files specified. Use -f or --preset to include code context.'));
+      }
     } else {
       // Safe default include set (respects .gitignore + conservative excludes)
-      patterns = safeDefaultPatterns();
+      patterns = SAFE_DEFAULT_PATTERNS;
     }
     
     // Save preset if requested
@@ -415,9 +426,8 @@ export async function expertCommand(question: string | undefined, options: Exper
     const fileContextTokens = result.tokenCount || 0;
     const totalInputTokens = systemPromptTokens + questionTokens + fileContextTokens;
     
-    const SAFETY_MARGIN = 256; // leave room for stop-tokens & metadata
     const availableTokens =
-      modelConfig.contextWindow - totalInputTokens - SAFETY_MARGIN;
+      modelConfig.contextWindow - totalInputTokens - DEFAULT_SAFETY_MARGIN;
 
     if (availableTokens <= 0) {
       if (spin) {

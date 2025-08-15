@@ -11,8 +11,11 @@ import {
   loadInstructionsFromOptions,
   getPatternsFromOptions,
   handlePresetSave,
-  outputResults
+  outputResults,
+  getPresetPath,
+  getProjectRoot
 } from '../utils';
+import { validatePatterns } from '../utils/validation';
 import { 
   getTokenThreshold,
   shouldSkipConfirmation,
@@ -66,8 +69,9 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
     // Get patterns from preset or options
     let patterns: string[];
     if (options.preset) {
-      // Load preset patterns
-      const presetPath = path.join(projectPath, '.promptcode', 'presets', `${options.preset}.patterns`);
+      // Load preset patterns using helper
+      const presetPath = getPresetPath(projectPath, options.preset);
+        
       if (fs.existsSync(presetPath)) {
         const content = await fs.promises.readFile(presetPath, 'utf8');
         patterns = content
@@ -75,7 +79,7 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
           .map(line => line.trim())
           .filter(line => line && !line.startsWith('#'));
         
-        if (!options.json) {
+        if (!options.json && !options.dryRun) {
           console.log(chalk.gray(`📋 Using preset: ${options.preset}`));
         }
       } else {
@@ -85,6 +89,9 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
       patterns = await getPatternsFromOptions(options, projectPath);
     }
     
+    // Validate patterns for security
+    validatePatterns(patterns);
+    
     // Save preset if requested
     if (options.savePreset && patterns.length > 0) {
       await handlePresetSave(options.savePreset, patterns, projectPath, options.json);
@@ -93,16 +100,39 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
     // Scan files
     spin.text = 'Scanning files...';
     
+    // Use project root for scanning (where preset patterns are relative to)
+    const scanRoot = getProjectRoot(projectPath);
     const selectedFiles = await scanFiles({
-      cwd: projectPath,
+      cwd: scanRoot,
       patterns,
       respectGitignore: !options.ignoreGitignore,
-      customIgnoreFile: options.ignoreFile || path.join(projectPath, IGNORE_FILE_NAME),
-      workspaceName: path.basename(projectPath)
+      customIgnoreFile: options.ignoreFile || path.join(scanRoot, IGNORE_FILE_NAME),
+      workspaceName: path.basename(scanRoot),
+      followSymlinks: false  // Security: don't follow symlinks
     });
     
     if (selectedFiles.length === 0) {
       throw new Error('No files found matching the specified patterns');
+    }
+    
+    // Validate all files are within project root (defense in depth)
+    // Use the actual project root (where .promptcode lives) for security check
+    const projectRoot = fs.realpathSync(scanRoot) + path.sep;
+    const escapedFile = selectedFiles.find((f) => {
+      try {
+        const realPath = fs.realpathSync(f.absolutePath || f.path);
+        return !realPath.startsWith(projectRoot);
+      } catch {
+        // If realpath fails (e.g., broken symlink), treat as escape attempt
+        return true;
+      }
+    });
+    
+    if (escapedFile) {
+      throw new Error(
+        `Security violation: File outside project root detected. ` +
+        `Ensure all files are within the project directory.`
+      );
     }
     
     // Calculate total tokens for dry run or warning

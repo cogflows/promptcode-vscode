@@ -30,3 +30,63 @@ export const ENV_VARS = {
   XAI_API_KEY: 'XAI_API_KEY',
   GROK_API_KEY: 'GROK_API_KEY'
 } as const;
+
+/**
+ * Safe default patterns for file scanning
+ * These patterns exclude sensitive and unnecessary files
+ */
+export const SAFE_DEFAULT_PATTERNS = [
+  '**/*',
+  '!**/node_modules/**',
+  '!**/.git/**',
+  '!**/.svn/**',
+  '!**/.hg/**',
+  '!**/dist/**',
+  '!**/build/**',
+  '!**/.cache/**',
+  '!**/.DS_Store',
+  '!**/.env*',
+  '!**/*.pem',
+  '!**/*.key',
+  '!**/.ssh/**',
+  '!**/.aws/**',
+  '!**/.azure/**',
+  '!**/.gcp/**',
+  '!**/.kube/**',
+  '!**/.gnupg/**',
+  '!**/*.p12',
+  '!**/*.pfx',
+  '!**/*.pkcs12',
+  '!**/*.jks',
+  '!**/*.keystore',
+  '!**/*.asc',
+  '!**/*.enc',
+  '!**/*.sqlite',
+  '!**/*.db',
+  '!**/*.bak',
+  '!**/*.zip',
+  '!**/*.tar',
+  '!**/*.tar.gz',
+  '!**/*.7z',
+  '!**/*.jpg',
+  '!**/*.jpeg',
+  '!**/*.png',
+  '!**/*.gif',
+  '!**/*.mp4',
+  '!**/*.avi',
+  '!**/*.mov',
+];
+
+/**
+ * Default patterns for ignoring files and directories
+ * Used by the pattern optimizer
+ */
+export const DEFAULT_IGNORE_PATTERNS = [
+  'node_modules/**',
+  '.git/**',
+  'dist/**',
+  'out/**',
+  '.vscode/**',
+  '**/*.log',
+  '**/.DS_Store',
+];
