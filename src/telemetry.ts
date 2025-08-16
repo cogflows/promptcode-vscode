@@ -221,4 +221,18 @@ export class TelemetryService {
         console.log('[TELEMETRY] Status Report:');
         console.log(this.getTelemetryStatus());
     }
+    
+    /**
+     * Dispose of the telemetry reporter
+     * Should be called when the extension is deactivating
+     */
+    public dispose(): Promise<void> {
+        if (this.reporter) {
+            // The reporter's dispose method is async, so we return its promise
+            const disposePromise = this.reporter.dispose();
+            this.reporter = undefined;
+            return disposePromise;
+        }
+        return Promise.resolve();
+    }
 } 

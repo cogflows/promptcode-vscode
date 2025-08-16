@@ -1476,10 +1476,26 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 // This method is called when your extension is deactivated
-export function deactivate() {
+export async function deactivate(): Promise<void> {
 	// Send final telemetry event before deactivation
 	const telemetryService = TelemetryService.getInstance();
 	telemetryService.sendTelemetryEvent('extension_deactivated');
+	
+	// Dispose of telemetry reporter to prevent hanging
+	// The telemetry reporter's dispose() is async and is the most common
+	// cause of hanging test runners. We must await it.
+	await telemetryService.dispose();
+	
+	// Dispose of file explorer provider (clears search timers)
+	if (fileExplorerProvider) {
+		fileExplorerProvider.dispose();
+	}
+	
+	// Clear all token and file type caches
+	tokenCache.clear();
+	fileTypeCache.clear();
+	
+	console.log('PromptCode extension deactivated cleanly.');
 }
 
 // Helper function to validate includeOptions

@@ -2,8 +2,8 @@ import * as path from 'path';
 import * as fs from 'fs';
 import fg from 'fast-glob';
 import ignore from 'ignore';
-import { SelectedFile } from './types';
-import { countTokensWithCacheDetailed } from './tokenCounter';
+import { SelectedFile } from './types/index.js';
+import { countTokensWithCacheDetailed } from './tokenCounter.js';
 
 export interface ScanOptions {
   cwd: string;                    // workspace root

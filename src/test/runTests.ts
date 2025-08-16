@@ -31,27 +31,31 @@ async function makeFixture(): Promise<string> {
 }
 
 async function main() {
-  const extensionDevelopmentPath = path.resolve(__dirname, '../../');
-  const extensionTestsPath = path.resolve(__dirname, './index'); // compiled tests entry
-  const workspace = await makeFixture();
+  try {
+    const extensionDevelopmentPath = path.resolve(__dirname, '../../');
+    const extensionTestsPath = path.resolve(__dirname, './index'); // compiled tests entry
+    const workspace = await makeFixture();
 
-  await runTests({
-    extensionDevelopmentPath,
-    extensionTestsPath,
-    launchArgs: [workspace],
-    extensionTestsEnv: {
-      PROMPTCODE_TEST: '1',
-      NO_COLOR: '1',
-      VSCODE_TELEMETRY_DISABLED: '1'
-    }
-  });
-  
-  // Ensure the outer Node process exits deterministically in CI
-  // This is safe here since we're in the outer runner, not the VS Code host
-  process.exit(0);
+    // The `runTests` function returns the exit code from the test run.
+    const exitCode = await runTests({
+      extensionDevelopmentPath,
+      extensionTestsPath,
+      launchArgs: [workspace],
+      extensionTestsEnv: {
+        PROMPTCODE_TEST: '1',
+        NO_COLOR: '1',
+        VSCODE_TELEMETRY_DISABLED: '1'
+      }
+    });
+
+    // Exit with the actual exit code from the test run. This is crucial for CI.
+    // A non-zero exit code will fail the build if tests fail.
+    process.exit(exitCode);
+
+  } catch (err) {
+    console.error('Failed to run VS Code tests', err);
+    process.exit(1);
+  }
 }
 
-main().catch((err) => {
-  console.error('Failed to run VS Code tests', err);
-  process.exit(1);
-});
+main();

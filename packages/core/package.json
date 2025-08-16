@@ -2,6 +2,7 @@
   "name": "@promptcode/core",
   "version": "0.2.0",
   "description": "Core functionality for PromptCode - Generate AI-ready prompts from codebases",
+  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {

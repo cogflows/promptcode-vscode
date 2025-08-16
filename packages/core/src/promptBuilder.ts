@@ -1,8 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { SelectedFile } from './types';
-import { countTokens } from './tokenCounter';
-import { buildTreeFromSelection } from './utils/buildTreeFromSelection';
+import { SelectedFile } from './types/index.js';
+import { countTokens } from './tokenCounter.js';
+import { buildTreeFromSelection } from './utils/buildTreeFromSelection.js';
 
 export interface PromptOptions {
   includeFiles: boolean;
