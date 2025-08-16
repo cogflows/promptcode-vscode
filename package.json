@@ -191,6 +191,8 @@
     "lint": "eslint src",
     "test": "vscode-test",
     "test:unit": "npm run compile && npm run compile:tests && node ./out/test/runTests.js",
+    "test:extension": "npm run compile && npm run compile:tests && node ./out/test/runTests.js",
+    "test:webview": "playwright test -c playwright.config.ts",
     "compile:tests": "node ./scripts/build-tests.js",
     "build:prod": "node ./scripts/build.js --minify --publish",
     "build:dev": "node ./scripts/build.js",

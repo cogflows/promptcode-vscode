@@ -29,8 +29,19 @@ jobs:
       - name: Build extension
         run: npm run compile
         
-      - name: Test packaging
-        run: npx @vscode/vsce package --no-dependencies
+      - name: Install Playwright (Chromium)
+        run: npx playwright install --with-deps chromium
+        
+      - name: Run extension tests (Electron)
+        env:
+          VSCODE_TELEMETRY_DISABLED: '1'
+          CI: '1'
+        run: xvfb-run -a npm run test:unit
+        
+      - name: Webview E2E (Playwright)
+        env:
+          CI: '1'
+        run: npx playwright test -c playwright.config.ts
 
   test-cli:
     runs-on: ubuntu-24.04

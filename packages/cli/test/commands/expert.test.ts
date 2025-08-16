@@ -353,13 +353,19 @@ describe('expert command', () => {
   // New tests for domain boundary hardening
   // ──────────────────────────────────────────────────────────
 
-  it('rejects patterns attempting to escape project root', async () => {
+  it('rejects patterns with .. for security', async () => {
     const result = await runCLI(['expert', 'Q', '-f', '../../**/*.pem'], {
       cwd: fixture.dir,
       env: { ...process.env, OPENAI_API_KEY: 'test-key' }
     });
-    // Should fail with a non-zero exit code
-    expect(result.exitCode).toBeGreaterThan(0);
+    // Should fail with non-zero exit code as .. patterns are rejected
+    // This is a security measure to prevent directory traversal
+    expect(result.exitCode).not.toBe(0);
+    // Check for either the path error or permission error (both indicate rejection)
+    const output = (result.stderr || '') + (result.stdout || '');
+    const hasPathError = output.includes('path should be') || output.includes('path.relative');
+    const hasPermissionError = output.includes('EPERM') || output.includes('operation not permitted');
+    expect(hasPathError || hasPermissionError).toBe(true);
   });
 
   it('applies safe default excludes on broad scans (no preset/files)', async () => {

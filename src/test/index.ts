@@ -29,10 +29,6 @@ export function run(): Promise<void> {
           } else {
             c();
           }
-          // Force exit after tests complete
-          setTimeout(() => {
-            process.exit(failures > 0 ? 1 : 0);
-          }, 1000);
         });
       } catch (err) {
         console.error(err);

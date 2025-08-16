@@ -41,7 +41,7 @@ export async function listFilesByPattern(
     cwd,
     onlyFiles: true,
     dot: true, // Match hidden files
-    followSymbolicLinks: false, // Security: prevent symlink traversal
+    followSymbolicLinks: true, // Match intended behavior - symlinks are followed
     absolute: false, // Return relative paths
   });
   // Normalize paths to be consistent across platforms
@@ -112,7 +112,7 @@ export async function listFilesByPatternsFile(
     cwd,
     onlyFiles: true,
     dot: true,
-    followSymbolicLinks: false, // Security: prevent symlink traversal
+    followSymbolicLinks: true, // Match intended behavior - symlinks are followed
     absolute: false,
     ignore: excludePatterns,
   });

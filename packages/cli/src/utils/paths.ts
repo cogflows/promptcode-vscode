@@ -270,9 +270,22 @@ export function assertInsideRoot(root: string, candidatePath: string): void {
 
 /**
  * Resolve project path from options or current directory
+ * Intelligently finds the project root by looking for .promptcode folder
  */
 export function resolveProjectPath(pathOption?: string): string {
-  return path.resolve(pathOption || process.cwd());
+  // Start from the provided path or current directory
+  const startPath = path.resolve(pathOption || process.cwd());
+  
+  // Try to find project root by looking for .promptcode folder
+  const promptcodeFolder = findPromptcodeFolder(startPath);
+  if (promptcodeFolder) {
+    // Return the parent of .promptcode (the project root)
+    return path.dirname(promptcodeFolder);
+  }
+  
+  // If no .promptcode found, return the resolved start path
+  // This allows the tool to work in projects without .promptcode yet
+  return startPath;
 }
 
 /**

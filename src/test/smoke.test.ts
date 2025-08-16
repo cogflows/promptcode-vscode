@@ -1,5 +1,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
 
 suite('Extension Smoke Test', () => {
     vscode.window.showInformationMessage('Start smoke tests.');
@@ -24,6 +26,18 @@ suite('Extension Smoke Test', () => {
         assert.ok(commands.includes('promptcode.selectAll'));
         assert.ok(commands.includes('promptcode.deselectAll'));
         assert.ok(commands.includes('promptcode.clearTokenCache'));
+    });
+
+    test('All contributed commands from package.json are registered', async () => {
+        // This test ensures all commands in package.json are actually registered
+        const packageJsonPath = path.join(__dirname, '../../package.json');
+        const pkg = JSON.parse(await fs.readFile(packageJsonPath, 'utf8'));
+        const contributed = (pkg.contributes?.commands ?? []).map((c: any) => c.command);
+        const registered = await vscode.commands.getCommands(true);
+        
+        for (const cmd of contributed) {
+            assert.ok(registered.includes(cmd), `Missing command: ${cmd}`);
+        }
     });
 
     test('Core integration should work', async () => {

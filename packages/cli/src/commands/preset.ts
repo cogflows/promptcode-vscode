@@ -2,7 +2,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import chalk from 'chalk';
 import { scanFiles, initializeTokenCounter, listFilesByPatternsFile, optimizeSelection, type OptimizationLevel, type OptimizationResult } from '@promptcode/core';
-import { findPromptcodeFolder, ensureDirWithApproval, getProjectRoot, getPresetDir, getPresetPath, getCacheDir } from '../utils/paths';
+import { findPromptcodeFolder, ensureDirWithApproval, getProjectRoot, getPresetDir, getPresetPath, getCacheDir, resolveProjectPath } from '../utils/paths';
 import { spinner } from '../utils/spinner';
 import { CACHE_VERSION } from '../utils/constants';
 
@@ -133,8 +133,8 @@ async function showPresetInfo(presetName: string, projectPath: string, options: 
       .map(line => line.trim())
       .filter(line => line && !line.startsWith('#'));
     
-    // Scan files using patterns from project root
-    const projectRoot = getProjectRoot(projectPath);
+    // projectPath is already the project root thanks to resolveProjectPath
+    const projectRoot = projectPath;
     const files = await scanFiles({
       cwd: projectRoot,
       patterns,
@@ -158,7 +158,7 @@ async function showPresetInfo(presetName: string, projectPath: string, options: 
         fileCount: files.length,
         totalTokens: totalTokens,
         files: files.map(f => ({
-          path: path.relative(projectPath, f.path),
+          path: f.path, // Already relative to project root from scanFiles
           tokenCount: f.tokenCount
         })).sort((a, b) => b.tokenCount - a.tokenCount)
       };
@@ -180,7 +180,8 @@ async function showPresetInfo(presetName: string, projectPath: string, options: 
         .slice(0, 10);
       
       for (const file of topFiles) {
-        const relativePath = path.relative(projectPath, file.path);
+        // file.path is already relative to the project root from scanFiles
+        const relativePath = file.path;
         console.log(`  ${relativePath.padEnd(50)} ${chalk.gray(file.tokenCount.toLocaleString() + ' tokens')}`);
       }
     }
@@ -318,8 +319,8 @@ async function createPreset(presetName: string, projectPath: string, opts?: {
   }
 
   // Build selection from provided globs (auto-optimized)
-  // Use project root for consistent pattern resolution
-  const projectRoot = getProjectRoot(projectPath);
+  // projectPath is already the project root thanks to resolveProjectPath
+  const projectRoot = projectPath;
   const files = await scanFiles({
     cwd: projectRoot,
     patterns: from,
@@ -395,8 +396,8 @@ async function optimizePresetOrFiles(projectPath: string, args: {
         return;
       }
       // Expand preset -> concrete file list
-      // Use project root for pattern matching (where .promptcode lives)
-      const projectRoot = getProjectRoot(projectPath);
+      // projectPath is already the project root thanks to resolveProjectPath
+      const projectRoot = projectPath;
       const files = await listFilesByPatternsFile(presetPath, projectRoot);
       selection = files;
       origin = `preset:${args.presetName}`;
@@ -409,8 +410,8 @@ async function optimizePresetOrFiles(projectPath: string, args: {
       return;
     }
 
-    // Use project root for optimization (patterns should be relative to project root)
-    const projectRoot = getProjectRoot(projectPath);
+    // projectPath is already the project root thanks to resolveProjectPath
+    const projectRoot = projectPath;
     const result = await optimizeSelection(selection, projectRoot, level);
 
     // If preset: prepare diff
@@ -615,7 +616,8 @@ async function editPreset(presetName: string, projectPath: string): Promise<void
  * Preset command implementation
  */
 export async function presetCommand(options: PresetOptions): Promise<void> {
-  const projectPath = path.resolve(options.path || process.cwd());
+  // This now intelligently finds the project root
+  const projectPath = resolveProjectPath(options.path);
   const presetsDir = getPresetDir(projectPath);
   
   try {

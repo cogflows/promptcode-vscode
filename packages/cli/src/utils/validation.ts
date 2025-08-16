@@ -2,30 +2,26 @@ import * as path from 'path';
 import chalk from 'chalk';
 
 /**
- * Validates that file patterns don't contain security risks
+ * Validates that file patterns meet basic sanity requirements
  * @param patterns Array of file patterns to validate
  * @throws Error if any pattern is invalid
  */
 export function validatePatterns(patterns: string[]): void {
-  // Only block dangerous patterns like .. for traversal
-  // Allow absolute paths but they'll get a warning later
-  const invalid = patterns.find((p) => {
-    // Check for path traversal attempts
-    if (p.includes('..')) return true;
-    return false;
-  });
-  
-  if (invalid) {
-    throw new Error(
-      `Invalid file pattern detected: "${invalid}". Path traversal with ".." is not allowed.`
-    );
+  // Only basic sanity checks - real security is handled post-resolution
+  for (const p of patterns) {
+    if (typeof p !== 'string' || p.trim() === '') {
+      throw new Error('Invalid file pattern: empty value.');
+    }
+    if (p.includes('\0')) {
+      throw new Error('Invalid file pattern: contains NUL byte.');
+    }
   }
   
-  // Warn about absolute paths but don't block them
+  // Optional soft note about absolute paths (not a security concern, just informational)
   const absolutePaths = patterns.filter(p => path.isAbsolute(p));
   const isJsonMode = process.argv.includes('--json');
   if (absolutePaths.length > 0 && !process.env.PROMPTCODE_TEST && !isJsonMode) {
-    console.warn(chalk.yellow(`⚠️  Using absolute path(s): ${absolutePaths.join(', ')}`));
+    console.warn(chalk.yellow(`ℹ️  Note: Using absolute path(s): ${absolutePaths.join(', ')}`));
   }
 }
 

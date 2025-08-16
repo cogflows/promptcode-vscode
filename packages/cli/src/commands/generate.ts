@@ -56,6 +56,7 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
   try {
     // Initialize and validate
     initializeTokenCounter(getCacheDir(), CACHE_VERSION);
+    // This now intelligently finds the project root
     const projectPath = resolveProjectPath(options.path);
     
     if (!fs.existsSync(projectPath)) {
@@ -75,7 +76,7 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
     // Get patterns from preset or options
     let patterns: string[];
     if (options.preset) {
-      // Load preset patterns using helper
+      // Load preset patterns using helper (projectPath is now the root)
       const presetPath = getPresetPath(projectPath, options.preset);
         
       if (fs.existsSync(presetPath)) {
@@ -110,8 +111,8 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
     const absolutePaths = patterns.filter(p => path.isAbsolute(p));
     const relativePatterns = patterns.filter(p => !path.isAbsolute(p));
     
-    // Use project root for scanning (where preset patterns are relative to)
-    const scanRoot = getProjectRoot(projectPath);
+    // projectPath is already the project root thanks to resolveProjectPath
+    const scanRoot = projectPath;
     
     // Scan relative patterns normally
     let selectedFiles = relativePatterns.length > 0 ? await scanFiles({
@@ -120,7 +121,7 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
       respectGitignore: !options.ignoreGitignore,
       customIgnoreFile: options.ignoreFile || path.join(scanRoot, IGNORE_FILE_NAME),
       workspaceName: path.basename(scanRoot),
-      followSymlinks: false  // Security: don't follow symlinks
+      followSymlinks: true  // Match VS Code extension behavior
     }) : [];
     
     // Handle absolute paths directly
@@ -165,14 +166,21 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
       }
     });
     
-    if (externalFiles.length > 0 && !options.json) {
-      console.warn(chalk.yellow(`\n⚠️  Note: Including ${externalFiles.length} file(s) from outside the project directory`));
-      if (process.env.VERBOSE || options.dryRun) {
-        console.warn(chalk.gray('   External files:'));
-        externalFiles.forEach(f => {
-          const relPath = path.relative(projectPath, f.absolutePath || f.path);
-          console.warn(chalk.gray(`   - ${relPath}`));
-        });
+    if (externalFiles.length > 0) {
+      if (!options.json) {
+        console.warn(chalk.yellow(`\n⚠️  Note: Including ${externalFiles.length} file(s) from outside the project directory`));
+        if (process.env.VERBOSE || options.dryRun) {
+          console.warn(chalk.gray('   External files:'));
+          externalFiles.forEach(f => {
+            const relPath = path.relative(projectPath, f.absolutePath || f.path);
+            console.warn(chalk.gray(`   - ${relPath}`));
+          });
+        }
+      }
+      
+      // Optional CI policy: fail if external files detected
+      if (process.env.PROMPTCODE_EXTERNAL_FILES === 'deny') {
+        throw new Error(`External files detected (${externalFiles.length}). Failing due to PROMPTCODE_EXTERNAL_FILES=deny.`);
       }
     }
     

@@ -31,6 +31,10 @@ logs/
 coverage/
 .nyc_output/
 
+# Playwright test results
+test-results/
+playwright-report/
+
 # VS Code extension specific
 .vscode-test/
 *.vsix

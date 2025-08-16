@@ -14,7 +14,7 @@ import {
   shouldShowSpinner
 } from '../utils/environment';
 import { EXIT_CODES, exitWithCode } from '../utils/exit-codes';
-import { findPromptcodeFolder, getProjectRoot, getPresetPath, getCacheDir } from '../utils/paths';
+import { findPromptcodeFolder, getProjectRoot, getPresetPath, getCacheDir, resolveProjectPath } from '../utils/paths';
 import { validatePatterns, validatePresetName } from '../utils/validation';
 import { SAFE_DEFAULT_PATTERNS, DEFAULT_SAFETY_MARGIN } from '../utils/constants';
 
@@ -134,8 +134,8 @@ async function savePresetSafely(
 }
 
 async function scanProject(projectPath: string, patterns: string[]) {
-  // Use project root for scanning (where preset patterns are relative to)
-  const projectRoot = getProjectRoot(projectPath);
+  // projectPath is already the project root thanks to resolveProjectPath
+  const projectRoot = projectPath;
   
   // Separate absolute paths from relative patterns
   const absolutePaths = patterns.filter(p => path.isAbsolute(p));
@@ -147,7 +147,7 @@ async function scanProject(projectPath: string, patterns: string[]) {
     patterns: relativePatterns,
     respectGitignore: true,
     workspaceName: path.basename(projectRoot),
-    followSymlinks: false,  // Security: don't follow symlinks
+    followSymlinks: true,  // Match VS Code extension behavior
   }) : [];
   
   // Handle absolute paths directly
@@ -396,7 +396,8 @@ export async function expertCommand(question: string | undefined, options: Exper
     const cacheDir = getCacheDir();
     initializeTokenCounter(cacheDir, '0.1.0');
     
-    const projectPath = path.resolve(options.path || process.cwd());
+    // This now intelligently finds the project root
+    const projectPath = resolveProjectPath(options.path);
     
     // Determine patterns - prioritize files, then preset, then default (safe)
     let patterns: string[] = [];
@@ -428,7 +429,12 @@ export async function expertCommand(question: string | undefined, options: Exper
     if (patterns.length > 0) {
       files = await scanProject(projectPath, patterns);
       // Warn if files are outside project (informational, not blocking)
-      warnIfFilesOutsideProject(projectPath, files);
+      const externalCount = warnIfFilesOutsideProject(projectPath, files);
+      
+      // Optional CI policy: fail if external files detected
+      if (process.env.PROMPTCODE_EXTERNAL_FILES === 'deny' && externalCount > 0) {
+        throw new Error(`External files detected (${externalCount}). Failing due to PROMPTCODE_EXTERNAL_FILES=deny.`);
+      }
       
       if (files.length === 0) {
         if (spin) {

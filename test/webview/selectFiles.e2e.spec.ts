@@ -1,16 +1,19 @@
 import { test, expect } from '@playwright/test';
+import * as path from 'path';
+
+const harness = `file://${path.resolve(__dirname, 'harness.html')}`;
 
 // Helper function to open the Select Files tab
 async function openSelectFilesTab(page) {
-  // Navigate to the webview (this will need to be adjusted based on how your extension is served during tests)
-  await page.goto('vscode-webview://your-extension-id');
-
-  // Click on the Select Files tab
-  const selectFilesTab = page.locator('.tab-trigger[data-tab="files"]');
+  // Navigate to the test harness
+  await page.goto(harness);
+  
+  // The select files tab should be active by default, but click it to be sure
+  const selectFilesTab = page.locator('.tab-trigger[data-tab="selectFiles"]');
   await selectFilesTab.click();
   
-  // Wait for the tab content to load
-  await page.waitForSelector('#selected-files-list');
+  // Wait for the tab content to be visible
+  await page.waitForSelector('#selected-files-list', { state: 'visible' });
 }
 
 test('trash icon deletes first directory header', async ({ page }) => {
