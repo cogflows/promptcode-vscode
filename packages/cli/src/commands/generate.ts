@@ -23,6 +23,9 @@ import {
   exitInTestMode
 } from '../utils/environment';
 import { spinner } from '../utils/spinner';
+import { estimateCost, formatCost } from '../utils/cost';
+import { EXIT_CODES, exitWithCode } from '../utils/exit-codes';
+import { DEFAULT_MODEL } from '../providers/models';
 
 export interface GenerateOptions {
   path?: string;
@@ -40,6 +43,9 @@ export interface GenerateOptions {
   dryRun?: boolean;
   tokenWarning?: number;
   yes?: boolean;
+  estimateCost?: boolean;
+  costThreshold?: string;
+  model?: string;  // For cost estimation
 }
 
 export async function generateCommand(options: GenerateOptions): Promise<void> {
@@ -223,23 +229,101 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
       return;
     }
     
-    // Token warning threshold check
-    const threshold = getTokenThreshold(options);
+    // Cost estimation and threshold checking
+    const modelKey = options.model || DEFAULT_MODEL;
+    const expectedCompletion = 4000; // Default expected completion tokens
+    const estimatedTotalCost = estimateCost(modelKey, totalTokens, expectedCompletion);
     
-    if (totalTokens > threshold && !shouldSkipConfirmation(options)) {
+    // Handle --estimate-cost flag
+    if (options.estimateCost) {
       spin.stop();
       
-      // Estimate cost (rough approximation)
-      const estimatedCost = (totalTokens / 1000000) * 5; // Assuming ~$5 per million tokens
+      if (options.json) {
+        const output = {
+          model: modelKey,
+          inputTokens: totalTokens,
+          expectedCompletionTokens: expectedCompletion,
+          estimatedCost: estimatedTotalCost,
+          estimatedCostFormatted: formatCost(estimatedTotalCost),
+          fileCount: selectedFiles.length
+        };
+        console.log(JSON.stringify(output, null, 2));
+      } else {
+        console.log(chalk.bold('\nCost Estimation:'));
+        console.log(`Model: ${chalk.cyan(modelKey)}`);
+        console.log(`Input tokens: ${chalk.cyan(totalTokens.toLocaleString())}`);
+        console.log(`Expected completion: ${chalk.cyan(expectedCompletion.toLocaleString())}`);
+        console.log(`Estimated cost: ${chalk.yellow(formatCost(estimatedTotalCost))}`);
+      }
+      return;
+    }
+    
+    // Determine cost threshold
+    const costThreshold = options.costThreshold 
+      ? parseFloat(options.costThreshold)
+      : parseFloat(process.env.PROMPTCODE_COST_THRESHOLD || '0.50');
+    
+    // Check cost threshold
+    if (estimatedTotalCost > costThreshold) {
+      spin.stop();
       
-      console.log(chalk.yellow(`\n⚠️  Large prompt detected:`));
-      console.log(`   Files: ${selectedFiles.length}`);
-      console.log(`   Tokens: ${chalk.bold(totalTokens.toLocaleString())}`);
-      console.log(`   Estimated cost: ~$${estimatedCost.toFixed(2)}`);
+      if (!options.json) {
+        console.log(chalk.yellow(`\n⚠️  Cost threshold check:`));
+        console.log(`   Estimated cost: ${chalk.bold(formatCost(estimatedTotalCost))}`);
+        console.log(`   Threshold: ${chalk.bold(formatCost(costThreshold))}`);
+        console.log(`   Files: ${selectedFiles.length}`);
+        console.log(`   Tokens: ${totalTokens.toLocaleString()}`);
+      }
       
-      // Check if interactive
+      if (!shouldSkipConfirmation(options)) {
+        // Check if interactive
+        if (!isInteractive()) {
+          if (options.json) {
+            console.log(JSON.stringify({
+              error: 'Cost approval required',
+              errorCode: 'APPROVAL_REQUIRED',
+              estimatedCost: estimatedTotalCost,
+              costThreshold,
+              message: 'Use --yes to proceed without confirmation in non-interactive mode'
+            }));
+          } else {
+            console.log(chalk.yellow('\nNon-interactive environment detected.'));
+            console.log('Cost approval required. Use --yes to proceed without confirmation.');
+          }
+          exitWithCode(EXIT_CODES.APPROVAL_REQUIRED);
+        }
+        
+        const readline = await import('readline');
+        const rl = readline.createInterface({
+          input: process.stdin,
+          output: process.stdout
+        });
+        
+        const answer = await new Promise<string>((resolve) => {
+          rl.question(chalk.bold('\nProceed? (y/N): '), resolve);
+        });
+        
+        rl.close();
+        
+        if (answer.toLowerCase() !== 'yes' && answer.toLowerCase() !== 'y') {
+          console.log(chalk.gray('\nCancelled by user.'));
+          exitWithCode(EXIT_CODES.OPERATION_CANCELLED);
+        }
+      }
+      
+      spin.start('Building prompt...');
+    }
+    
+    // Legacy token warning check (kept for backward compatibility)
+    const tokenThreshold = getTokenThreshold(options);
+    if (totalTokens > tokenThreshold && !options.costThreshold && !shouldSkipConfirmation(options)) {
+      spin.stop();
+      
+      console.log(chalk.yellow(`\n⚠️  Large prompt detected (${totalTokens.toLocaleString()} tokens)`));
+      console.log(`Estimated cost: ${formatCost(estimatedTotalCost)}`);
+      
       if (!isInteractive()) {
-        console.log(chalk.yellow('\nNon-interactive environment. Use --yes to proceed without confirmation.'));
+        console.log(chalk.yellow('Use --yes to proceed without confirmation.'));
         process.exit(1);
       }
       
@@ -250,13 +334,13 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
       });
       
       const answer = await new Promise<string>((resolve) => {
-        rl.question(chalk.bold('\nProceed? (y/N): '), resolve);
+        rl.question(chalk.bold('Proceed? (y/N): '), resolve);
       });
       
       rl.close();
       
       if (answer.toLowerCase() !== 'yes' && answer.toLowerCase() !== 'y') {
-        console.log(chalk.gray('\nCancelled.'));
+        console.log(chalk.gray('Cancelled.'));
         process.exit(0);
       }
       

@@ -36,9 +36,11 @@ export const TEMPLATE_CHECKSUMS: Record<string, string[]> = {
     "77ed93f774f3d1a47bc5d21342594c68aa7f3fb4733a2e786452b780af65605d"
   ],
   "promptcode-preset-info.mdc": [
+    "1fa6ee9037a46bef55039a2f4ec06be5b493833e6efe6de0e2506424170e002d",
     "d9faaeee858e4cdf6c5b6aad2e6f6816eae403db6ea586405a88d4427bab1a39"
   ],
   "promptcode-preset-create.mdc": [
+    "65b1edbe2ff662af74feb54acde66965b23c97101b8645194698573f11cc0939",
     "468b8549f45ba8072e15140ff4d1324e11a7c67b7f5a04c74430baa5993ff7ed"
   ],
   "promptcode-ask-expert.mdc": [

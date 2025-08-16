@@ -14,6 +14,7 @@ import { cursorCommand } from './commands/cursor';
 import { updateCommand } from './commands/update';
 import { uninstallCommand } from './commands/uninstall';
 import { integrateCommand } from './commands/integrate';
+import { modelsCommand } from './commands/models';
 import { BUILD_VERSION } from './version';
 import { startUpdateCheck } from './utils/update-checker';
 import { exitWithCode, EXIT_CODES } from './utils/exit-codes';
@@ -151,6 +152,9 @@ Examples:
   .option('--save-preset <name>', 'save file patterns as a preset')
   .option('--dry-run', 'show what would be included without generating')
   .option('--token-warning <n>', 'token threshold for warning (default: 50000)')
+  .option('--estimate-cost', 'estimate cost without generating')
+  .option('--cost-threshold <usd>', 'maximum allowed cost before approval', process.env.PROMPTCODE_COST_THRESHOLD || '0.50')
+  .option('--model <name>', 'model to use for cost estimation (default: gpt-5)')
   .option('-y, --yes', 'skip confirmation prompts')
   .allowExcessArguments(false)
   .action(async (options) => {
@@ -294,6 +298,21 @@ program
     await configCommand(options);
   });
 
+// Models command - List available AI models
+program
+  .command('models')
+  .description('List available AI models and their capabilities')
+  .option('--json', 'output in JSON format')
+  .option('--all', 'show all models including unavailable ones')
+  .addHelpText('after', `
+Examples:
+  $ promptcode models                 # List available models
+  $ promptcode models --all           # Show all models (including unavailable)
+  $ promptcode models --json          # Output as JSON for scripting`)
+  .action(async (options) => {
+    await modelsCommand(options);
+  });
+
 // CC command - Claude integration setup
 program
   .command('cc')
@@ -369,6 +388,7 @@ program
   .description('Show token statistics for current project or preset')
   .option('--path <dir>', 'project root directory', process.cwd())
   .option('-l, --preset <name>', 'analyze a specific preset')
+  .option('--json', 'output in JSON format')
   .addHelpText('after', '\nShows file count, total tokens, and breakdown by file type.')
   .action(async (options) => {
     const { scanFiles, initializeTokenCounter } = await import('@promptcode/core');
@@ -426,7 +446,37 @@ program
         filesByExt[ext].tokens += file.tokenCount;
       }
       
-      // Display results
+      // Sort extensions by token count
+      const sortedExts = Object.entries(filesByExt)
+        .sort((a, b) => b[1].tokens - a[1].tokens);
+      
+      // Output JSON format if requested
+      if (options.json) {
+        const output = {
+          project: path.basename(projectPath),
+          preset: options.preset || null,
+          totalFiles: files.length,
+          totalTokens,
+          averageTokensPerFile: Math.round(totalTokens / files.length),
+          fileTypes: sortedExts.map(([ext, stats]) => ({
+            extension: ext,
+            fileCount: stats.count,
+            tokenCount: stats.tokens,
+            percentage: parseFloat(((stats.tokens / totalTokens) * 100).toFixed(2))
+          })),
+          topFiles: files
+            .sort((a, b) => b.tokenCount - a.tokenCount)
+            .slice(0, 10)
+            .map(f => ({
+              path: path.relative(projectPath, f.path),
+              tokens: f.tokenCount
+            }))
+        };
+        console.log(JSON.stringify(output, null, 2));
+        return;
+      }
+      
+      // Display human-readable results
       const title = options.preset 
         ? `Preset Statistics: ${chalk.cyan(options.preset)}`
         : `Project Statistics: ${chalk.cyan(path.basename(projectPath))}`;
@@ -438,11 +488,9 @@ program
       console.log(`Average tokens/file: ${chalk.cyan(Math.round(totalTokens / files.length).toLocaleString())}`);
       
       console.log(chalk.bold('\nTop file types by token count:'));
-      const sortedExts = Object.entries(filesByExt)
-        .sort((a, b) => b[1].tokens - a[1].tokens)
-        .slice(0, 10);
+      const topExts = sortedExts.slice(0, 10);
         
-      for (const [ext, stats] of sortedExts) {
+      for (const [ext, stats] of topExts) {
         const percentage = ((stats.tokens / totalTokens) * 100).toFixed(1);
         console.log(`  ${ext.padEnd(15)} ${chalk.cyan(stats.count.toString().padStart(5))} files  ${chalk.cyan(stats.tokens.toLocaleString().padStart(10))} tokens  ${chalk.gray(`(${percentage}%)`)}`);
       }
@@ -524,7 +572,7 @@ if (args[0] && args[0].startsWith('--')) {
   const possibleCommand = args[0].substring(2);
   const knownCommandNames = [
     'generate', 'cache', 'templates', 'list-templates', 'preset',
-    'expert', 'config', 'cc', 'stats', 'history', 'update', 'uninstall'
+    'expert', 'config', 'models', 'cc', 'stats', 'history', 'update', 'uninstall'
   ];
   
   if (knownCommandNames.includes(possibleCommand)) {
@@ -537,7 +585,7 @@ if (args[0] && args[0].startsWith('--')) {
 
 const knownCommands = [
   'generate', 'cache', 'templates', 'list-templates', 'preset', 
-  'expert', 'config', 'cc', 'cursor', 'integrate', 'stats', 'history', 'update', 'uninstall',
+  'expert', 'config', 'models', 'cc', 'cursor', 'integrate', 'stats', 'history', 'update', 'uninstall',
   '--help', '-h', '--version', '-V', '--detailed'
 ];
 

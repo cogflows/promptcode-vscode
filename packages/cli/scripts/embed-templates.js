@@ -51,10 +51,15 @@ function embedTemplates() {
   }
   
   // Generate TypeScript file with embedded templates
+  // Use deterministic timestamp in development to avoid git noise
+  const timestamp = (process.env.CI || process.env.PROD_BUILD) 
+    ? new Date().toISOString()
+    : 'development-build';
+    
   const tsContent = `/**
  * Embedded templates for compiled binaries.
  * This file is auto-generated during build - DO NOT EDIT MANUALLY.
- * Generated at: ${new Date().toISOString()}
+ * Generated at: ${timestamp}
  */
 
 // Template contents embedded at build time

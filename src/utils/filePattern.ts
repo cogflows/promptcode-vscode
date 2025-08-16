@@ -41,7 +41,7 @@ export async function listFilesByPattern(
     cwd,
     onlyFiles: true,
     dot: true, // Match hidden files
-    followSymbolicLinks: true,
+    followSymbolicLinks: false, // Security: match core behavior and prevent traversal via symlinks
     absolute: false, // Return relative paths
   });
   return files.sort();
@@ -92,7 +92,7 @@ export async function getFilesMatchingPatterns(
     cwd,
     onlyFiles: true,
     dot: true,
-    followSymbolicLinks: true,
+    followSymbolicLinks: false, // Security: match core behavior and prevent traversal via symlinks
     absolute: false,
     ignore: patterns.excludePatterns, // fast-glob handles exclusions via ignore option
   });
