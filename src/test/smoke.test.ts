@@ -59,4 +59,18 @@ suite('Extension Smoke Test', () => {
             });
         }
     });
+
+    suiteTeardown(async () => {
+        // Ensure extension is properly deactivated to prevent hanging
+        // This disposes of any watchers/timers that might keep the process alive
+        const ext = vscode.extensions.getExtension('cogflows.promptcode');
+        if (ext?.isActive && ext.exports?.deactivate) {
+            try {
+                await ext.exports.deactivate();
+            } catch (e) {
+                // Don't fail the build on deactivation errors
+                console.warn('Extension deactivate threw:', e);
+            }
+        }
+    });
 });

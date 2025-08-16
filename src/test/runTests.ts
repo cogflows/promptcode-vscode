@@ -45,6 +45,10 @@ async function main() {
       VSCODE_TELEMETRY_DISABLED: '1'
     }
   });
+  
+  // Ensure the outer Node process exits deterministically in CI
+  // This is safe here since we're in the outer runner, not the VS Code host
+  process.exit(0);
 }
 
 main().catch((err) => {

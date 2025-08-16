@@ -29,13 +29,6 @@ export function run(): Promise<void> {
           } else {
             c();
           }
-          // In CI, we need to exit the process after tests complete
-          // This is safe because @vscode/test-electron manages the lifecycle
-          if (process.env.CI) {
-            setTimeout(() => {
-              process.exit(failures > 0 ? 1 : 0);
-            }, 100);
-          }
         });
       } catch (err) {
         console.error(err);
