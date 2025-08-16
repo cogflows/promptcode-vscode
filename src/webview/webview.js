@@ -489,5 +489,29 @@
       // e.g. auto-switch to instructions if you want
       // const instructionsTab = document.querySelector('.tab-trigger[data-tab="instructions"]');
       // if (instructionsTab) instructionsTab.click();
+      
+      // Add footer link handlers
+      const docLink = document.getElementById('documentation-link');
+      const issueLink = document.getElementById('report-issue-link');
+      
+      if (docLink) {
+          docLink.addEventListener('click', (e) => {
+              e.preventDefault();
+              vscode.postMessage({ 
+                  command: 'openExternal',
+                  url: 'https://github.com/cogflows/promptcode-vscode#readme'
+              });
+          });
+      }
+      
+      if (issueLink) {
+          issueLink.addEventListener('click', (e) => {
+              e.preventDefault();
+              vscode.postMessage({ 
+                  command: 'openExternal',
+                  url: 'https://github.com/cogflows/promptcode-vscode/issues/new'
+              });
+          });
+      }
   });
 })();

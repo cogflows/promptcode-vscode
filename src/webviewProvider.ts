@@ -120,6 +120,12 @@ export class PromptCodeWebViewProvider {
                         console.log('CopyPrompt command received in webview provider');
                         vscode.commands.executeCommand('promptcode.copyPromptDirectly');
                         return;
+                    case 'openExternal':
+                        console.log('OpenExternal command received:', message.url);
+                        if (message.url) {
+                            vscode.env.openExternal(vscode.Uri.parse(message.url));
+                        }
+                        return;
                     case 'saveIgnoreConfig':
                         console.log('SaveIgnoreConfig command received in webview provider');
                         vscode.commands.executeCommand('promptcode.saveIgnoreConfig', message.ignorePatterns, message.respectGitignore);
@@ -852,8 +858,8 @@ export class PromptCodeWebViewProvider {
                     <footer class="footer">
                         <p>
                             PromptCode v${this.packageVersion} •
-                            <a href="#" target="_blank" rel="noopener noreferrer">Documentation</a> •
-                            <a href="#" target="_blank" rel="noopener noreferrer">Report Issue</a>
+                            <a href="#" id="documentation-link">Documentation</a> •
+                            <a href="#" id="report-issue-link">Report Issue</a>
                         </p>
                     </footer>
                 </div>
