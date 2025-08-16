@@ -57,7 +57,7 @@ export async function buildPrompt(
 
   // 1. Add Instructions
   if (options.includeInstructions && instructions) {
-    const instructionSection = `<instructions>\n${instructions}\n</instructions>\n\n`;
+    const instructionSection = `<user_instructions>\n${instructions}\n</user_instructions>\n\n`;
     finalPromptText += instructionSection;
     sections.instructions = countTokens(instructionSection);
   }
@@ -66,12 +66,12 @@ export async function buildPrompt(
   if (options.includeFiles) {
     try {
       const fileMapContent = buildTreeFromSelection(selectedFiles);
-      const fileMapSection = `<file_map>\n${fileMapContent}</file_map>\n\n`;
+      const fileMapSection = `<file_tree>\n${fileMapContent}</file_tree>\n\n`;
       finalPromptText += fileMapSection;
       sections.fileMap = countTokens(fileMapSection);
     } catch (error) {
       console.error('Error generating file map:', error);
-      const errorSection = '<file_map>\n<!-- Error generating file map -->\n</file_map>\n\n';
+      const errorSection = '<file_tree>\n<!-- Error generating file map -->\n</file_tree>\n\n';
       finalPromptText += errorSection;
       sections.fileMap = countTokens(errorSection);
     }
@@ -79,7 +79,7 @@ export async function buildPrompt(
 
   // 3. Add File Contents
   if (options.includeFiles && options.includeFileContents !== false) {
-    let fileContentsSection = '<file_contents>\n';
+    let fileContentsSection = '<files>\n';
     
     for (const file of selectedFiles) {
       try {
@@ -96,7 +96,7 @@ export async function buildPrompt(
       }
     }
     
-    fileContentsSection += '</file_contents>\n\n';
+    fileContentsSection += '</files>\n\n';
     finalPromptText += fileContentsSection;
     sections.fileContents = countTokens(fileContentsSection);
   }

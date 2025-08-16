@@ -75,6 +75,61 @@ export function parsePatterns(content: string): ParsedPatterns {
 }
 
 /**
+ * Parse pattern lines into include and exclude patterns.
+ * Wrapper for parsePatterns to maintain API compatibility.
+ * @param lines Array of pattern lines
+ * @returns Parsed patterns object
+ */
+export function parsePatternLines(lines: string[]): ParsedPatterns {
+  const includePatterns: string[] = [];
+  const excludePatterns: string[] = [];
+  
+  const cleanLines = lines
+    .map(l => l.trim())
+    .filter(l => l && !l.startsWith('#')); // Skip empty lines and comments
+  
+  for (const pattern of cleanLines) {
+    if (pattern.startsWith('!')) {
+      // Exclusion pattern - remove the ! prefix
+      excludePatterns.push(pattern.substring(1));
+    } else {
+      // Inclusion pattern
+      includePatterns.push(pattern);
+    }
+  }
+
+  // If no inclusion patterns, include everything by default
+  if (includePatterns.length === 0 && excludePatterns.length > 0) {
+    includePatterns.push('**/*');
+  }
+
+  return { includePatterns, excludePatterns };
+}
+
+/**
+ * Get files matching the given patterns.
+ * @param patterns Parsed patterns object
+ * @param cwd Working directory
+ * @returns Array of matching file paths
+ */
+export async function getFilesMatchingPatterns(
+  patterns: ParsedPatterns,
+  cwd: string
+): Promise<string[]> {
+  const includedFiles = await fg(patterns.includePatterns, {
+    cwd,
+    onlyFiles: true,
+    dot: true,
+    followSymbolicLinks: true,
+    absolute: false,
+    ignore: patterns.excludePatterns,
+  });
+
+  // Normalize paths to be consistent across platforms
+  return includedFiles.map(f => f.replace(/\\/g, '/')).sort();
+}
+
+/**
  * List files based on patterns from a pattern file.
  * @param patternFile Path to file containing patterns
  * @param parentFolder Base directory to search from
