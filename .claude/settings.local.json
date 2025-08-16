@@ -135,7 +135,9 @@
       "Bash(PROMPTCODE_TEST=1 bun test test/commands/expert.test.ts -t \"allows patterns with .. but warns about external files\")",
       "Bash(PROMPTCODE_TEST=1 ./dist/promptcode expert \"test\" -f \"../../**/*.pem\")",
       "Bash(CI=1 npm run test:unit)",
-      "Bash(PROMPTCODE_TEST=1 ./dist/promptcode expert \"test\" -f \"src/**/*.ts\")"
+      "Bash(PROMPTCODE_TEST=1 ./dist/promptcode expert \"test\" -f \"src/**/*.ts\")",
+      "Bash(gh run cancel:*)",
+      "Bash(gtimeout:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits",

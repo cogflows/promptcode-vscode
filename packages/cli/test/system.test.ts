@@ -34,7 +34,7 @@ describe('system tests - core CLI functionality', () => {
       
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toContain('console.log("hello")');
-      expect(result.stdout).toContain('<file_contents>');
+      expect(result.stdout).toContain('<files>');
     });
 
     it('should output JSON format', async () => {

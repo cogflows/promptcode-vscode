@@ -62,7 +62,7 @@ export async function buildPrompt(
     sections.instructions = countTokens(instructionSection);
   }
 
-  // 2. Generate File Map
+  // 2. Generate File Map  
   if (options.includeFiles) {
     try {
       const fileMapContent = buildTreeFromSelection(selectedFiles);

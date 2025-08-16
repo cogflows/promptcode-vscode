@@ -1,0 +1,17 @@
+# test-hanging-issue preset
+# Generated: 2025-08-16T20:18:46.236Z
+# Source: from-files (src/test/**/*.ts, src/extension.ts, src/telemetry.ts, src/fileExplorer.ts, .github/workflows/test.yml, package.json)
+# Optimization: minimal
+# Stats: files=15, patterns=6, saved=9
+# Applied:
+# - full-directory: src/test (from 10 → 1)
+
+src/test/**
+.github/workflows/test.yml
+package.json
+src/extension.ts
+src/fileExplorer.ts
+src/telemetry.ts
+!**/node_modules/**
+!**/dist/**
+!**/build/**

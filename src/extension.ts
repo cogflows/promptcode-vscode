@@ -1552,28 +1552,8 @@ async function generatePrompt(
 		includeFileContents: includeOptions.files
 	});
 
-	// Apply compatibility transformation to maintain existing tag names
-	// Core uses: <instructions>, <file_map>, <file_contents>
-	// Extension expects: <user_instructions>, <file_tree>, <files>
-	let prompt = result.prompt;
-	if (prompt) {
-		// Improved tag translation per O3-pro recommendation
-		// This approach is more maintainable and safer
-		const TAG_MAP = {
-			'instructions': 'user_instructions',
-			'/instructions': '/user_instructions',
-			'file_map': 'file_tree',
-			'/file_map': '/file_tree',
-			'file_contents': 'files',
-			'/file_contents': '/files'
-		} as const;
-		
-		// Replace all tags in a single pass with exact matches only
-		prompt = prompt.replace(/<(\/?)(instructions|file_map|file_contents)>/g, (match, slash, tag) => {
-			const key = `${slash}${tag}` as keyof typeof TAG_MAP;
-			return TAG_MAP[key] ? `<${TAG_MAP[key]}>` : match;
-		});
-	}
+	// No transformation needed - core now uses standard tags
+	const prompt = result.prompt;
 
 	const endTime = performance.now();
 	console.log(`Prompt generation took ${endTime - startTime}ms for ${selectedFiles.length} files`);
