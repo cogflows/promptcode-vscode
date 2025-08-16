@@ -2,7 +2,7 @@ name: Test
 
 on:
   push:
-    branches: [ main, develop, feature/cli-integration ]
+    branches: [ '**' ]  # Run on all branches
   pull_request:
     branches: [ main ]
   workflow_dispatch:  # Allows manual triggering from GitHub UI
