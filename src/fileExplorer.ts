@@ -54,7 +54,7 @@ export class FileItem extends vscode.TreeItem {
 }
 
 
-export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
+export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, vscode.FileDecorationProvider {
   // ... (existing properties remain the same) ...
   private _onDidChangeTreeData: vscode.EventEmitter<FileItem | undefined | null | void> = new vscode.EventEmitter<FileItem | undefined | null | void>();
   readonly onDidChangeTreeData: vscode.Event<FileItem | undefined | null | void> = this._onDidChangeTreeData.event;
@@ -65,6 +65,10 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
   private _treeView: vscode.TreeView<FileItem> | undefined;
   private disposables: vscode.Disposable[] = [];
   private ignoreHelper: IgnoreHelper | undefined;
+  
+  // FileDecorationProvider properties
+  private _onDidChangeFileDecorations: vscode.EventEmitter<vscode.Uri | vscode.Uri[] | undefined> = new vscode.EventEmitter<vscode.Uri | vscode.Uri[] | undefined>();
+  readonly onDidChangeFileDecorations: vscode.Event<vscode.Uri | vscode.Uri[] | undefined> = this._onDidChangeFileDecorations.event;
   private workspaceRoots: Map<string, string> = new Map(); // Uri string -> fsPath
   private includedPaths: Set<string> = new Set();
   private checkboxQueue: Promise<void> = Promise.resolve(); // Added queue field
@@ -419,6 +423,17 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
     const globRegex = this.isGlobSearch ? this.globToRegex(this.searchTerm.trim()) : null;
     
     console.log(`[Debug] rebuildSearchPaths: Normalized term: "${normalizedSearchTerm}", Is path search: ${isPathSearch}, Is glob: ${this.isGlobSearch}, Include folders: ${this.includeFoldersInSearch}`);
+    
+    // Performance optimization: Only do deep scan for complex cases
+    const doDeepScan = this.isGlobSearch || isPathSearch || this.includeFoldersInSearch;
+    
+    // For simple substring searches on filenames only, avoid deep scan
+    if (!doDeepScan) {
+      console.log(`[Debug] rebuildSearchPaths: Using lightweight filtering for simple filename search`);
+      // Don't populate includedPaths, let getChildren filter on the fly
+      // This avoids expensive full tree walk for simple cases
+      return;
+    }
 
     // --- PASS 1: Find Direct Matches (by name or path) --- 
     console.log("[Debug] rebuildSearchPaths: Starting Pass 1 (Finding direct matches)");
@@ -568,6 +583,24 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
     // If no search term is active, include everything
     if (!this.searchTerm.trim()) {
       return true;
+    }
+    
+    // For lightweight searches (simple filename substring), do on-the-fly filtering
+    const isPathSearch = this.searchTerm.includes('/') || this.searchTerm.includes('\\');
+    const doDeepScan = this.isGlobSearch || isPathSearch || this.includeFoldersInSearch;
+    
+    if (!doDeepScan && this.includedPaths.size === 0) {
+      // Lightweight mode: just check filename
+      const filename = path.basename(fullPath).toLowerCase();
+      const searchTermLower = this.searchTerm.toLowerCase();
+      const matches = filename.includes(searchTermLower);
+      
+      // For directories in lightweight mode, always include them to allow navigation
+      if (isDirectory) {
+        return true;
+      }
+      
+      return matches;
     }
 
     // Otherwise, include only if the path exists in the final includedPaths set
@@ -921,6 +954,9 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
 
     // Step 3: Update all parent directories up to the root
     await this.updateParentChain(path.dirname(item.fullPath));
+    
+    // Step 4: Update file decorations for tri-state visual indication
+    this.updateDecorations([item.fullPath]);
   }
 
   // Set checkbox state for all children (simplifying previous methods)
@@ -1498,11 +1534,15 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
   // --- ADDED: Select files programmatically based on relative paths ---
   public async selectFiles(relativePaths: string[], addToExisting: boolean = false): Promise<void> {
     console.log(`FileExplorerProvider: selectFiles called with ${relativePaths.length} paths. Add to existing: ${addToExisting}`);
+    console.log(`[DEBUG] First few relative paths:`, relativePaths.slice(0, 3));
+    
     if (!this.workspaceRoots.size) {
       console.warn('selectFiles called with no workspace roots.');
       return;
     }
 
+    console.log(`[DEBUG] Workspace roots:`, Array.from(this.workspaceRoots.values()));
+    
     const absolutePaths = new Set<string>();
     const workspaceRootEntries = Array.from(this.workspaceRoots.entries()); // [[uriString, fsPath], ...]
 
@@ -1519,10 +1559,12 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
                     await fs.promises.access(absolutePath, fs.constants.F_OK);
                     absolutePaths.add(absolutePath);
                     foundRoot = true;
+                    console.log(`[DEBUG] Successfully resolved: ${relativePath} -> ${absolutePath}`);
                     break; // Assume first match is correct for simplicity
                  } catch (err) {
                     // File doesn't exist or isn't accessible
-                    console.warn(`Preset file path not found or inaccessible, skipping: ${absolutePath} (from relative: ${relativePath})`);
+                    console.warn(`[DEBUG] Preset file path not found or inaccessible, skipping: ${absolutePath} (from relative: ${relativePath})`);
+                    console.warn(`[DEBUG] Error details:`, err);
                  }
             }
         }
@@ -1531,9 +1573,140 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
         }
     }
 
-    console.log(`Resolved ${relativePaths.length} relative paths to ${absolutePaths.size} existing absolute paths.`);
+    console.log(`[DEBUG] Resolved ${relativePaths.length} relative paths to ${absolutePaths.size} existing absolute paths.`);
+    if (absolutePaths.size === 0) {
+      console.error(`[DEBUG] ERROR: No files could be resolved! Check if files exist and are accessible.`);
+      vscode.window.showErrorMessage(`Could not find any files from the preset. The files may not exist or may not be accessible.`);
+      return;
+    }
+    console.log(`[DEBUG] Calling setCheckedItems with ${absolutePaths.size} paths`);
     // Use the existing setCheckedItems logic
     await this.setCheckedItems(absolutePaths, addToExisting);
+    console.log(`[DEBUG] setCheckedItems completed`);
+    
+    // Force auto-expansion to show selected items
+    if (absolutePaths.size > 0) {
+      // Get first few selected paths to expand
+      const pathsToExpand = Array.from(absolutePaths).slice(0, 10);
+      for (const filePath of pathsToExpand) {
+        await this.expandToShowFile(filePath);
+      }
+    }
+    
+    // Update file decorations for all selected paths
+    this.updateDecorations(Array.from(absolutePaths));
   }
   // --- END ADDED ---
+
+  // FileDecorationProvider implementation for tri-state visual indication
+  provideFileDecoration(uri: vscode.Uri): vscode.FileDecoration | undefined {
+    const filePath = uri.fsPath;
+    
+    // Check if this is a directory
+    try {
+      const stats = fs.statSync(filePath);
+      if (stats.isDirectory()) {
+        // Check the selection state of children
+        const childState = this.getDirectoryChildrenState(filePath);
+        
+        if (childState === 'partial') {
+          // Return a decoration indicating partial selection
+          return {
+            badge: '◐',
+            tooltip: 'Partially selected',
+            color: new vscode.ThemeColor('gitDecoration.modifiedResourceForeground')
+          };
+        } else if (childState === 'all') {
+          // Return a decoration indicating all children selected
+          return {
+            badge: '●',
+            tooltip: 'All items selected',
+            color: new vscode.ThemeColor('gitDecoration.addedResourceForeground')
+          };
+        }
+      }
+    } catch (error) {
+      // File doesn't exist or other error, ignore
+    }
+    
+    return undefined;
+  }
+
+  private getDirectoryChildrenState(dirPath: string): 'none' | 'partial' | 'all' {
+    // Synchronously gather all visible (non-ignored) files under dirPath
+    const visibleFiles: string[] = [];
+    
+    const walkSync = (currentPath: string) => {
+      let entries: fs.Dirent[];
+      try {
+        entries = fs.readdirSync(currentPath, { withFileTypes: true });
+      } catch {
+        // Directory not accessible, skip
+        return;
+      }
+      
+      for (const entry of entries) {
+        const fullPath = path.join(currentPath, entry.name);
+        
+        // Skip ignored files
+        if (this.ignoreHelper?.shouldIgnore(fullPath)) {
+          continue;
+        }
+        
+        if (entry.isDirectory()) {
+          // Recursively walk subdirectories
+          walkSync(fullPath);
+        } else if (entry.isFile()) {
+          // Add visible files to our list
+          visibleFiles.push(fullPath);
+        }
+      }
+    };
+    
+    // Start walking from the target directory
+    walkSync(dirPath);
+    
+    // If no visible files, directory is effectively empty
+    if (visibleFiles.length === 0) {
+      return 'none';
+    }
+    
+    // Count how many visible files are checked
+    let checkedCount = 0;
+    for (const file of visibleFiles) {
+      if (checkedItems.get(file) === vscode.TreeItemCheckboxState.Checked) {
+        checkedCount++;
+      }
+    }
+    
+    // Determine state based on checked count
+    if (checkedCount === 0) {
+      return 'none';
+    } else if (checkedCount === visibleFiles.length) {
+      return 'all';
+    } else {
+      return 'partial';
+    }
+  }
+
+  // Trigger decoration updates when selection changes
+  private updateDecorations(paths?: string[]): void {
+    if (paths && paths.length > 0) {
+      // Update decorations for specific paths and their parents
+      const uris: vscode.Uri[] = [];
+      for (const filePath of paths) {
+        uris.push(vscode.Uri.file(filePath));
+        // Also update parent directories
+        let parentPath = path.dirname(filePath);
+        while (parentPath && parentPath !== path.dirname(parentPath)) {
+          uris.push(vscode.Uri.file(parentPath));
+          parentPath = path.dirname(parentPath);
+        }
+      }
+      this._onDidChangeFileDecorations.fire(uris);
+    } else {
+      // Update all decorations
+      this._onDidChangeFileDecorations.fire(undefined);
+    }
+  }
 }

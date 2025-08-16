@@ -63,6 +63,16 @@ export function getSelectFilesTabHtml(): string {
           <span class="codicon codicon-search search-icon"></span>
           <input type="text" id="file-search" placeholder="Search by name or glob (*, ?)..."></input>
           <span class="codicon codicon-close" id="clear-search"></span>
+          <div class="search-toggles">
+            <button id="search-glob-toggle" class="toggle-chip" title="Use glob pattern matching">
+              <span class="codicon codicon-regex"></span>
+              Glob
+            </button>
+            <button id="search-include-folders" class="toggle-chip" title="Include folders in search">
+              <span class="codicon codicon-folder"></span>
+              Folders
+            </button>
+          </div>
         </div>
         <div class="action-group">
           <button id="expand-all-btn" class="button">

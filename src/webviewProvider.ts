@@ -539,30 +539,9 @@ export class PromptCodeWebViewProvider {
                                 return;
                             }
                             
-                            // Check if there are already selected files
-                            const currentSelectedPaths = fileExplorerProvider.getSelectedPaths();
-                            let addToExisting = false;
-                            
-                            if (currentSelectedPaths.length > 0) {
-                                // Ask user if they want to replace or add to existing selection
-                                const choice = await vscode.window.showQuickPick(
-                                    ['Replace current selection', 'Add to current selection'],
-                                    { 
-                                        placeHolder: `You have ${currentSelectedPaths.length} files selected. How should the preset be applied?`,
-                                        title: `Apply Preset: ${presetName}`
-                                    }
-                                );
-                                
-                                if (!choice) {
-                                    // User cancelled
-                                    return;
-                                }
-                                
-                                addToExisting = choice === 'Add to current selection';
-                            }
-                            
-                            await fileExplorerProvider.selectFiles(filesToSelect, addToExisting);
-                            console.log(`Applied preset "${presetName}" successfully (addToExisting: ${addToExisting}).`);
+                            // Apply preset - always replace current selection (original behavior)
+                            await fileExplorerProvider.selectFiles(filesToSelect);
+                            console.log(`Applied preset "${presetName}" successfully.`);
                             
                             // Store the applied preset name in workspace state
                             await this._extensionContext.workspaceState.update('promptcode.appliedPresetName', presetName);

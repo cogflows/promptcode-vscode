@@ -52,6 +52,8 @@ if (typeof window !== 'undefined') {
                 // ----------------------------------------------------------
                 const searchInput = document.getElementById('file-search');
                 const clearSearchBtn = document.getElementById('clear-search');
+                const globToggle = document.getElementById('search-glob-toggle');
+                const foldersToggle = document.getElementById('search-include-folders');
                 const configHeader = document.getElementById('config-section-header');
                 const configContent = document.getElementById('config-content');
                 const respectGitignore = document.getElementById('respect-gitignore');
@@ -272,7 +274,7 @@ if (typeof window !== 'undefined') {
 
                     let html = '';
                     if (viewMode === 'folder') {
-                        // Group all files by directory regardless of workspace
+                        // Group all files by directory and workspace to avoid conflation
                         const filesByDirectory = message.selectedFiles.reduce((acc, file) => {
                             // Create a directory key that combines path and workspace
                             let dirPath = '.';
@@ -285,7 +287,9 @@ if (typeof window !== 'undefined') {
                                 }
                             }
                             
-                            const dirKey = dirPath;
+                            // Include workspace in the key to prevent conflation across workspaces
+                            const workspace = file.workspaceFolderName || '';
+                            const dirKey = `${workspace}:${dirPath}`;
                             
                             if (!acc[dirKey]) {
                                 acc[dirKey] = {
@@ -384,10 +388,18 @@ if (typeof window !== 'undefined') {
                 function handleSearchInput(value) {
                     console.log('Sending search command with term:', value);
                     
-                    // Set search term first
+                    // Get toggle states
+                    const globToggle = document.getElementById('search-glob-toggle');
+                    const foldersToggle = document.getElementById('search-include-folders');
+                    const useGlob = globToggle?.classList.contains('active') || false;
+                    const includeFolders = foldersToggle?.classList.contains('active') || false;
+                    
+                    // Set search term with flags
                     vscode.postMessage({
                         command: 'search',
-                        searchTerm: value
+                        searchTerm: value,
+                        globPattern: useGlob,
+                        shouldIncludeFolders: includeFolders
                     });
                     
                     // Add or remove active-filter class
@@ -409,7 +421,7 @@ if (typeof window !== 'undefined') {
                         searchTimeout = setTimeout(() => {
                             handleSearchInput(searchInput.value);
                             updateClearButtonVisibility();
-                        }, 300);
+                        }, 400); // Increased debounce for better performance on large repos
                     });
 
                     clearSearchBtn.addEventListener('click', function() {
@@ -424,6 +436,27 @@ if (typeof window !== 'undefined') {
                     if (searchInput.value.trim()) {
                         document.querySelector('.search-container')?.classList.add('active-filter');
                     }
+                }
+                
+                // Add toggle button handlers
+                if (globToggle) {
+                    globToggle.addEventListener('click', function() {
+                        this.classList.toggle('active');
+                        // Re-trigger search with new flag state
+                        if (searchInput && searchInput.value) {
+                            handleSearchInput(searchInput.value);
+                        }
+                    });
+                }
+                
+                if (foldersToggle) {
+                    foldersToggle.addEventListener('click', function() {
+                        this.classList.toggle('active');
+                        // Re-trigger search with new flag state
+                        if (searchInput && searchInput.value) {
+                            handleSearchInput(searchInput.value);
+                        }
+                    });
                 }
 
                 // ----------------------------------------------------------

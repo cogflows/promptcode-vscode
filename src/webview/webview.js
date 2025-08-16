@@ -174,90 +174,22 @@
       return start + '...' + end;
   }
 
-  // Search input handling
-  searchInput.addEventListener('input', function(event) {
-      updateClearButtonVisibility();
-      const searchTerm = event.target.value;
-      
-      // Set search term
-      vscode.postMessage({
-          command: 'search',
-          searchTerm: searchTerm
-      });
-      
-      // Add or remove active-filter class
-      const searchContainer = document.querySelector('.search-container');
-      if (searchTerm.trim()) {
-          searchContainer?.classList.add('active-filter');
-      } else {
-          searchContainer?.classList.remove('active-filter');
-          // Collapse all directories when search is cleared
-          vscode.postMessage({ command: 'collapseAll' });
-      }
-  });
-
-  // Clear button handling
-  clearSearchBtn.addEventListener('click', function() {
-      searchInput.value = '';
-      clearSearchBtn.style.display = 'none';
-      
-      // Clear search term
-      vscode.postMessage({
-          command: 'search',
-          searchTerm: ''
-      });
-      
-      // Remove active filter class
-      document.querySelector('.search-container')?.classList.remove('active-filter');
-      
-      // Collapse all directories when search is cleared
-      vscode.postMessage({ command: 'collapseAll' });
-      
-      searchInput.focus();
-  });
+  // NOTE: Search and clear button event bindings are handled in selectFilesTab.js
+  // to avoid duplicate event handlers
   
   // Initialize active filter display
   if (searchInput && searchInput.value.trim()) {
       document.querySelector('.search-container')?.classList.add('active-filter');
   }
 
-  // Add event listeners for buttons
-  document.getElementById('expand-all-btn')?.addEventListener('click', () => {
-      vscode.postMessage({ command: 'expandAll' });
-  });
+  // NOTE: Expand/collapse/select/deselect button bindings are handled in selectFilesTab.js
+  // to avoid duplicate event handlers
 
-  document.getElementById('collapse-all-btn')?.addEventListener('click', () => {
-      vscode.postMessage({ command: 'collapseAll' });
-  });
-
-  document.getElementById('select-all-btn')?.addEventListener('click', () => {
-      vscode.postMessage({ command: 'selectAll' });
-  });
-
-  document.getElementById('deselect-all-btn')?.addEventListener('click', () => {
-      vscode.postMessage({ command: 'deselectAll' });
-  });
-
-  // Handle configuration
-  const saveIgnoreBtn = document.getElementById('save-ignore-btn');
-
-  if (respectGitignore && ignorePatterns && saveIgnoreBtn) {
-      respectGitignore.addEventListener('click', function() {
-          this.classList.toggle('checked');
-      });
-
-      // Only respect gitignore can be saved now
-      saveIgnoreBtn.addEventListener('click', () => {
-          vscode.postMessage({
-              command: 'saveIgnoreConfig',
-              // Use the current value without modification
-              ignorePatterns: ignorePatterns.value,
-              respectGitignore: respectGitignore.classList.contains('checked')
-          });
-      });
-
-      vscode.postMessage({ command: 'loadIgnoreConfig' });
-  }
+  // NOTE: Configuration and ignore pattern bindings are handled in selectFilesTab.js
+  // to avoid duplicate event handlers
+  
+  // Still request initial config load
+  vscode.postMessage({ command: 'loadIgnoreConfig' });
 
   // Listen for extension => webview messages
   window.addEventListener('message', event => {

@@ -115,6 +115,11 @@ export function activate(context: vscode.ExtensionContext) {
 	// Create the file explorer provider and assign to exported variable
 	fileExplorerProvider = new FileExplorerProvider();
 
+	// Register the FileDecorationProvider for tri-state visual indication
+	context.subscriptions.push(
+		vscode.window.registerFileDecorationProvider(fileExplorerProvider)
+	);
+
 	// Register the tree data provider
 	const treeView = vscode.window.createTreeView('promptcodeExplorer', {
 		treeDataProvider: fileExplorerProvider,
