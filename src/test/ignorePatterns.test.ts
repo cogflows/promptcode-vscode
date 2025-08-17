@@ -18,7 +18,8 @@ suite('File scanning + ignore semantics', () => {
       workspaceName: 'fixture'
     });
 
-    const rels = files.map(f => path.relative(root, f.path)).sort();
+    // The files already have relative paths in the 'path' property
+    const rels = files.map(f => f.path).sort();
     assert.ok(rels.includes('src/a.ts'), 'src/a.ts should be selected');
     assert.ok(!rels.includes('src/b.ts'), 'src/b.ts should be ignored by .promptcode_ignore');
   });
