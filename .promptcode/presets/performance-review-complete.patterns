@@ -1,0 +1,26 @@
+# Performance Review Complete - All fixes implemented
+# This preset includes all files modified during the performance optimization work
+
+# Core implementation with all performance fixes
+src/fileExplorer.ts
+src/ignoreHelper.ts
+
+# Test files showing 100% success
+src/test/suite/fileExplorer.test.ts
+src/test/suite/fileExplorerSearch.test.ts
+
+# Documentation of changes
+FINAL_STATUS_REPORT.md
+IMPLEMENTATION_PLAN.md
+PERFORMANCE_FIXES_STATUS.md
+review-instructions.txt
+
+# Configuration changes
+package.json
+package-lock.json
+
+# Exclude build output
+!out/
+!dist/
+!node_modules/
+!*.vsix

@@ -32,6 +32,14 @@ export class IgnoreHelper {
      * Initialize the ignore helper by loading all relevant ignore files
      */
     public async initialize(): Promise<void> {
+        // Always re-snapshot workspace roots from VS Code
+        this.workspaceRoots.clear();
+        if (vscode.workspace.workspaceFolders) {
+            for (const folder of vscode.workspace.workspaceFolders) {
+                this.workspaceRoots.set(folder.uri.toString(), folder.uri.fsPath);
+            }
+        }
+        
         // Load the respectGitignore setting
         const config = vscode.workspace.getConfiguration('promptcode');
         this.respectGitignore = config.get('respectGitignore', true);
@@ -130,20 +138,26 @@ export class IgnoreHelper {
 
     /**
      * Check if a file should be ignored based on the loaded ignore patterns
+     * @param filePath The path to check
+     * @param isDirHint Optional hint about whether the path is a directory (avoids stat call)
      */
-    public shouldIgnore(filePath: string): boolean {
+    public shouldIgnore(filePath: string, isDirHint?: boolean): boolean {
         if (!filePath || filePath.trim() === '') {
             return false; // Can't ignore an empty path
         }
         
-        // Find which workspace folder this file belongs to
-        const workspaceFolder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(filePath));
-        
-        if (!workspaceFolder) {
-            return false; // File is not in any workspace folder
+        // Find which workspace root this file belongs to by checking our stored roots
+        let workspaceRoot: string | undefined;
+        for (const root of this.workspaceRoots.values()) {
+            if (filePath.startsWith(root)) {
+                workspaceRoot = root;
+                break;
+            }
         }
         
-        const workspaceRoot = workspaceFolder.uri.fsPath;
+        if (!workspaceRoot) {
+            return false; // File is not in any workspace root
+        }
         
         // Get relative path to the workspace root
         let relativePath = '';
@@ -159,8 +173,15 @@ export class IgnoreHelper {
         
         // Check promptcode_ignore for this workspace
         const promptcodeIgnore = this.promptcodeIgnores.get(workspaceRoot);
-        if (promptcodeIgnore && promptcodeIgnore.ignores(relativePath)) {
-            return true;
+        
+        
+        if (promptcodeIgnore) {
+            // For directories, also check with trailing slash for patterns like "docs/"
+            // Use the hint if provided, otherwise assume it's a file
+            const isDir = isDirHint ?? false;
+            if (promptcodeIgnore.ignores(relativePath) || (isDir && promptcodeIgnore.ignores(relativePath + '/'))) {
+                return true;
+            }
         }
         
         // Check gitignore patterns
@@ -171,8 +192,13 @@ export class IgnoreHelper {
                 const gitignore = this.gitignores.get(currentDir);
                 if (gitignore) {
                     const relativeToGitignore = path.relative(currentDir, filePath);
-                    if (relativeToGitignore !== '' && gitignore.ignores(relativeToGitignore)) {
-                        return true;
+                    if (relativeToGitignore !== '') {
+                        // For directories, also check with trailing slash
+                        // Use the hint if provided, otherwise assume it's a file
+                        const isDir = isDirHint ?? false;
+                        if (gitignore.ignores(relativeToGitignore) || (isDir && gitignore.ignores(relativeToGitignore + '/'))) {
+                            return true;
+                        }
                     }
                 }
                 // Move up to parent directory

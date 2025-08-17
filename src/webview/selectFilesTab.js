@@ -421,7 +421,15 @@ if (typeof window !== 'undefined') {
                         searchTimeout = setTimeout(() => {
                             handleSearchInput(searchInput.value);
                             updateClearButtonVisibility();
-                        }, 400); // Increased debounce for better performance on large repos
+                        }, 300); // Balanced debounce for better responsiveness
+                    });
+
+                    // Add Enter key handler to reveal first search match
+                    searchInput.addEventListener('keydown', function(e) {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            vscode.postMessage({ command: 'revealFirstSearchMatch' });
+                        }
                     });
 
                     clearSearchBtn.addEventListener('click', function() {

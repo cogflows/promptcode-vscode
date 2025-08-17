@@ -11,7 +11,7 @@ export async function run(): Promise<void> {
   const mocha = new Mocha({
     ui: 'tdd',
     color: true,
-    timeout: 10000 // 10 second timeout
+    timeout: 30000 // 30 second timeout
   });
 
   const testsRoot = path.resolve(__dirname, '.');

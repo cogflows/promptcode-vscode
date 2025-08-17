@@ -114,6 +114,9 @@ export function activate(context: vscode.ExtensionContext) {
 
 	// Create the file explorer provider and assign to exported variable
 	fileExplorerProvider = new FileExplorerProvider();
+	
+	// Set the context for state persistence
+	fileExplorerProvider.setContext(context);
 
 	// Register the FileDecorationProvider for tri-state visual indication
 	context.subscriptions.push(
@@ -1132,8 +1135,8 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	});
 
-	// Register open file in editor command
-	const openFileInEditorCommand = vscode.commands.registerCommand('promptcode.openFileInEditor', (fileItemOrPath: FileItem | string, workspaceFolderRootPath?: string) => {
+	// Register open file in editor command (with auto-reveal in tree)
+	const openFileInEditorCommand = vscode.commands.registerCommand('promptcode.openFileInEditor', async (fileItemOrPath: FileItem | string, workspaceFolderRootPath?: string) => {
 		try {
 			let fileUri: vscode.Uri | undefined;
 
@@ -1179,14 +1182,17 @@ export function activate(context: vscode.ExtensionContext) {
 
 			// Open the document
 			if (fileUri) {
-				vscode.window.showTextDocument(fileUri, { preview: false }) // Open non-preview
-					.then(
-						editor => console.log(`Successfully opened ${fileUri.fsPath}`),
-						error => {
-							console.error(`Failed to open document: ${error}`);
-							vscode.window.showErrorMessage(`Failed to open file: ${error.message}`);
-						}
-					);
+				const editor = await vscode.window.showTextDocument(fileUri, { preview: false }); // Open non-preview
+				console.log(`Successfully opened ${fileUri.fsPath}`);
+				
+				// Auto-reveal in PromptCode tree without stealing focus
+				if (fileExplorerProvider) {
+					await fileExplorerProvider.revealPath(fileUri.fsPath, { 
+						select: true, 
+						focus: false, 
+						expand: true 
+					});
+				}
 			} else {
 				throw new Error('Failed to resolve file URI');
 			}
@@ -1196,6 +1202,78 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	});
 
+	// Register reveal first search match command
+	const revealFirstSearchMatch = vscode.commands.registerCommand('promptcode.revealFirstSearchMatch', async () => {
+		try {
+			const results = await (fileExplorerProvider?.getCurrentSearchResults() ?? Promise.resolve([]));
+			if (results.length > 0) {
+				await fileExplorerProvider.expandToShowFile(results[0]);
+				await fileExplorerProvider.revealPath(results[0], { 
+					select: true, 
+					focus: false, 
+					expand: true 
+				});
+			} else {
+				console.log('No search matches to reveal');
+			}
+		} catch (e) {
+			console.error('revealFirstSearchMatch failed', e);
+		}
+	});
+
+	// Register add to PromptCode selection command (from Explorer context menu)
+	const addToPromptCodeSelection = vscode.commands.registerCommand('promptcode.addToPromptCodeSelection', async (resource?: vscode.Uri, resources?: vscode.Uri[]) => {
+		const uris = (resources && resources.length ? resources : resource ? [resource] : [])
+			.filter(u => u?.scheme === 'file');
+		
+		if (uris.length === 0) {
+			const active = vscode.window.activeTextEditor?.document.uri;
+			if (active?.scheme === 'file') {
+				uris.push(active);
+			}
+		}
+		
+		if (uris.length === 0) {
+			vscode.window.showWarningMessage('No file or folder selected.');
+			return;
+		}
+
+		// Expand directories recursively, respecting ignore rules
+		const toCheck = new Set<string>();
+		const helper = fileExplorerProvider.getIgnoreHelper();
+		
+		const addPath = async (p: string) => {
+			try {
+				const st = await fs.promises.stat(p);
+				if (st.isDirectory()) {
+					const entries = await fs.promises.readdir(p, { withFileTypes: true });
+					for (const e of entries) {
+						const child = path.join(p, e.name);
+						if (helper?.shouldIgnore(child)) {continue;}
+						await addPath(child);
+					}
+				} else if (st.isFile()) {
+					if (!helper || !helper.shouldIgnore(p)) {
+						toCheck.add(p);
+					}
+				}
+			} catch { 
+				// Ignore errors for inaccessible files
+			}
+		};
+		
+		for (const u of uris) {
+			await addPath(u.fsPath);
+		}
+		
+		if (toCheck.size === 0) {
+			vscode.window.showInformationMessage('No non-ignored files to add.');
+			return;
+		}
+		
+		await fileExplorerProvider.setCheckedItems(toCheck, true);
+		vscode.window.showInformationMessage(`Added ${toCheck.size} file(s) to PromptCode selection.`);
+	});
 
 	// Register show new content command
 	const showNewContentCommand = vscode.commands.registerCommand('promptcode.showNewContent', async (message) => {
@@ -1463,6 +1541,8 @@ export function activate(context: vscode.ExtensionContext) {
 		clearTokenCacheCommand,
 		refreshFileExplorerCommand,
 		openFileInEditorCommand,
+		revealFirstSearchMatch,
+		addToPromptCodeSelection,
 		showNewContentCommand,
 		showDiffCommand,
 		debugRefreshSelectedFilesCommand,

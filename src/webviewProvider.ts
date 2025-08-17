@@ -104,6 +104,10 @@ export class PromptCodeWebViewProvider {
                         console.log('CollapseAll command received in webview provider');
                         vscode.commands.executeCommand('promptcode.collapseAll');
                         return;
+                    case 'revealFirstSearchMatch':
+                        console.log('RevealFirstSearchMatch command received in webview provider');
+                        vscode.commands.executeCommand('promptcode.revealFirstSearchMatch');
+                        return;
                     case 'selectAll':
                         console.log('SelectAll command received in webview provider');
                         vscode.commands.executeCommand('promptcode.selectAll');

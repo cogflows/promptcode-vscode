@@ -1,6 +1,13 @@
 # Changelog
 
-## [0.5.1] - 2025-01-12
+## [0.5.2] - 2025-08-13
+
+### Fixed
+- Critical search functionality in VS Code extension
+- File selection state management issues
+- Core package integration bugs
+
+## [0.5.1] - 2025-08-12
 
 ### Added
 - **Cursor IDE Integration**: New `promptcode cursor` command creates `.cursor/rules/*.mdc` files for Cursor IDE integration
@@ -15,7 +22,7 @@
 ### Breaking Changes
 - **CLI Parsing**: Commands must now be explicitly specified. Previously `promptcode "question"` would implicitly run the expert command, now you must use `promptcode expert "question"`. This change improves clarity and prevents ambiguous command interpretation.
 
-## [0.3.3] - 2025-01-06
+## [0.3.3] - 2025-08-07
 
 ### Added
 - PromptCode CLI - Standalone command-line interface for generating AI-ready prompts

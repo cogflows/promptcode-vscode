@@ -12,9 +12,20 @@ const testEntryPoints = [
   'src/test/generatePatternsFromSelection.test.ts',
   'src/test/smoke.test.ts',
   'src/test/migration.test.ts',
+  'src/test/promptContract.test.ts',
+  'src/test/ignorePatterns.test.ts',
+  'src/test/extensionActivation.test.ts',
+  'src/test/tokenCounter.test.ts',
+  'src/test/suite/fileExplorer.test.ts',
+  'src/test/suite/fileExplorerCheckbox.test.ts',
+  'src/test/suite/fileExplorerSearch.test.ts',
   // Also compile the utils that tests depend on
   'src/utils/filePattern.ts',
-  'src/utils/generatePatternsFromSelection.ts'
+  'src/utils/generatePatternsFromSelection.ts',
+  // Compile modules that tests import directly
+  'src/fileExplorer.ts',
+  'src/ignoreHelper.ts',
+  'src/constants.ts'
 ];
 
 // Filter out any test files that don't exist

@@ -77,6 +77,14 @@
       {
         "command": "promptcode.openFileInEditor",
         "title": "Open in Editor"
+      },
+      {
+        "command": "promptcode.revealFirstSearchMatch",
+        "title": "PromptCode: Reveal First Search Match"
+      },
+      {
+        "command": "promptcode.addToPromptCodeSelection",
+        "title": "Add to PromptCode"
       }
     ],
     "configuration": {
@@ -176,6 +184,13 @@
           "command": "promptcode.copyRelativeFilePath",
           "when": "view == promptcodeExplorer && (viewItem == file || viewItem == directory)",
           "group": "1_copy@2"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "promptcode.addToPromptCodeSelection",
+          "group": "navigation@5",
+          "when": "resourceScheme == file"
         }
       ]
     }
