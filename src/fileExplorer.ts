@@ -1419,6 +1419,40 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
   }
   // --- END RESTORED ---
 
+  /**
+   * Expands the tree to show a specific file
+   * @param absolutePath The absolute path of the file to reveal
+   */
+  public async expandToShowFile(absolutePath: string): Promise<void> {
+    // Get all parent directories
+    const parents: string[] = [];
+    let currentPath = path.dirname(absolutePath);
+    
+    // Build list of parent directories from the file up to the workspace root
+    while (currentPath && currentPath !== path.dirname(currentPath)) {
+      // Check if we've reached a workspace root
+      const isWorkspaceRoot = Array.from(this.workspaceRoots.values()).some(root => root === currentPath);
+      
+      parents.unshift(currentPath); // Add to beginning to expand from root down
+      
+      if (isWorkspaceRoot) {
+        break; // Stop at workspace root
+      }
+      
+      currentPath = path.dirname(currentPath);
+    }
+    
+    // Expand each parent directory
+    for (const parentPath of parents) {
+      if (!this.expandedItems.has(parentPath)) {
+        this.expandedItems.set(parentPath, true);
+      }
+    }
+    
+    // Trigger a refresh to update the tree
+    this._onDidChangeTreeData.fire();
+  }
+
   // --- RESTORED: Method to set checked items from a list ---
   public async setCheckedItems(absoluteFilePaths: Set<string>, addToExisting: boolean = false): Promise<void> {
     console.log(`Restored setCheckedItems: Received ${absoluteFilePaths.size} absolute paths. Add to existing: ${addToExisting}`);
