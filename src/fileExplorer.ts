@@ -324,6 +324,9 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
         return;
       }
 
+      // Auto-expand parent directories of search matches
+      this.autoExpandSearchResults();
+      
       // Then refresh the tree to show matching items
       this.refresh();
 
@@ -1418,6 +1421,51 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
     return this.ignoreHelper;
   }
   // --- END RESTORED ---
+
+  /**
+   * Auto-expand parent directories of all search matches
+   * This ensures search results are visible without manual expansion
+   */
+  private autoExpandSearchResults(): void {
+    if (!this.searchTerm.trim() || this.includedPaths.size === 0) {
+      return;
+    }
+    
+    // For each file in search results, expand all parent directories
+    for (const includedPath of this.includedPaths) {
+      let currentPath = includedPath;
+      
+      // Skip if it's already a directory that we're including
+      try {
+        const stats = fs.statSync(includedPath);
+        if (stats.isDirectory()) {
+          // Mark directory itself as expanded
+          this.expandedItems.set(includedPath, true);
+          currentPath = path.dirname(includedPath);
+        }
+      } catch {
+        // If stat fails, assume it's a file and get its parent
+        currentPath = path.dirname(includedPath);
+      }
+      
+      // Expand all parent directories up to workspace root
+      while (currentPath && currentPath !== path.dirname(currentPath)) {
+        // Check if we've reached a workspace root
+        const isWorkspaceRoot = Array.from(this.workspaceRoots.values()).some(root => root === currentPath);
+        
+        // Mark as expanded
+        this.expandedItems.set(currentPath, true);
+        
+        if (isWorkspaceRoot) {
+          break; // Stop at workspace root
+        }
+        
+        currentPath = path.dirname(currentPath);
+      }
+    }
+    
+    console.log(`Auto-expanded ${this.expandedItems.size} directories for search results`);
+  }
 
   /**
    * Expands the tree to show a specific file
