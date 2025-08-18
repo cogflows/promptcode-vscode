@@ -73,6 +73,8 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
   private includedPaths: Set<string> = new Set();
   private checkboxQueue: Promise<void> = Promise.resolve(); // Added queue field
   private searchSequence: number = 0; // For search cancellation
+  private expandRunId: number = 0; // For expansion cancellation
+  private pendingExpansion: Promise<void> | null = null; // Track pending expansion for tests
   // searchTimer removed - using debounceWaiters pattern instead
   private debounceWaiters: Array<() => void> = []; // For shared debounce
   private debounceHandle: NodeJS.Timeout | null = null;
@@ -123,7 +125,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
   }
 
   // ... (rest of the FileExplorerProvider class remains the same) ...
-  private initializeWorkspaceRoots(): void {
+  public initializeWorkspaceRoots(): void {
     if (vscode.workspace.workspaceFolders) {
       for (const folder of vscode.workspace.workspaceFolders) {
         this.workspaceRoots.set(folder.uri.toString(), folder.uri.fsPath);
@@ -311,6 +313,9 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
   // Set the search term and refresh the tree
   async setSearchTerm(searchTerm: string, globPattern?: boolean, shouldIncludeFolders?: boolean): Promise<void> {
     this.debugLog(`FileExplorer: Setting search term to "${searchTerm}", glob: ${globPattern}, includeFolders: ${shouldIncludeFolders}`);
+    
+    // Cancel any in-flight expand from a previous search
+    this.expandRunId++;
 
     const searchTermLower = (searchTerm || '').toLowerCase();
     const nextIsGlob = !!globPattern;
@@ -370,13 +375,25 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
     // Refresh, then expand
     this.refresh();
 
-    queueMicrotask(() => {
-      if (this._treeView && sequence === this.searchSequence) {
-        this.expandMatchingDirectories().catch(err =>
-          console.error('Error expanding search matches:', err)
-        );
-      }
-    });
+    // Only schedule expansion if we actually have results
+    if (this.includedPaths.size > 0) {
+      const runId = ++this.expandRunId;
+      queueMicrotask(() => {
+        if (this._treeView && sequence === this.searchSequence && runId === this.expandRunId) {
+          const expansionPromise = this.expandMatchingDirectories(runId)
+            .catch(err => console.error('Error expanding search matches:', err))
+            .finally(() => {
+              if (this.pendingExpansion === expansionPromise) {
+                this.pendingExpansion = null;
+              }
+            });
+          this.pendingExpansion = expansionPromise;
+        }
+      });
+    } else {
+      // Clear pending expansion when no results
+      this.pendingExpansion = null;
+    }
 
     // Optional single-result auto-select
     const files = await this.getCurrentSearchResults();
@@ -558,6 +575,8 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
         this.includedPaths.clear();
         // Clear expandedItems to prevent stale state from auto-expanding
         expandedItems.clear();
+        // Also cancel any in-flight expansion work
+        this.expandRunId++;
         return;
     }
 
@@ -1201,6 +1220,16 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
   clearExpandedState(): void {
     expandedItems.clear();
   }
+  
+  // Test helper: wait for search and expansion to complete
+  public async waitForSearchIdle(): Promise<void> {
+    // Wait for debounce window to flush any pending processSearch scheduling
+    await new Promise(r => setTimeout(r, 0));
+    const p = this.pendingExpansion;
+    if (p) { 
+      await p; 
+    }
+  }
 
   // Select all files
   selectAll(): void {
@@ -1401,13 +1430,15 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
   }
 
   // Method to expand directories that match the search
-  private async expandMatchingDirectories(): Promise<void> {
+  private async expandMatchingDirectories(runId: number): Promise<void> {
+    if (runId !== this.expandRunId) {return;}
+    
     if (!this._treeView) {
       return;
     }
 
     // Don't expand anything if there are no search results
-    if (this.includedPaths.size === 0) {
+    if (this.includedPaths.size === 0 || runId !== this.expandRunId) {
       this.debugLog('No search results, skipping directory expansion');
       console.log('[expandMatchingDirectories] No results - not expanding. expandedItems size:', expandedItems.size);
       return;
@@ -1418,6 +1449,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
     try {
       // First get all the directories present in the current view (respecting search filter)
       const directories = await this.getAllDirectories(); // This already respects ignore filters
+      if (runId !== this.expandRunId) {return;}
       this.debugLog(`Found ${directories.length} potentially visible directories to check for expansion`);
 
       // Get workspace roots as a Set of paths for checking when to stop
@@ -1453,7 +1485,9 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
 
        // Reveal directories level by level or in batches
       const revealBatch = async (batch: FileItem[]) => {
+          if (runId !== this.expandRunId) {return;}
           for (const dir of batch) {
+              if (runId !== this.expandRunId) {return;}
               expandedItems.set(dir.fullPath, true); // Mark as expanded first
           }
            // Reveal the batch
@@ -1468,9 +1502,11 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
 
       const batchSize = 50; // Process 50 directories at a time
        for (let i = 0; i < directoriesToExpand.length; i += batchSize) {
+            if (runId !== this.expandRunId) {break;}
             const batch = directoriesToExpand.slice(i, i + batchSize);
             this.debugLog(`Expanding search match batch ${i / batchSize + 1}...`);
             await revealBatch(batch);
+            if (runId !== this.expandRunId) {break;}
             await delay(100); // Small delay between batches
        }
 

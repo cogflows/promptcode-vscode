@@ -434,8 +434,8 @@ suite('FileExplorer Tests', () => {
             
             await fileExplorer.setSearchTerm('nonexistentfile');
             
-            // Wait for potential expansion
-            await new Promise(resolve => setTimeout(resolve, 500));
+            // Wait for search and expansion to complete
+            await fileExplorer.waitForSearchIdle();
             
             // Nothing should be expanded
             assert.strictEqual(expandedItems.size, 0, 'No directories should be expanded when no results');

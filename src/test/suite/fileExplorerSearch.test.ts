@@ -323,9 +323,9 @@ suite('FileExplorer Search & Reveal Tests', () => {
             await fileExplorer.setSearchTerm('nonexistentfile');
             console.log('[TEST] After setSearchTerm, expandedItems size:', expandedItems.size);
             
-            // Wait for potential expansion
-            await new Promise(resolve => setTimeout(resolve, 500));
-            console.log('[TEST] After waiting 500ms, expandedItems size:', expandedItems.size);
+            // Wait for search and expansion to complete
+            await fileExplorer.waitForSearchIdle();
+            console.log('[TEST] After waitForSearchIdle, expandedItems size:', expandedItems.size);
             console.log('[TEST] Expanded items:', Array.from(expandedItems.keys()));
             
             assert.strictEqual(
