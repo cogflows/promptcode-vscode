@@ -461,17 +461,17 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
     this.debugLog("[Debug] rebuildSearchPaths: Starting Pass 1 (Finding direct matches)");
     const findDirectMatchesRecursive = async (dirPath: string, rootPath: string): Promise<void> => {
       // Check if search was cancelled
-      if (sequence !== this.searchSequence) return;
+      if (sequence !== this.searchSequence) {return;}
       
       try {
         const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
 
         for (const entry of entries) {
           // Check if search was cancelled
-          if (sequence !== this.searchSequence) return;
+          if (sequence !== this.searchSequence) {return;}
           
           // Skip symbolic links to prevent infinite loops
-          if (entry.isSymbolicLink && entry.isSymbolicLink()) continue;
+          if (entry.isSymbolicLink && entry.isSymbolicLink()) {continue;}
           const fullPath = path.join(dirPath, entry.name);
           const entryName = entry.name; // Use original name for glob matching
           const entryNameLower = entryName.toLowerCase();
@@ -567,16 +567,16 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
     // Helper function to add all descendants recursively
     const addDescendantsRecursive = async (dirPath: string): Promise<void> => {
       // Check if search was cancelled
-      if (sequence !== this.searchSequence) return;
+      if (sequence !== this.searchSequence) {return;}
       
       try {
         const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
         for (const entry of entries) {
           // Check if search was cancelled
-          if (sequence !== this.searchSequence) return;
+          if (sequence !== this.searchSequence) {return;}
           
           // Skip symbolic links to prevent infinite loops
-          if (entry.isSymbolicLink && entry.isSymbolicLink()) continue;
+          if (entry.isSymbolicLink && entry.isSymbolicLink()) {continue;}
           const fullPath = path.join(dirPath, entry.name);
           // Skip ignored items
           if (this.ignoreHelper && this.ignoreHelper.shouldIgnore(fullPath)) {
@@ -1011,7 +1011,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
 
       for (const entry of entries) {
         // Skip symbolic links to prevent infinite loops
-        if (entry.isSymbolicLink && entry.isSymbolicLink()) continue;
+        if (entry.isSymbolicLink && entry.isSymbolicLink()) {continue;}
         
         const fullPath = path.join(dirPath, entry.name);
 
@@ -1769,7 +1769,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
         
         for (const entry of entries) {
           // Skip symbolic links to prevent infinite loops
-          if (entry.isSymbolicLink && entry.isSymbolicLink()) continue;
+          if (entry.isSymbolicLink && entry.isSymbolicLink()) {continue;}
           
           const fullPath = path.join(dirPath, entry.name);
           

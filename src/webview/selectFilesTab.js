@@ -797,7 +797,7 @@ if (typeof window !== 'undefined') {
                         // Handle file open/remove actions
                         selectedFilesListEl.addEventListener('click', (e) => {
                             const el = e.target.closest('.js-file-action');
-                            if (!el) return;
+                            if (!el) {return;}
 
                             const action = el.getAttribute('data-action');
                             const path = el.getAttribute('data-path') || '';
@@ -824,7 +824,7 @@ if (typeof window !== 'undefined') {
                         // Handle directory remove actions
                         selectedFilesListEl.addEventListener('click', (e) => {
                             const btn = e.target.closest('.js-dir-remove');
-                            if (!btn) return;
+                            if (!btn) {return;}
                             e.preventDefault();
                             e.stopPropagation();
                             const dir = btn.getAttribute('data-dir') || '';
