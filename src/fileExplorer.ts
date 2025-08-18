@@ -45,7 +45,7 @@ export class FileItem extends vscode.TreeItem {
     // Add command to open file when clicking on the label (not checkbox)
     if (!isDirectory) {
       this.command = {
-        command: 'promptcode.openFileFromTree',
+        command: 'promptcode.openFileInEditor',
         title: 'Open File',
         arguments: [resourceUri]
       };
@@ -73,7 +73,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
   private includedPaths: Set<string> = new Set();
   private checkboxQueue: Promise<void> = Promise.resolve(); // Added queue field
   private searchSequence: number = 0; // For search cancellation
-  private searchTimer: NodeJS.Timeout | null = null; // For debouncing
+  // searchTimer removed - using debounceWaiters pattern instead
   private debounceWaiters: Array<() => void> = []; // For shared debounce
   private debounceHandle: NodeJS.Timeout | null = null;
   
@@ -208,10 +208,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
   // Method to dispose watchers when extension is deactivated
   dispose(): void {
     // Clean up search timer if it's active
-    if (this.searchTimer) {
-      clearTimeout(this.searchTimer);
-      this.searchTimer = null;
-    }
+    // searchTimer cleanup removed - using debounceWaiters pattern
     
     // Dispose all other disposables
     this.disposables.forEach(d => d.dispose());
@@ -360,7 +357,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
     this.debugLog(`[processSearch] Proceeding with search, sequence ${sequence} === ${this.searchSequence}`);
 
     try {
-      await this.rebuildSearchPaths();
+      await this.rebuildSearchPaths(sequence);
     } catch (error) {
       console.error('[processSearch] Error in rebuildSearchPaths:', error);
     }
@@ -440,9 +437,10 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
   // --- END ADDED ---
 
   // First stage of search: find all matches and build path inclusion set
-  private async rebuildSearchPaths(): Promise<void> {
-    this.debugLog(`[rebuildSearchPaths] START for term: "${this.searchTerm}", isGlob: ${this.isGlobSearch}`);
-    this.includedPaths.clear(); // Clear the final set
+  private async rebuildSearchPaths(sequence: number): Promise<void> {
+    this.debugLog(`[rebuildSearchPaths] START for term: "${this.searchTerm}", isGlob: ${this.isGlobSearch}, sequence: ${sequence}`);
+    // Build results in local set to avoid race conditions
+    const nextIncluded = new Set<string>();
     const directMatches = new Set<string>(); // Set for Pass 1 results
 
     if (!this.searchTerm.trim()) {
@@ -462,10 +460,18 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
     // --- PASS 1: Find Direct Matches (by name or path) --- 
     this.debugLog("[Debug] rebuildSearchPaths: Starting Pass 1 (Finding direct matches)");
     const findDirectMatchesRecursive = async (dirPath: string, rootPath: string): Promise<void> => {
+      // Check if search was cancelled
+      if (sequence !== this.searchSequence) return;
+      
       try {
         const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
 
         for (const entry of entries) {
+          // Check if search was cancelled
+          if (sequence !== this.searchSequence) return;
+          
+          // Skip symbolic links to prevent infinite loops
+          if (entry.isSymbolicLink && entry.isSymbolicLink()) continue;
           const fullPath = path.join(dirPath, entry.name);
           const entryName = entry.name; // Use original name for glob matching
           const entryNameLower = entryName.toLowerCase();
@@ -552,21 +558,32 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
 
     // --- PASS 2: Add Ancestors and Descendants --- 
     this.debugLog("[Debug] rebuildSearchPaths: Starting Pass 2 (Adding ancestors and descendants)");
-    // Initialize final set with direct matches
-    this.includedPaths = new Set(directMatches);
+    // Build into local set, not this.includedPaths
+    nextIncluded.clear();
+    for (const match of directMatches) {
+      nextIncluded.add(match);
+    }
 
     // Helper function to add all descendants recursively
     const addDescendantsRecursive = async (dirPath: string): Promise<void> => {
+      // Check if search was cancelled
+      if (sequence !== this.searchSequence) return;
+      
       try {
         const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
         for (const entry of entries) {
+          // Check if search was cancelled
+          if (sequence !== this.searchSequence) return;
+          
+          // Skip symbolic links to prevent infinite loops
+          if (entry.isSymbolicLink && entry.isSymbolicLink()) continue;
           const fullPath = path.join(dirPath, entry.name);
           // Skip ignored items
           if (this.ignoreHelper && this.ignoreHelper.shouldIgnore(fullPath)) {
             continue;
           }
-          // Add the descendant
-          this.includedPaths.add(fullPath);
+          // Add the descendant to local set
+          nextIncluded.add(fullPath);
           // Recurse if it's a directory
           if (entry.isDirectory()) {
             await addDescendantsRecursive(fullPath);
@@ -588,7 +605,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
         const parentPath = path.dirname(currentPath);
         if (parentPath === currentPath) {break;} // Stop at filesystem root
 
-        this.includedPaths.add(parentPath); // Add ancestor
+        nextIncluded.add(parentPath); // Add ancestor to local set
 
         // Stop if we hit a workspace root
         const isWorkspaceRoot = Array.from(this.workspaceRoots.values()).some(root => parentPath === root);
@@ -600,7 +617,8 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
 
       // 2b: Add Descendants (if it's a directory)
       try {
-        const stats = await fs.promises.stat(matchPath);
+        // Use lstat to avoid following symbolic links
+        const stats = await fs.promises.lstat(matchPath);
         if (stats.isDirectory()) {
           await addDescendantsRecursive(matchPath);
         }
@@ -612,8 +630,13 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
       }
     }
 
-    this.debugLog(`[Debug] rebuildSearchPaths: Pass 2 Complete. Final includedPaths size: ${this.includedPaths.size}`);
-    // this.debugLog(`[Debug] rebuildSearchPaths: Final includedPaths:`, Array.from(this.includedPaths).sort()); // Optional: Log full final set
+    // Only commit results if this is still the current search
+    if (sequence === this.searchSequence) {
+      this.includedPaths = nextIncluded;
+      this.debugLog(`[Debug] rebuildSearchPaths: Pass 2 Complete. Final includedPaths size: ${this.includedPaths.size}`);
+    } else {
+      this.debugLog(`[Debug] rebuildSearchPaths: Search cancelled (sequence ${sequence} != ${this.searchSequence})`);
+    }
   }
 
   // Check if an item should be included in search results based on the inclusion set
@@ -987,6 +1010,9 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
       const state = isChecked ? vscode.TreeItemCheckboxState.Checked : vscode.TreeItemCheckboxState.Unchecked;
 
       for (const entry of entries) {
+        // Skip symbolic links to prevent infinite loops
+        if (entry.isSymbolicLink && entry.isSymbolicLink()) continue;
+        
         const fullPath = path.join(dirPath, entry.name);
 
         // Skip ignored items
@@ -1523,6 +1549,18 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
   }
   // --- END RESTORED ---
 
+  // Helper to safely check if a path is inside a root directory
+  private isPathInside(rootPath: string, candidatePath: string): boolean {
+    const root = path.resolve(rootPath);
+    const cand = path.resolve(candidatePath);
+
+    // Windows: make comparison case-insensitive
+    const norm = (p: string) => process.platform === 'win32' ? p.toLowerCase() : p;
+
+    const rel = path.relative(root, cand);
+    return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel) && norm(cand).startsWith(norm(root) + path.sep);
+  }
+
   // --- ADDED: Get selected file paths (relative to workspace root) ---
   public getSelectedPaths(): string[] {
     if (!this.workspaceRoots.size) {
@@ -1538,8 +1576,8 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
           // Only include files, not directories, in the path list
           const stats = fs.statSync(fullPath);
           if (stats.isFile()) {
-             // Find the workspace root this path belongs to
-            const containingRoot = workspaceRootPaths.find(root => fullPath.startsWith(root + path.sep));
+             // Find the workspace root this path belongs to (using safe containment check)
+            const containingRoot = workspaceRootPaths.find(root => this.isPathInside(root, fullPath));
             if (containingRoot) {
               selectedPaths.push(path.relative(containingRoot, fullPath));
             } else {
@@ -1574,9 +1612,8 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
         let foundRoot = false;
         for (const [, rootPath] of workspaceRootEntries) {
             const absolutePath = path.resolve(rootPath, relativePath); // Use resolve for robustness
-            // Basic check: Does the resolved path still seem to be within the root?
-            // This isn't perfect but prevents issues with paths like ../../outside
-            if (absolutePath.startsWith(rootPath)) {
+            // Safe containment check to prevent path traversal
+            if (this.isPathInside(rootPath, absolutePath)) {
                  // Check if the file actually exists before adding
                  try {
                     await fs.promises.access(absolutePath, fs.constants.F_OK);
@@ -1731,6 +1768,9 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
         let hasFiles = false;
         
         for (const entry of entries) {
+          // Skip symbolic links to prevent infinite loops
+          if (entry.isSymbolicLink && entry.isSymbolicLink()) continue;
+          
           const fullPath = path.join(dirPath, entry.name);
           
           // Skip ignored files
