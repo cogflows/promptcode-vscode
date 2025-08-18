@@ -317,11 +317,15 @@ suite('FileExplorer Search & Reveal Tests', () => {
 
         test('should not expand when no search results', async () => {
             expandedItems.clear();
+            console.log('[TEST] expandedItems cleared, size:', expandedItems.size);
             
             await fileExplorer.setSearchTerm('nonexistentfile');
+            console.log('[TEST] After setSearchTerm, expandedItems size:', expandedItems.size);
             
             // Wait for potential expansion
             await new Promise(resolve => setTimeout(resolve, 500));
+            console.log('[TEST] After waiting 500ms, expandedItems size:', expandedItems.size);
+            console.log('[TEST] Expanded items:', Array.from(expandedItems.keys()));
             
             assert.strictEqual(
                 expandedItems.size, 

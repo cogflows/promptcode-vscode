@@ -151,7 +151,8 @@
       "Bash(npm install:*)",
       "WebFetch(domain:cookbook.openai.com)",
       "Bash(git restore:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(git fetch:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits",

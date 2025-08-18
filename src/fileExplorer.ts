@@ -1389,6 +1389,12 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
       return;
     }
 
+    // Don't expand anything if there are no search results
+    if (this.includedPaths.size === 0) {
+      this.debugLog('No search results, skipping directory expansion');
+      return;
+    }
+
     this.debugLog('Expanding directories that match search criteria');
 
     try {
