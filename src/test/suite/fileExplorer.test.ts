@@ -266,6 +266,8 @@ suite('FileExplorer Tests', () => {
         test('should clear search results when search term is empty', async () => {
             // First set a search term
             await fileExplorer.setSearchTerm('helper');
+            // Wait for the async search to complete
+            await new Promise(resolve => setTimeout(resolve, 300));
             let searchResults = await fileExplorer.getCurrentSearchResults();
             assert.ok(searchResults.length > 0);
             

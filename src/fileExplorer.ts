@@ -218,6 +218,11 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
     this.disposables = [];
   }
 
+  // Set the extension context for state persistence
+  setContext(context: vscode.ExtensionContext) {
+    // Store context for future use if needed
+  }
+
   // Set the tree view instance
   setTreeView(treeView: vscode.TreeView<FileItem>) {
     this._treeView = treeView;
@@ -330,53 +335,61 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
     this.searchTerm = searchTermLower;
 
     const sequence = ++this.searchSequence;
+    this.debugLog(`[setSearchTerm] Starting search for "${searchTermLower}", sequence: ${sequence}`);
     
-    // Use shared debounce helper
+    // If the term is empty, clear immediately to keep the UI snappy
+    if (!this.searchTerm.trim()) {
+      this.includedPaths.clear();
+      this.refresh();
+      return;
+    }
+    
+    // Kick off processing without awaiting, so callers don't serialize the debounce
+    void this.processSearch(sequence);
+  }
+
+  // Process the search after debouncing
+  private async processSearch(sequence: number): Promise<void> {
     await this.waitForDebounce(200);
 
-    // Check if this search has been superseded
+    // Cancel stale runs
     if (sequence !== this.searchSequence) {
-      return; // A newer search has started
+      this.debugLog(`[processSearch] Search superseded, sequence ${sequence} !== ${this.searchSequence}, returning early`);
+      return;
+    }
+    this.debugLog(`[processSearch] Proceeding with search, sequence ${sequence} === ${this.searchSequence}`);
+
+    try {
+      await this.rebuildSearchPaths();
+    } catch (error) {
+      console.error('[processSearch] Error in rebuildSearchPaths:', error);
     }
 
-    if (this.searchTerm.trim() !== '') {
-      // When searching, first build the search paths
-      await this.rebuildSearchPaths();
-      
-      // Check again if superseded after the expensive rebuild operation
-      if (sequence !== this.searchSequence) {
-        return;
+    // Cancel if superseded while rebuilding
+    if (sequence !== this.searchSequence) {
+      return;
+    }
+
+    // Refresh, then expand
+    this.refresh();
+
+    queueMicrotask(() => {
+      if (this._treeView && sequence === this.searchSequence) {
+        this.expandMatchingDirectories().catch(err =>
+          console.error('Error expanding search matches:', err)
+        );
       }
+    });
 
-      // Then refresh the tree to show matching items
+    // Optional single-result auto-select
+    const files = await this.getCurrentSearchResults();
+    if (sequence === this.searchSequence && files.length === 1) {
+      const singlePath = files[0];
+      checkedItems.clear();
+      checkedItems.set(singlePath, vscode.TreeItemCheckboxState.Checked);
+      this.updateDecorationCache();
       this.refresh();
-
-      // After refreshing, expand all matching directories
-      // Using queueMicrotask for better performance than setTimeout
-      queueMicrotask(() => {
-        if (this._treeView && sequence === this.searchSequence) {
-          this.expandMatchingDirectories().catch(error => {
-            console.error('Error expanding search matches:', error);
-          });
-        }
-      });
-
-      // Auto-select if only one file result
-      const files = await this.getCurrentSearchResults();
-      if (files.length === 1) {
-        const singlePath = files[0];
-        checkedItems.clear();
-        checkedItems.set(singlePath, vscode.TreeItemCheckboxState.Checked);
-        this.updateDecorationCache();
-        this.refresh();
-        vscode.commands.executeCommand('promptcode.getSelectedFiles');
-      }
-    } else {
-      // Clear the included paths when search is cleared for better performance
-      this.includedPaths.clear();
-
-      // Full refresh when clearing search
-      this.refresh();
+      vscode.commands.executeCommand('promptcode.getSelectedFiles');
     }
   }
 
@@ -402,14 +415,18 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
     let escapedPattern = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&'); 
 
     // Convert glob patterns to regex:
-    // ** matches any number of directories
+    // ** matches any number of directories (including zero)
     // * matches any characters except path separator
     // ? matches single character except path separator
+    
+    // IMPORTANT: handle **/ specially so the slash is optional when ** matches zero dirs.
     let regexString = escapedPattern
-      .replace(/\*\*/g, '{{GLOBSTAR}}')  // Temporarily mark ** patterns
-      .replace(/\*/g, '[^/]*')           // * matches anything except /
-      .replace(/\?/g, '[^/]')             // ? matches single char except /
-      .replace(/{{GLOBSTAR}}/g, '.*');   // ** matches anything including /
+      .replace(/\*\*\/+/g, '{{GLOBSTAR_SLASH}}')  // Temporarily mark **/ patterns
+      .replace(/\*\*/g, '{{GLOBSTAR}}')           // Temporarily mark ** patterns
+      .replace(/\*/g, '[^/]*')                    // * matches anything except /
+      .replace(/\?/g, '[^/]')                     // ? matches single char except /
+      .replace(/{{GLOBSTAR_SLASH}}/g, '(?:.*/)?') // **/ -> zero or more directories (slash optional)
+      .replace(/{{GLOBSTAR}}/g, '.*');            // ** -> anything including /
 
     try {
       // Create case-insensitive regex (anchored to match the whole path)
@@ -424,7 +441,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
 
   // First stage of search: find all matches and build path inclusion set
   private async rebuildSearchPaths(): Promise<void> {
-    this.debugLog(`[Debug] rebuildSearchPaths START (New Logic) for term: "${this.searchTerm}"`);
+    this.debugLog(`[rebuildSearchPaths] START for term: "${this.searchTerm}", isGlob: ${this.isGlobSearch}`);
     this.includedPaths.clear(); // Clear the final set
     const directMatches = new Set<string>(); // Set for Pass 1 results
 
@@ -439,7 +456,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
     
     // Create glob regex - use the same regex for both path and filename matching
     const globRegex = this.isGlobSearch ? this.globToRegex(this.searchTerm.trim()) : null;
-    
+    this.debugLog(`[rebuildSearchPaths] Glob regex created: ${globRegex}`);
     this.debugLog(`[Debug] rebuildSearchPaths: Normalized term: "${normalizedSearchTerm}", Is path search: ${isPathSearch}, Is glob: ${this.isGlobSearch}, Include folders: ${this.includeFoldersInSearch}`);
 
     // --- PASS 1: Find Direct Matches (by name or path) --- 
@@ -478,8 +495,18 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
             // If no wildcards, fall back to substring match
             isMatch = globRegex ? globRegex.test(entryName) : entryNameLower.includes(normalizedSearchTerm);
           } else {
-            // For simple searches, check if name contains the search term
-            isMatch = entryNameLower.includes(normalizedSearchTerm);
+            // Simple search: directories still match by name only (when allowed),
+            // files match by filename OR relative path fragment.
+            if (entry.isDirectory()) {
+              isMatch = this.includeFoldersInSearch && entryNameLower.includes(normalizedSearchTerm);
+            } else {
+              const relativePathLower = path
+                .relative(rootPath, fullPath)
+                .replace(/\\/g, '/')
+                .toLowerCase();
+              isMatch = entryNameLower.includes(normalizedSearchTerm)
+                     || relativePathLower.includes(normalizedSearchTerm);
+            }
           }
 
           // Handle include folders option - skip directories if not included
@@ -505,12 +532,15 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
     };
 
     // Run Pass 1 for each workspace root
+    this.debugLog(`[rebuildSearchPaths] Workspace roots count: ${this.workspaceRoots.size}`);
     for (const rootPath of this.workspaceRoots.values()) {
+      this.debugLog(`[rebuildSearchPaths] Scanning root: ${rootPath}`);
       await findDirectMatchesRecursive(rootPath, rootPath);
     }
 
     // Print sorted direct matches
     const sortedDirectMatches = Array.from(directMatches).sort();
+    this.debugLog(`[rebuildSearchPaths] Direct matches found: ${directMatches.size}`);
     this.debugLog(`[Debug] rebuildSearchPaths: Pass 1 Results (Direct Matches):`, sortedDirectMatches);
 
     // If no direct matches found, no need for Pass 2

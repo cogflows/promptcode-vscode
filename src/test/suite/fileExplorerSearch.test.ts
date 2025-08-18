@@ -504,6 +504,9 @@ suite('FileExplorer Search & Reveal Tests', () => {
             
             await Promise.all(promises);
             
+            // Wait for debounced search to complete
+            await new Promise(resolve => setTimeout(resolve, 300));
+            
             // Final results should be for 'helper'
             const results = await fileExplorer.getCurrentSearchResults();
             assert.ok(
