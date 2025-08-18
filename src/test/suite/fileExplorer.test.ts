@@ -111,6 +111,7 @@ suite('FileExplorer Tests', () => {
         // Clear state before each test
         checkedItems.clear();
         expandedItems.clear();
+        fileExplorer.clearExpandedState(); // Clear any stale expanded state
     });
 
     suiteTeardown(() => {

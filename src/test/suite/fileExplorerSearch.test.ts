@@ -111,6 +111,7 @@ suite('FileExplorer Search & Reveal Tests', () => {
         // Clear state before each test
         checkedItems.clear();
         expandedItems.clear();
+        fileExplorer.clearExpandedState(); // Clear any stale expanded state
         if ((mockTreeView as any).clearTracking) {
             (mockTreeView as any).clearTracking();
         }

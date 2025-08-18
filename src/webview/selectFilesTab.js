@@ -407,8 +407,8 @@ if (typeof window !== 'undefined') {
                         console.log('Search term entered');
                     } else {
                         searchContainer?.classList.remove('active-filter');
-                        console.log('Search term cleared, collapsing all directories');
-                        vscode.postMessage({ command: 'collapseAll' });
+                        console.log('Search term cleared, restoring tree state');
+                        // Don't collapse all - let the tree restore to its previous state
                     }
                 }
                 

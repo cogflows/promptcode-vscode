@@ -156,6 +156,25 @@ export function activate(context: vscode.ExtensionContext) {
 		})
 	);
 
+	// Listen for active editor changes to sync with file tree
+	context.subscriptions.push(
+		vscode.window.onDidChangeActiveTextEditor(async (editor) => {
+			if (editor && treeView.visible) {
+				const filePath = editor.document.uri.fsPath;
+				try {
+					await fileExplorerProvider.revealPath(filePath, { 
+						select: true, 
+						focus: false, 
+						expand: true 
+					});
+				} catch (error) {
+					// Silently ignore if file can't be revealed (e.g., outside workspace)
+					console.log(`Could not reveal file in tree: ${filePath}`);
+				}
+			}
+		})
+	);
+
 	// Create the PromptCode webview provider
 	const promptCodeProvider = new PromptCodeWebViewProvider(context.extensionUri, context);
 

@@ -445,6 +445,8 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
 
     if (!this.searchTerm.trim()) {
       this.debugLog(`[Debug] rebuildSearchPaths: Search term is empty. No filtering needed.`);
+      // Clear includedPaths when search is cleared
+      this.includedPaths.clear();
       // No need to refresh here, getChildren will handle showing everything
       return;
     }
@@ -552,7 +554,10 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
     // If no direct matches found, no need for Pass 2
     if (directMatches.size === 0) {
         this.debugLog("[Debug] rebuildSearchPaths: No direct matches found, skipping Pass 2.");
-        // includedPaths remains empty, so refresh will show nothing
+        // Clear includedPaths when no matches
+        this.includedPaths.clear();
+        // Clear expandedItems to prevent stale state from auto-expanding
+        expandedItems.clear();
         return;
     }
 
@@ -922,8 +927,10 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
         const fileItem = this.createFileItem(
           entry,
           directoryPath,
-          // Force collapsed state during search initially for performance, expansion happens later
-          entry.isDirectory() ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None
+          // During search, use the expandedItems to determine state
+          entry.isDirectory() ? 
+            (expandedItems.get(fullPath) ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed) : 
+            vscode.TreeItemCollapsibleState.None
         );
 
         // Ensure checkbox state is preserved
@@ -942,7 +949,10 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
       const fileItem = this.createFileItem(
         entry,
         directoryPath,
-        entry.isDirectory() ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None
+        // When not searching, use expandedItems to restore state
+        entry.isDirectory() ? 
+          (expandedItems.get(fullPath) ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed) : 
+          vscode.TreeItemCollapsibleState.None
       );
 
       // Ensure checkbox state is preserved
@@ -1297,6 +1307,13 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
   // Get all directories in the workspace
   private async getAllDirectories(): Promise<FileItem[]> {
     const directories: FileItem[] = [];
+    console.log('[getAllDirectories] Called, current expandedItems size:', expandedItems.size);
+
+    // If there's an active search with no results, don't try to get directories
+    if (this.searchTerm.trim() && this.includedPaths.size === 0) {
+      console.log('[getAllDirectories] Active search with no results - returning empty');
+      return [];
+    }
 
     // Function to recursively collect directories
     const collectDirectories = async (parentItem?: FileItem) => {
@@ -1392,6 +1409,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
     // Don't expand anything if there are no search results
     if (this.includedPaths.size === 0) {
       this.debugLog('No search results, skipping directory expansion');
+      console.log('[expandMatchingDirectories] No results - not expanding. expandedItems size:', expandedItems.size);
       return;
     }
 
@@ -1764,14 +1782,21 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
   private updateDecorationCache(): void {
     this.dirDecorationCache.clear();
     
-    // First pass: count all files per directory
-    const allDirs = new Set<string>();
+    // Recursive bottom-up walk to count all descendants
+    const visited = new Set<string>();
     
-    // Walk the file tree to find all directories with files
-    const walkDirectory = (dirPath: string): void => {
+    const walk = (dirPath: string): { total: number, checked: number } => {
+      if (visited.has(dirPath)) {
+        const cached = this.dirDecorationCache.get(dirPath);
+        return cached || { total: 0, checked: 0 };
+      }
+      visited.add(dirPath);
+      
+      let total = 0;
+      let checked = 0;
+      
       try {
         const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-        let hasFiles = false;
         
         for (const entry of entries) {
           // Skip symbolic links to prevent infinite loops
@@ -1785,50 +1810,32 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
           }
           
           if (entry.isDirectory()) {
-            walkDirectory(fullPath);
+            // Recursively count subdirectories
+            const subCounts = walk(fullPath);
+            total += subCounts.total;
+            checked += subCounts.checked;
           } else if (entry.isFile()) {
-            hasFiles = true;
+            total++;
+            if (checkedItems.get(fullPath) === vscode.TreeItemCheckboxState.Checked) {
+              checked++;
+            }
           }
-        }
-        
-        if (hasFiles) {
-          allDirs.add(dirPath);
         }
       } catch {
         // Directory not accessible
       }
+      
+      // Store the counts for this directory
+      if (total > 0) {
+        this.dirDecorationCache.set(dirPath, { checked, total });
+      }
+      
+      return { total, checked };
     };
     
     // Walk from each workspace root
     for (const rootPath of this.workspaceRoots.values()) {
-      walkDirectory(rootPath);
-    }
-    
-    // Count files per directory
-    for (const dirPath of allDirs) {
-      const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-      let total = 0;
-      let checked = 0;
-      
-      for (const entry of entries) {
-        if (!entry.isFile()) {
-          continue;
-        }
-        
-        const fullPath = path.join(dirPath, entry.name);
-        if (this.ignoreHelper?.shouldIgnore(fullPath)) {
-          continue;
-        }
-        
-        total++;
-        if (checkedItems.get(fullPath) === vscode.TreeItemCheckboxState.Checked) {
-          checked++;
-        }
-      }
-      
-      if (total > 0) {
-        this.dirDecorationCache.set(dirPath, { checked, total });
-      }
+      walk(rootPath);
     }
   }
 
