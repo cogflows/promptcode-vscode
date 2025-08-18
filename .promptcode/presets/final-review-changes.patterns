@@ -1,0 +1,10 @@
+# Final review - all changed files and related tests
+src/fileExplorer.ts
+src/webview/selectFilesTab.js
+src/webviewProvider.ts
+src/extension.ts
+src/test/suite/fileExplorerSearch.test.ts
+src/test/suite/fileExplorer.test.ts
+packages/cli/src/commands/expert.ts
+CLAUDE.md
+package.json

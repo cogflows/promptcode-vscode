@@ -179,8 +179,8 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 
 	// Register the command to filter files based on search term
-	const filterFilesCommand = vscode.commands.registerCommand('promptcode.filterFiles', async (searchTerm: string, globPattern?: boolean, shouldIncludeFolders?: boolean) => {
-		await fileExplorerProvider.setSearchTerm(searchTerm, globPattern, shouldIncludeFolders);
+	const filterFilesCommand = vscode.commands.registerCommand('promptcode.filterFiles', async (searchTerm: string, isGlob?: boolean, includeFolders?: boolean) => {
+		await fileExplorerProvider.setSearchTerm(searchTerm, isGlob, includeFolders);
 	});
 
 	// If tree view is already visible on activation, show the webview

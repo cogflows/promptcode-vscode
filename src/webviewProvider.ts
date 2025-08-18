@@ -87,8 +87,8 @@ export class PromptCodeWebViewProvider {
 
                 switch (message.command) {
                     case 'search':
-                        console.log('Search command received in webview provider, searchTerm:', message.searchTerm, 'glob:', message.globPattern, 'includeFolders:', message.shouldIncludeFolders);
-                        Promise.resolve(vscode.commands.executeCommand('promptcode.filterFiles', message.searchTerm, message.globPattern, message.shouldIncludeFolders))
+                        console.log('Search command received in webview provider, searchTerm:', message.searchTerm, 'glob:', message.isGlob, 'folders:', message.includeFolders);
+                        Promise.resolve(vscode.commands.executeCommand('promptcode.filterFiles', message.searchTerm, message.isGlob, message.includeFolders))
                             .then(() => {
                                 console.log("Search filtering complete");
                             })

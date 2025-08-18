@@ -593,19 +593,24 @@ export async function expertCommand(question: string | undefined, options: Exper
     
     if (!skipConfirm && isExpensive) {
       if (!isInteractive()) {
-        if (options.json) {
-          // Return JSON error for approval required
-          console.log(JSON.stringify({
-            error: 'Cost approval required',
-            errorCode: 'APPROVAL_REQUIRED',
-            estimatedCost: estimatedTotalCost,
-            message: 'Non-interactive environment detected. Use --yes to proceed with approval after getting user confirmation.'
-          }, null, 2));
-        } else {
+        const errorPayload = {
+          error: 'Cost approval required',
+          errorCode: 'APPROVAL_REQUIRED',
+          estimatedCost: estimatedTotalCost,
+          costThreshold: resolvedCostThreshold,
+          message: 'Re-run with --yes flag to approve this cost in a non-interactive environment.'
+        };
+        
+        // Always output JSON error to stderr for scripts
+        console.error(JSON.stringify(errorPayload, null, 2));
+        
+        // Also show human-readable message if not in JSON mode
+        if (!options.json) {
           console.error(chalk.yellow('\n⚠️  Cost approval required for expensive operation (~$' + estimatedTotalCost.toFixed(2) + ')'));
-          console.error(chalk.yellow('\nNon-interactive environment detected.'));
+          console.error(chalk.yellow('Non-interactive environment detected.'));
           console.error(chalk.yellow('Use --yes to proceed with approval after getting user confirmation.'));
         }
+        
         exitWithCode(EXIT_CODES.APPROVAL_REQUIRED);
       }
       

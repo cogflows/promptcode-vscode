@@ -103,8 +103,8 @@ suite('FileExplorer Tests', () => {
 
         fileExplorer.setTreeView(mockTreeView);
 
-        // Ensure index is ready
-        await fileExplorer.waitForIndexBuild();
+        // Give file explorer time to initialize
+        await new Promise(resolve => setTimeout(resolve, 100));
     });
 
     setup(() => {

@@ -56,7 +56,7 @@ promptocode-vscode/
   - Generate Prompt tab - Final prompt generation with token counting
   - Apply & Review tab - AI response parsing and code diff visualization
 - **File Selection**: `src/fileExplorer.ts` - Custom tree view provider that respects .gitignore and custom ignore patterns
-- **Prompt Generation**: `src/promptGenerator.ts` - Generates structured prompts with XML-like tags for file contents and instructions
+- **Prompt Generation**: `packages/core/src/promptBuilder.ts` - Builds structured prompts from selected files and instructions
 - **Token Counting**: `src/tokenCounter.ts` - Uses GPT tokenizer with caching for real-time token counts
 
 ### CLI Tool

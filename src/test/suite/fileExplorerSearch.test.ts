@@ -103,8 +103,8 @@ suite('FileExplorer Search & Reveal Tests', () => {
 
         fileExplorer.setTreeView(mockTreeView);
 
-        // Ensure index is ready
-        await fileExplorer.waitForIndexBuild();
+        // Give file explorer time to initialize
+        await new Promise(resolve => setTimeout(resolve, 100));
     });
 
     setup(() => {
@@ -188,6 +188,20 @@ suite('FileExplorer Search & Reveal Tests', () => {
             assert.ok(
                 results.some(r => r.includes('utils/math.ts')), 
                 'Should find utils/math.ts'
+            );
+        });
+
+        test('should detect Windows-style paths', async () => {
+            await fileExplorer.setSearchTerm('src\\utils');
+            await new Promise(resolve => setTimeout(resolve, 500)); // Wait for debounced search
+            
+            const results = await fileExplorer.getCurrentSearchResults();
+            
+            // Should auto-detect as path search and find the same results
+            assert.ok(results.length > 0, 'Should find files with Windows-style path');
+            assert.ok(
+                results.some(r => r.includes('utils/helper.ts') || r.includes('utils\\helper.ts')), 
+                'Should find utils/helper.ts with Windows path'
             );
         });
 

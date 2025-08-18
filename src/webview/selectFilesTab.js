@@ -386,20 +386,17 @@ if (typeof window !== 'undefined') {
                 let searchTimeout;
                 
                 function handleSearchInput(value) {
-                    console.log('Sending search command with term:', value);
-                    
-                    // Get toggle states
-                    const globToggle = document.getElementById('search-glob-toggle');
-                    const foldersToggle = document.getElementById('search-include-folders');
-                    const useGlob = globToggle?.classList.contains('active') || false;
+                    const isGlob = globToggle?.classList.contains('active') || false;
                     const includeFolders = foldersToggle?.classList.contains('active') || false;
                     
-                    // Set search term with flags
+                    console.log('Sending search command with term:', value, 'glob:', isGlob, 'folders:', includeFolders);
+                    
+                    // Send search term with explicit toggle states
                     vscode.postMessage({
                         command: 'search',
                         searchTerm: value,
-                        globPattern: useGlob,
-                        shouldIncludeFolders: includeFolders
+                        isGlob: isGlob,
+                        includeFolders: includeFolders
                     });
                     
                     // Add or remove active-filter class
@@ -421,7 +418,7 @@ if (typeof window !== 'undefined') {
                         searchTimeout = setTimeout(() => {
                             handleSearchInput(searchInput.value);
                             updateClearButtonVisibility();
-                        }, 300); // Balanced debounce for better responsiveness
+                        }, 200); // Match extension debounce timing
                     });
 
                     // Add Enter key handler to reveal first search match
