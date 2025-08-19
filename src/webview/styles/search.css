@@ -1,0 +1,18 @@
+/* Search Box Clear Button Fix */
+#clear-search {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: pointer;
+  font-size: 14px;
+  display: none; /* Hidden by default, shown via JavaScript when there's text */
+  z-index: 1;
+  color: var(--vscode-input-foreground);
+  opacity: 0.6;
+  transition: opacity 0.2s ease;
+}
+
+#clear-search:hover {
+  opacity: 1;
+}

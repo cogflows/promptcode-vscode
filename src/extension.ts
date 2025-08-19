@@ -981,6 +981,9 @@ export function activate(context: vscode.ExtensionContext) {
 				// Update parent directories' checkbox states
 				await fileExplorerProvider.updateParentStates(absoluteFilePath);
 
+				// Refresh decorations to update badges (●/◐)
+				fileExplorerProvider.refreshDecorations([absoluteFilePath]);
+
 				// Refresh the tree view
 				fileExplorerProvider.refresh();
 
@@ -1073,6 +1076,8 @@ export function activate(context: vscode.ExtensionContext) {
                await fileExplorerProvider.updateParentStates(path.join(parentPath, 'dummyfile')); // Pass a dummy path inside the parent
             }
 
+			// Refresh decorations for all affected directories
+			fileExplorerProvider.refreshDecorations();
 
 			// Refresh the tree view
 			fileExplorerProvider.refresh();

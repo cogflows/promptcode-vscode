@@ -244,6 +244,21 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
     this._onDidChangeTreeData.fire();
   }
 
+  // Public method to refresh decorations (called from extension.ts after webview commands)
+  public refreshDecorations(paths?: string[]): void {
+    // Always update the cache to ensure it's current
+    this.updateDecorationCache();
+    
+    // Fire decoration change event
+    if (paths && paths.length > 0) {
+      // Update specific paths and their ancestors
+      this.updateDecorations(paths);
+    } else {
+      // Update all decorations
+      this._onDidChangeFileDecorations.fire(undefined);
+    }
+  }
+
   // Method to refresh the ignore helper
   async refreshIgnoreHelper(): Promise<void> {
     if (!this.ignoreHelper) {
@@ -289,8 +304,13 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
       this.debugLog(`Removed now-ignored ${isDirectory ? 'directory' : 'file'} from selection: ${itemPath}`);
     }
 
-    // If any items were removed, notify the webview
+    // If any items were removed, update decorations and notify the webview
     if (itemsToRemove.length > 0) {
+      // Update decoration cache since we modified checkedItems
+      this.updateDecorationCache();
+      // Fire decoration change event for all items
+      this._onDidChangeFileDecorations.fire(undefined);
+      // Notify the webview
       vscode.commands.executeCommand('promptcode.getSelectedFiles');
     }
   }
@@ -995,8 +1015,16 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
           title: 'Updating selection…'
         }, async () => {
           try {
+            // Step 1: Update the data model
             await this.processCheckboxChange(item, state);
+            
+            // Step 2: Rebuild the decoration cache based on the new model state
+            this.updateDecorationCache();
+            
+            // Step 3: Trigger a single UI refresh (updates both checkboxes AND decorations)
             this.refresh();
+            
+            // Step 4: Notify the webview of the change
             await vscode.commands.executeCommand('promptcode.getSelectedFiles');
           } catch (error) {
             // Propagate error to be caught by outer catch
@@ -1027,9 +1055,8 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
     // Step 3: Update all parent directories up to the root
     await this.updateParentChain(path.dirname(item.fullPath));
     
-    // Step 4: Update file decorations for tri-state visual indication
-    this.updateDecorationCache();
-    this.updateDecorations([item.fullPath]);
+    // Note: Decoration cache update moved to handleCheckboxToggle to avoid race condition
+    // between _onDidChangeFileDecorations and _onDidChangeTreeData events
   }
 
   // Set checkbox state for all children (simplifying previous methods)
@@ -1420,10 +1447,11 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
       await processDirectory(rootPath);
     }
 
-    this.refresh();
-    
-    // Update decoration cache after selection changes
+    // Update decoration cache BEFORE refresh to avoid race condition
     this.updateDecorationCache();
+    
+    // Refresh the tree (which will use the updated cache for decorations)
+    this.refresh();
 
     // Notify the webview about the change in selected files
     vscode.commands.executeCommand('promptcode.getSelectedFiles');
