@@ -78,8 +78,6 @@ suite('FileExplorer Decoration Webview Command Bug Reproduction', () => {
             const file1 = path.join(testDir, 'unit.test.ts');
             const file2 = path.join(testDir, 'integration.test.ts');
             
-            console.log('\n=== DESELECT FILE BUG REPRODUCTION ===');
-            
             // Step 1: Select files normally (this should update decorations correctly)
             checkedItems.set(file1, vscode.TreeItemCheckboxState.Checked);
             checkedItems.set(file2, vscode.TreeItemCheckboxState.Checked);
