@@ -152,7 +152,8 @@
       "WebFetch(domain:cookbook.openai.com)",
       "Bash(git restore:*)",
       "Bash(git checkout:*)",
-      "Bash(git fetch:*)"
+      "Bash(git fetch:*)",
+      "Bash(npx esbuild:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits",
