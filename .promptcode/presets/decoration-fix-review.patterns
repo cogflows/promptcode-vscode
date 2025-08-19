@@ -1,0 +1,13 @@
+# decoration-fix-review preset
+# Generated: 2025-08-19T08:53:12.008Z
+# Source: from-files (src/fileExplorer.ts, src/extension.ts, src/webview/styles/search.css, src/test/suite/fileExplorerDecorationWebviewBug.test.ts)
+# Optimization: balanced
+# Stats: files=4, patterns=4, saved=0
+
+src/extension.ts
+src/fileExplorer.ts
+src/test/suite/fileExplorerDecorationWebviewBug.test.ts
+src/webview/styles/search.css
+!**/node_modules/**
+!**/dist/**
+!**/build/**

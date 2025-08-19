@@ -275,19 +275,29 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
     }
   }
 
-  // Remove ignored files from selection
-  private cleanupSelectedFiles(): void {
-    if (!this.ignoreHelper) {
-      return;
-    }
-
+  // Remove ignored and non-existent files from selection
+  public cleanupSelectedFiles(): void {
     // Create a list of items to remove
     const itemsToRemove: string[] = [];
+    const reasons: Map<string, string> = new Map();
 
     // Check each selected item (files and directories)
     for (const [itemPath, isChecked] of checkedItems.entries()) {
-      if (isChecked && this.ignoreHelper.shouldIgnore(itemPath)) {
+      if (!isChecked) {
+        continue;
+      }
+      
+      // Remove if file doesn't exist
+      if (!fs.existsSync(itemPath)) {
         itemsToRemove.push(itemPath);
+        reasons.set(itemPath, 'non-existent');
+        continue;
+      }
+      
+      // Remove if file is ignored (only if ignoreHelper is available)
+      if (this.ignoreHelper && this.ignoreHelper.shouldIgnore(itemPath)) {
+        itemsToRemove.push(itemPath);
+        reasons.set(itemPath, 'ignored');
       }
     }
 
@@ -300,12 +310,13 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
         console.error(`Error updating parent states for ${itemPath}:`, error);
       });
 
-      const isDirectory = fs.existsSync(itemPath) && fs.statSync(itemPath).isDirectory();
-      this.debugLog(`Removed now-ignored ${isDirectory ? 'directory' : 'file'} from selection: ${itemPath}`);
+      const reason = reasons.get(itemPath) || 'unknown';
+      this.debugLog(`Removed ${reason} item from selection: ${itemPath}`);
     }
 
     // If any items were removed, update decorations and notify the webview
     if (itemsToRemove.length > 0) {
+      console.log(`Cleaned up ${itemsToRemove.length} items from selection`);
       // Update decoration cache since we modified checkedItems
       this.updateDecorationCache();
       // Fire decoration change event for all items
@@ -1003,51 +1014,73 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
     });
   }
 
+  // Centralized method for all selection mutations to ensure consistent ordering
+  public applySelectionMutation(
+    label: string, 
+    mutator: () => Promise<void> | void, 
+    affectedPaths?: string[]
+  ): void {
+    this.checkboxQueue = this.checkboxQueue
+      .then(() => vscode.window.withProgress({
+        cancellable: false,
+        location: vscode.ProgressLocation.Window,
+        title: label || 'Updating selection…'
+      }, async () => {
+        try {
+          // Step 1: Apply the mutation to checkedItems
+          await mutator();
+          
+          // Step 2: Rebuild the decoration cache
+          this.updateDecorationCache();
+          
+          // Step 3: Fire decoration change events
+          if (affectedPaths && affectedPaths.length > 0) {
+            this.updateDecorations(affectedPaths);
+          } else {
+            this._onDidChangeFileDecorations.fire(undefined);
+          }
+          
+          // Step 4: Refresh the tree view
+          this.refresh();
+          
+          // Step 5: Notify the webview
+          await vscode.commands.executeCommand('promptcode.getSelectedFiles');
+        } catch (error) {
+          console.error('Selection mutation error:', error);
+          vscode.window.showErrorMessage(`Failed to update selection: ${error}`);
+          // Still refresh on error to clear bad state
+          this.refresh();
+        }
+      }))
+      .catch(err => {
+        console.error('Checkbox queue error:', err);
+        this.refresh();
+        return Promise.resolve();
+      });
+  }
+
   // Handle checkbox state changes
   handleCheckboxToggle(item: FileItem, state: vscode.TreeItemCheckboxState): void {
     // Ignore no-ops – saves queue slots
     if (checkedItems.get(item.fullPath) === state) { return; }
 
-    this.checkboxQueue = this.checkboxQueue
-      .then(() => vscode.window.withProgress({
-          cancellable: false,
-          location: vscode.ProgressLocation.Window,
-          title: 'Updating selection…'
-        }, async () => {
-          try {
-            // Step 1: Update the data model
-            await this.processCheckboxChange(item, state);
-            
-            // Step 2: Rebuild the decoration cache based on the new model state
-            this.updateDecorationCache();
-            
-            // Step 3: Fire decoration change event for updated paths
-            this.updateDecorations([item.fullPath]);
-            
-            // Step 4: Refresh the tree view to update checkboxes
-            this.refresh();
-            
-            // Step 5: Notify the webview of the change
-            await vscode.commands.executeCommand('promptcode.getSelectedFiles');
-          } catch (error) {
-            // Propagate error to be caught by outer catch
-            console.error('Error processing checkbox change:', error);
-            vscode.window.showErrorMessage(`Failed to update selection: ${error}`);
-            throw error;
-          }
-        }))
-      .catch(err => {
-        console.error('Checkbox queue error:', err);
-        this.refresh(); // Still refresh on error to potentially clear bad state
-        // Return resolved promise to keep queue going
-        return Promise.resolve();
-      });
+    this.applySelectionMutation(
+      'Updating selection…',
+      async () => {
+        await this.processCheckboxChange(item, state);
+      },
+      [item.fullPath]
+    );
   }
 
   // Process checkbox changes synchronously to avoid race conditions
   private async processCheckboxChange(item: FileItem, state: vscode.TreeItemCheckboxState): Promise<void> {
-    // Step 1: Update the current item's state
-    checkedItems.set(item.fullPath, state);
+    // Step 1: Update the current item's state (delete if unchecked to save memory)
+    if (state === vscode.TreeItemCheckboxState.Unchecked) {
+      checkedItems.delete(item.fullPath);
+    } else {
+      checkedItems.set(item.fullPath, state);
+    }
 
     // Step 2: If it's a directory, update all children
     if (item.isDirectory) {
@@ -1079,8 +1112,12 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
           continue;
         }
 
-        // Set the state
-        checkedItems.set(fullPath, state);
+        // Set the state (delete if unchecked to save memory)
+        if (state === vscode.TreeItemCheckboxState.Unchecked) {
+          checkedItems.delete(fullPath);
+        } else {
+          checkedItems.set(fullPath, state);
+        }
 
         // Recursively process subdirectories
         if (entry.isDirectory()) {
@@ -1096,7 +1133,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
   }
 
   // Update the entire chain of parent directories
-  private async updateParentChain(dirPath: string | undefined): Promise<void> {
+  public async updateParentChain(dirPath: string | undefined): Promise<void> {
     // Stop if no valid directory path or no workspace roots
     if (!dirPath || dirPath === '' || !this.workspaceRoots.size || dirPath === path.dirname(dirPath)) {
         return;
@@ -1414,50 +1451,58 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
       return;
     }
 
-    const state = checked ? vscode.TreeItemCheckboxState.Checked : vscode.TreeItemCheckboxState.Unchecked;
+    const label = checked ? 'Selecting all files…' : 'Clearing selection…';
+    
+    // Use centralized mutation to ensure proper ordering
+    this.applySelectionMutation(
+      label,
+      async () => {
+        const state = checked ? vscode.TreeItemCheckboxState.Checked : vscode.TreeItemCheckboxState.Unchecked;
 
-    // Recursive function to process directories
-    const processDirectory = async (dirPath: string): Promise<void> => {
-      try {
-        const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
+        // Recursive function to process directories
+        const processDirectory = async (dirPath: string): Promise<void> => {
+          try {
+            const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
 
-        for (const entry of entries) {
-          const fullPath = path.join(dirPath, entry.name);
+            for (const entry of entries) {
+              const fullPath = path.join(dirPath, entry.name);
 
-          // Skip ignored files
-          if (this.ignoreHelper && this.ignoreHelper.shouldIgnore(fullPath)) {
-            continue;
+              // Skip ignored files
+              if (this.ignoreHelper && this.ignoreHelper.shouldIgnore(fullPath)) {
+                continue;
+              }
+
+              // Delete unchecked entries to save memory
+              if (state === vscode.TreeItemCheckboxState.Unchecked) {
+                checkedItems.delete(fullPath);
+              } else {
+                checkedItems.set(fullPath, state);
+              }
+
+              if (entry.isDirectory()) {
+                await processDirectory(fullPath);
+              }
+            }
+          } catch (error) {
+            // Ignore errors like permission denied
+            if (error instanceof Error && (error as NodeJS.ErrnoException).code !== 'EACCES') {
+              console.error(`Error processing directory ${dirPath}:`, error);
+            }
           }
+        };
 
-          checkedItems.set(fullPath, state);
-
-          if (entry.isDirectory()) {
-            await processDirectory(fullPath);
+        // Process each workspace root
+        for (const rootPath of this.workspaceRoots.values()) {
+          // Add/remove the root directory itself
+          if (state === vscode.TreeItemCheckboxState.Unchecked) {
+            checkedItems.delete(rootPath);
+          } else {
+            checkedItems.set(rootPath, state);
           }
-        }
-      } catch (error) {
-        // Ignore errors like permission denied
-        if (error instanceof Error && (error as NodeJS.ErrnoException).code !== 'EACCES') {
-            console.error(`Error processing directory ${dirPath}:`, error);
+          await processDirectory(rootPath);
         }
       }
-    };
-
-    // Process each workspace root
-    for (const rootPath of this.workspaceRoots.values()) {
-      // Add the root directory itself to checkedItems
-      checkedItems.set(rootPath, state);
-      await processDirectory(rootPath);
-    }
-
-    // Update decoration cache BEFORE refresh to avoid race condition
-    this.updateDecorationCache();
-    
-    // Refresh the tree (which will use the updated cache for decorations)
-    this.refresh();
-
-    // Notify the webview about the change in selected files
-    vscode.commands.executeCommand('promptcode.getSelectedFiles');
+    );
   }
 
   // Method to expand directories that match the search
@@ -1563,10 +1608,14 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
   // --- RESTORED: Method to set checked items from a list ---
   public async setCheckedItems(absoluteFilePaths: Set<string>, addToExisting: boolean = false): Promise<void> {
     this.debugLog(`Restored setCheckedItems: Received ${absoluteFilePaths.size} absolute paths. Add to existing: ${addToExisting}`);
-    if (!this.ignoreHelper) {
-        console.warn('Ignore helper not initialized, cannot filter based on ignore rules.');
-        // Optionally, initialize it here if feasible or throw an error
-    }
+    
+    // Use centralized mutation to ensure proper ordering
+    this.applySelectionMutation(
+      'Setting selected files…',
+      async () => {
+        if (!this.ignoreHelper) {
+          console.warn('Ignore helper not initialized, cannot filter based on ignore rules.');
+        }
 
     // Clear existing selections only if not adding to existing
     if (!addToExisting) {
@@ -1616,27 +1665,19 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
         }
     }
 
-    this.debugLog(`Updating parent states for ${parentDirsToUpdate.size} directories.`);
-    // Update parent chains
-    // Process updates sequentially to avoid potential race conditions
-    for (const dirPath of parentDirsToUpdate) {
-        try {
+        this.debugLog(`Updating parent states for ${parentDirsToUpdate.size} directories.`);
+        // Update parent chains
+        // Process updates sequentially to avoid potential race conditions
+        for (const dirPath of parentDirsToUpdate) {
+          try {
             await this.updateParentChain(dirPath);
-        } catch(error) {
-             console.error(`Error updating parent chain for ${dirPath} during list processing:`, error);
+          } catch(error) {
+            console.error(`Error updating parent chain for ${dirPath} during list processing:`, error);
+          }
         }
-    }
-     this.debugLog(`Finished updating parent states.`);
-
-
-    // Refresh the tree view to show new states
-    this.refresh();
-    
-    // Update decoration cache after bulk changes
-    this.updateDecorationCache();
-
-    // Notify the webview about the change
-    vscode.commands.executeCommand('promptcode.getSelectedFiles');
+        this.debugLog(`Finished updating parent states.`);
+      }
+    );
   }
   // --- END RESTORED ---
 

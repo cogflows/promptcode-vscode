@@ -787,8 +787,10 @@ export function activate(context: vscode.ExtensionContext) {
 				} catch (error) {
 					// File doesn't exist or other error
 					console.log(`[getSelectedFiles] Error checking ${filePath}:`, error);
-					checkedItems.delete(filePath); // Remove from selection
-					fileTypeCache.delete(filePath); // Remove from cache
+					// DO NOT mutate checkedItems here - this is a read operation!
+					// The cleanup should be done separately by a dedicated cleanup function
+					// checkedItems.delete(filePath); // REMOVED: Don't mutate during read
+					fileTypeCache.delete(filePath); // Remove from cache is OK (cache maintenance)
 					return { filePath, isFile: false };
 				}
 			});
@@ -974,21 +976,18 @@ export function activate(context: vscode.ExtensionContext) {
 				}
 			}
 
-			// Uncheck the file in the checkedItems map
+			// Use centralized mutation to ensure proper ordering
 			if (absoluteFilePath && checkedItems.has(absoluteFilePath)) {
-				checkedItems.set(absoluteFilePath, vscode.TreeItemCheckboxState.Unchecked);
-
-				// Update parent directories' checkbox states
-				await fileExplorerProvider.updateParentStates(absoluteFilePath);
-
-				// Refresh decorations to update badges (●/◐)
-				fileExplorerProvider.refreshDecorations([absoluteFilePath]);
-
-				// Refresh the tree view
-				fileExplorerProvider.refresh();
-
-				// Update the selected files list in the webview
-				vscode.commands.executeCommand('promptcode.getSelectedFiles');
+				fileExplorerProvider.applySelectionMutation(
+					'Deselecting file…',
+					async () => {
+						// Delete the entry (don't store Unchecked state)
+						checkedItems.delete(absoluteFilePath);
+						// Update parent directories' checkbox states
+						await fileExplorerProvider.updateParentStates(absoluteFilePath);
+					},
+					[absoluteFilePath]
+				);
 			} else {
 				console.log(`File not in checked items or path unresolved: ${absoluteFilePath || relativeFilePath}`);
 			}
@@ -1064,26 +1063,31 @@ export function activate(context: vscode.ExtensionContext) {
 
 			console.log(`Found ${filesToDeselect.length} files to deselect in directory: ${dirPath}`);
 
-			// Deselect each file
-            let parentsToUpdate = new Set<string>();
-			for (const filePath of filesToDeselect) {
-				checkedItems.set(filePath, vscode.TreeItemCheckboxState.Unchecked);
-                parentsToUpdate.add(path.dirname(filePath));
+			// Use centralized mutation to ensure proper ordering
+			if (filesToDeselect.length > 0) {
+				const affectedPaths = Array.from(new Set(filesToDeselect.map(f => path.dirname(f))));
+				
+				fileExplorerProvider.applySelectionMutation(
+					`Removing ${filesToDeselect.length} files from directory…`,
+					async () => {
+						// Delete each file (don't store Unchecked state)
+						for (const filePath of filesToDeselect) {
+							checkedItems.delete(filePath);
+						}
+						
+						// Update parent states for affected directories
+						const parentsToUpdate = new Set<string>();
+						for (const filePath of filesToDeselect) {
+							parentsToUpdate.add(path.dirname(filePath));
+						}
+						
+						for(const parentPath of parentsToUpdate) {
+							await fileExplorerProvider.updateParentChain(parentPath);
+						}
+					},
+					affectedPaths
+				);
 			}
-
-             // Update parent states efficiently
-            for(const parentPath of parentsToUpdate) {
-               await fileExplorerProvider.updateParentStates(path.join(parentPath, 'dummyfile')); // Pass a dummy path inside the parent
-            }
-
-			// Refresh decorations for all affected directories
-			fileExplorerProvider.refreshDecorations();
-
-			// Refresh the tree view
-			fileExplorerProvider.refresh();
-
-			// Update the selected files list in the webview
-			vscode.commands.executeCommand('promptcode.getSelectedFiles');
 		} catch (error) {
 			console.error(`Error removing directory: ${dirPath}`, error);
 		}
@@ -1146,6 +1150,20 @@ export function activate(context: vscode.ExtensionContext) {
 		fileExplorerProvider.refresh();
 		vscode.commands.executeCommand('promptcode.getSelectedFiles');
 		vscode.window.showInformationMessage('File explorer refreshed successfully');
+	});
+
+	// Register cleanup selected files command (removes non-existent and ignored files)
+	const cleanupSelectedFilesCommand = vscode.commands.registerCommand('promptcode.cleanupSelectedFiles', async () => {
+		console.log('Cleaning up selected files (removing non-existent and ignored items)');
+		const beforeCount = [...checkedItems.entries()].filter(([_, checked]) => checked).length;
+		fileExplorerProvider.cleanupSelectedFiles();
+		const afterCount = [...checkedItems.entries()].filter(([_, checked]) => checked).length;
+		const removedCount = beforeCount - afterCount;
+		if (removedCount > 0) {
+			vscode.window.showInformationMessage(`Removed ${removedCount} invalid items from selection`);
+		} else {
+			vscode.window.showInformationMessage('No invalid items found in selection');
+		}
 	});
 
 	// Register command to open file from tree (triggered by clicking on label)
@@ -1564,6 +1582,7 @@ export function activate(context: vscode.ExtensionContext) {
 		copyRelativeFilePathCommand,
 		clearTokenCacheCommand,
 		refreshFileExplorerCommand,
+		cleanupSelectedFilesCommand,
 		openFileInEditorCommand,
 		revealFirstSearchMatch,
 		addToPromptCodeSelection,

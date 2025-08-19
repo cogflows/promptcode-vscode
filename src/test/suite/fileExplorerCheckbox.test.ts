@@ -150,10 +150,11 @@ suite('FileExplorer Checkbox Behavior Tests', () => {
             fileExplorer.handleCheckboxToggle(fileItem, vscode.TreeItemCheckboxState.Unchecked);
             await new Promise(resolve => setTimeout(resolve, 100));
 
+            // When unchecked, the entry is deleted (not stored as Unchecked)
             assert.strictEqual(
                 checkedItems.get(file1Path),
-                vscode.TreeItemCheckboxState.Unchecked,
-                'File should be unchecked'
+                undefined,
+                'File entry should be deleted when unchecked'
             );
         });
     });
@@ -215,25 +216,25 @@ suite('FileExplorer Checkbox Behavior Tests', () => {
             fileExplorer.handleCheckboxToggle(dirItem, vscode.TreeItemCheckboxState.Unchecked);
             await new Promise(resolve => setTimeout(resolve, 200));
 
-            // All files in dir1 should be unchecked
+            // All files in dir1 should have their entries deleted (not stored as Unchecked)
             const file3Path = path.join(tempDir, 'dir1', 'file3.txt');
             const file4Path = path.join(tempDir, 'dir1', 'file4.txt');
             const file5Path = path.join(tempDir, 'dir1', 'subdir', 'file5.txt');
 
             assert.strictEqual(
                 checkedItems.get(file3Path),
-                vscode.TreeItemCheckboxState.Unchecked,
-                'file3.txt should be unchecked when parent directory is unchecked'
+                undefined,
+                'file3.txt entry should be deleted when parent directory is unchecked'
             );
             assert.strictEqual(
                 checkedItems.get(file4Path),
-                vscode.TreeItemCheckboxState.Unchecked,
-                'file4.txt should be unchecked when parent directory is unchecked'
+                undefined,
+                'file4.txt entry should be deleted when parent directory is unchecked'
             );
             assert.strictEqual(
                 checkedItems.get(file5Path),
-                vscode.TreeItemCheckboxState.Unchecked,
-                'file5.txt should be unchecked when parent directory is unchecked'
+                undefined,
+                'file5.txt entry should be deleted when parent directory is unchecked'
             );
         });
     });
