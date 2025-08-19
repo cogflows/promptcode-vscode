@@ -1,8 +1,11 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import chalk from 'chalk';
+import { createTwoFilesPatch } from 'diff';
+import inquirer from 'inquirer';
 import { getCursorTemplatesDir } from '../utils/paths';
 import { spinner } from '../utils/spinner';
+import { isInteractive } from '../utils/environment';
 import { 
   findCursorFolder, 
   findCursorRulesFile,
@@ -12,12 +15,95 @@ import {
   PROMPTCODE_CURSOR_RULES 
 } from '../utils/cursor-integration';
 import { findOrCreateIntegrationDir } from '../utils/integration-helper';
+import { calculateChecksum, areContentsEquivalent } from '../utils/canonicalize';
+import { isKnownTemplateVersion } from '../utils/template-checksums';
 
 interface CursorOptions {
   path?: string;
   force?: boolean;
   yes?: boolean;
   uninstall?: boolean;
+  skipModified?: boolean;
+}
+
+/**
+ * Update a single template file with smart conflict detection
+ */
+async function updateTemplateFile(
+  templatePath: string,
+  targetPath: string,
+  fileName: string,
+  options?: { skipModified?: boolean }
+): Promise<'created' | 'updated' | 'unchanged' | 'kept' | 'replaced'> {
+  const newContent = await fs.promises.readFile(templatePath, 'utf8');
+  
+  if (!fs.existsSync(targetPath)) {
+    await fs.promises.writeFile(targetPath, newContent);
+    return 'created';
+  }
+  
+  const existingContent = await fs.promises.readFile(targetPath, 'utf8');
+  
+  // Check if identical
+  if (existingContent === newContent) {
+    return 'unchanged';
+  }
+  
+  // Check if only formatting differs
+  const fileExt = path.extname(fileName).toLowerCase();
+  if (areContentsEquivalent(existingContent, newContent, fileExt)) {
+    await fs.promises.writeFile(targetPath, newContent);
+    return 'updated';
+  }
+  
+  // Calculate checksum to see if it's a known version
+  const existingChecksum = calculateChecksum(existingContent, fileExt);
+  
+  if (isKnownTemplateVersion(fileName, existingChecksum)) {
+    // File matches a known version - safe to auto-update
+    await fs.promises.writeFile(targetPath, newContent);
+    return 'updated';
+  }
+  
+  // File has user modifications
+  if (options?.skipModified) {
+    console.log(chalk.yellow(`  ⚠️  Skipping ${fileName} (contains local changes)`));
+    return 'kept';
+  }
+  
+  if (!isInteractive()) {
+    console.log(chalk.yellow(`  ⚠️  Skipping ${fileName} (contains local changes, non-interactive)`));
+    return 'kept';
+  }
+  
+  // Show diff
+  const patch = createTwoFilesPatch(
+    fileName, fileName,
+    existingContent, newContent,
+    'Current', 'New'
+  );
+  
+  console.log(chalk.yellow(`\n📝 File has local changes: ${fileName}`));
+  console.log(patch);
+  
+  const { action } = await inquirer.prompt([{
+    type: 'list',
+    name: 'action',
+    message: 'What would you like to do?',
+    choices: [
+      { name: 'Keep my version', value: 'keep' },
+      { name: 'Use new version (discard my changes)', value: 'replace' },
+      { name: 'Skip for now', value: 'skip' }
+    ],
+    default: 'keep'
+  }]);
+  
+  if (action === 'replace') {
+    await fs.promises.writeFile(targetPath, newContent);
+    return 'replaced';
+  }
+  
+  return 'kept';
 }
 
 /**
@@ -71,7 +157,7 @@ ${templateContent}
 /**
  * Set up Cursor rules (.cursor/rules/*.mdc)
  */
-async function setupCursorRules(projectPath: string): Promise<{ cursorDir: string | null; isNew: boolean; installedCount?: number; updatedCount?: number; skippedCount?: number }> {
+async function setupCursorRules(projectPath: string, options?: CursorOptions): Promise<{ cursorDir: string | null; isNew: boolean; stats: { created: number; updated: number; kept: number; unchanged: number } }> {
   // Find or create .cursor directory
   const { dir: cursorDir, isNew } = await findOrCreateIntegrationDir(
     projectPath,
@@ -81,7 +167,7 @@ async function setupCursorRules(projectPath: string): Promise<{ cursorDir: strin
   
   if (!cursorDir) {
     console.log(chalk.red('Cannot setup Cursor integration without .cursor directory'));
-    return { cursorDir: null, isNew: false };
+    return { cursorDir: null, isNew: false, stats: { created: 0, updated: 0, kept: 0, unchanged: 0 } };
   }
   
   const rulesDir = path.join(cursorDir, 'rules');
@@ -93,9 +179,7 @@ async function setupCursorRules(projectPath: string): Promise<{ cursorDir: strin
   const rules = PROMPTCODE_CURSOR_RULES;
   
   const templatesDir = getCursorTemplatesDir();
-  let installedCount = 0;
-  let updatedCount = 0;
-  let skippedCount = 0;
+  const stats = { created: 0, updated: 0, kept: 0, unchanged: 0 };
   
   for (const rule of rules) {
     const templatePath = path.join(templatesDir, rule);
@@ -106,28 +190,28 @@ async function setupCursorRules(projectPath: string): Promise<{ cursorDir: strin
       continue;
     }
     
-    const newContent = await fs.promises.readFile(templatePath, 'utf8');
+    const result = await updateTemplateFile(
+      templatePath,
+      rulePath,
+      rule,
+      { skipModified: options?.skipModified }
+    );
     
-    // Check if file exists and has same content
-    if (fs.existsSync(rulePath)) {
-      const existingContent = await fs.promises.readFile(rulePath, 'utf8');
-      if (existingContent === newContent) {
-        skippedCount++;
-        continue; // Skip if content is identical
-      }
-      updatedCount++;
-    } else {
-      installedCount++;
+    switch (result) {
+      case 'created': stats.created++; break;
+      case 'updated': stats.updated++; break;
+      case 'kept': stats.kept++; break;
+      case 'replaced': stats.updated++; break;
+      case 'unchanged': stats.unchanged++; break;
     }
-    
-    await fs.promises.writeFile(rulePath, newContent);
   }
   
   // Report what was done
   const actions = [];
-  if (installedCount > 0) actions.push(`${installedCount} new`);
-  if (updatedCount > 0) actions.push(`${updatedCount} updated`);
-  if (skippedCount > 0) actions.push(`${skippedCount} unchanged`);
+  if (stats.created > 0) actions.push(`${stats.created} new`);
+  if (stats.updated > 0) actions.push(`${stats.updated} updated`);
+  if (stats.kept > 0) actions.push(`${stats.kept} kept`);
+  if (stats.unchanged > 0) actions.push(`${stats.unchanged} unchanged`);
   
   if (actions.length > 0) {
     console.log(chalk.green(`✓ Cursor rules: ${actions.join(', ')}`));
@@ -148,7 +232,7 @@ mcp.json
     );
   }
   
-  return { cursorDir, isNew, installedCount, updatedCount, skippedCount };
+  return { cursorDir, isNew, stats };
 }
 
 // MCP configuration removed - will be added when MCP server is ready
@@ -203,7 +287,7 @@ export async function cursorCommand(options: CursorOptions & { detect?: boolean 
   try {
     // Set up modern Cursor rules
     spin.text = 'Installing Cursor rules...';
-    const { cursorDir, isNew, installedCount = 0, updatedCount = 0, skippedCount = 0 } = await setupCursorRules(projectPath);
+    const { cursorDir, isNew, stats } = await setupCursorRules(projectPath, options);
     
     if (!cursorDir) {
       // Fall back to legacy .cursorrules if user didn't approve new .cursor
@@ -227,9 +311,10 @@ export async function cursorCommand(options: CursorOptions & { detect?: boolean 
     console.log(chalk.bold('\n📝 Updated files:'));
     if (cursorDir) {
       const summary = [];
-      if (installedCount > 0) summary.push(`${installedCount} new`);
-      if (updatedCount > 0) summary.push(`${updatedCount} updated`);
-      if (skippedCount > 0) summary.push(`${skippedCount} unchanged`);
+      if (stats.created > 0) summary.push(`${stats.created} new`);
+      if (stats.updated > 0) summary.push(`${stats.updated} updated`);
+      if (stats.kept > 0) summary.push(`${stats.kept} kept`);
+      if (stats.unchanged > 0) summary.push(`${stats.unchanged} unchanged`);
       console.log(chalk.gray(`  ${path.relative(projectPath, path.join(cursorDir, 'rules/'))} - ${summary.length > 0 ? summary.join(', ') : `${PROMPTCODE_CURSOR_RULES.length} rules`}`));
     } else if (cursorRulesFile) {
       console.log(chalk.gray(`  ${path.relative(projectPath, cursorRulesFile)} - PromptCode usage instructions`));

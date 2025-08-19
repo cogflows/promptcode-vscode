@@ -287,7 +287,13 @@ check_path() {
       # Check if PATH export already exists (idempotent)
       if ! grep -q "# PromptCode CLI PATH" "$shell_config" 2>/dev/null; then
         echo "Would you like to add ${INSTALL_DIR} to your PATH automatically? [Y/n]" >&2
-        response=$(safe_read "" "Y")
+        # Default to "N" in non-interactive mode for security
+        local default_ans="Y"
+        if ! is_interactive; then 
+          default_ans="N"
+          print_info "Non-interactive mode: defaulting to no PATH modification for security."
+        fi
+        response=$(safe_read "" "$default_ans")
         if [[ ! "$response" =~ ^[Nn]$ ]]; then
           if [[ "$SHELL" == */fish ]]; then
             echo "# PromptCode CLI PATH" >> "$shell_config"
@@ -313,40 +319,6 @@ check_path() {
   fi
 }
 
-# Detect Claude Code environment
-detect_claude_code() {
-  local current_dir="$PWD"
-  local claude_found=false
-
-  # Check environment variable first
-  if [ -n "${CLAUDE_PROJECT_DIR:-}" ]; then
-    claude_found=true
-    print_info "Claude Code environment detected (via CLAUDE_PROJECT_DIR)"
-  else
-    # Search for .claude folder up to 5 levels
-    local check_dir="$current_dir"
-    local levels=0
-    while [ "$check_dir" != "/" ] && [ $levels -lt 5 ]; do
-      if [ -d "$check_dir/.claude" ]; then
-        claude_found=true
-        print_info "Claude Code project detected at: $check_dir"
-        break
-      fi
-      check_dir=$(dirname "$check_dir")
-      ((levels++))
-    done
-  fi
-
-  if [ "$claude_found" = true ]; then
-    echo "" >&2
-    print_info "🤖 Claude Code Integration Available!"
-    echo "Run this command to set up the integration:" >&2
-    echo "" >&2
-    echo "  ${CLI_NAME} cc" >&2
-    echo "" >&2
-    echo "This will configure cost approval hooks for AI commands." >&2
-  fi
-}
 
 # Uninstall function
 uninstall() {
@@ -473,11 +445,14 @@ main() {
   # Check PATH
   check_path
 
-  # Detect Claude Code
-  detect_claude_code
-
   echo "" >&2
   print_success "Installation complete! 🎉"
+  
+  # Automatically check for integrations
+  echo "" >&2
+  print_info "Checking for AI environment integrations..."
+  "${CLI_NAME}" integrate --auto-detect 2>/dev/null || true
+  
   echo "" >&2
   echo "Get started with:" >&2
   echo "  ${CLI_NAME} --help" >&2

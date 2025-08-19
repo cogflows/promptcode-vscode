@@ -1,0 +1,66 @@
+# CLI and Core Implementation Review Preset
+# Focus: recent changes to update/install, ask-expert, cc command, domain boundaries
+# Created: 2025-01-14
+
+# Core package - all TypeScript source
+packages/core/src/**/*.ts
+
+# CLI package - main source code
+packages/cli/src/**/*.ts
+packages/cli/src/**/*.js
+
+# CLI Commands (specific focus areas)
+packages/cli/src/commands/expert.ts
+packages/cli/src/commands/cc.ts
+packages/cli/src/commands/cursor.ts
+packages/cli/src/commands/update.ts
+packages/cli/src/commands/generate.ts
+packages/cli/src/commands/preset.ts
+
+# Templates - Claude and Cursor integration
+packages/cli/src/claude-templates/**/*.md
+packages/cli/src/cursor-templates/**/*.mdc
+.claude/commands/**/*.md
+
+# Build and configuration scripts
+packages/cli/scripts/**/*.js
+packages/cli/scripts/**/*.sh
+packages/cli/scripts/**/*.ps1
+
+# Utils and services
+packages/cli/src/utils/**/*.ts
+packages/cli/src/services/**/*.ts
+packages/cli/src/providers/**/*.ts
+
+# Test files for verification
+packages/cli/test/**/*.ts
+packages/cli/test/**/*.js
+
+# Configuration files
+packages/cli/package.json
+packages/core/package.json
+packages/cli/tsconfig.json
+packages/core/tsconfig.json
+
+# Documentation
+CLAUDE.md
+packages/cli/README.md
+packages/core/README.md
+.claude/README.md
+
+# Root configuration
+package.json
+tsconfig.json
+
+# Exclusions
+!**/node_modules/**
+!**/dist/**
+!**/build/**
+!**/.cache/**
+!**/*.log
+!**/*.tmp
+!**/coverage/**
+!**/.git/**
+!**/*.vsix
+!**/*.tgz
+!**/*.zip

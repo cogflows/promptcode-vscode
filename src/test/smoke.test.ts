@@ -1,5 +1,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
 
 suite('Extension Smoke Test', () => {
     vscode.window.showInformationMessage('Start smoke tests.');
@@ -26,6 +28,18 @@ suite('Extension Smoke Test', () => {
         assert.ok(commands.includes('promptcode.clearTokenCache'));
     });
 
+    test('All contributed commands from package.json are registered', async () => {
+        // This test ensures all commands in package.json are actually registered
+        const packageJsonPath = path.join(__dirname, '../../package.json');
+        const pkg = JSON.parse(await fs.readFile(packageJsonPath, 'utf8'));
+        const contributed = (pkg.contributes?.commands ?? []).map((c: any) => c.command);
+        const registered = await vscode.commands.getCommands(true);
+        
+        for (const cmd of contributed) {
+            assert.ok(registered.includes(cmd), `Missing command: ${cmd}`);
+        }
+    });
+
     test('Core integration should work', async () => {
         // This test verifies that the core package is properly integrated
         const ext = vscode.extensions.getExtension('cogflows.promptcode');
@@ -43,6 +57,20 @@ suite('Extension Smoke Test', () => {
             assert.doesNotThrow(() => {
                 ext.exports.deactivate();
             });
+        }
+    });
+
+    suiteTeardown(async () => {
+        // Ensure extension is properly deactivated to prevent hanging
+        // This disposes of any watchers/timers that might keep the process alive
+        const ext = vscode.extensions.getExtension('cogflows.promptcode');
+        if (ext?.isActive && ext.exports?.deactivate) {
+            try {
+                await ext.exports.deactivate();
+            } catch (e) {
+                // Don't fail the build on deactivation errors
+                console.warn('Extension deactivate threw:', e);
+            }
         }
     });
 });

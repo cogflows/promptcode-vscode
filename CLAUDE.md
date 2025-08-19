@@ -56,12 +56,13 @@ promptocode-vscode/
   - Generate Prompt tab - Final prompt generation with token counting
   - Apply & Review tab - AI response parsing and code diff visualization
 - **File Selection**: `src/fileExplorer.ts` - Custom tree view provider that respects .gitignore and custom ignore patterns
-- **Prompt Generation**: `src/promptGenerator.ts` - Generates structured prompts with XML-like tags for file contents and instructions
+- **Prompt Generation**: `packages/core/src/promptBuilder.ts` - Builds structured prompts from selected files and instructions
 - **Token Counting**: `src/tokenCounter.ts` - Uses GPT tokenizer with caching for real-time token counts
 
 ### CLI Tool
 - **Entry Point**: `packages/cli/src/index.ts`
-- **Commands**: generate, expert, preset, stats, diff, extract
+- **Commands**: generate, expert, preset, stats
+  > Note: `diff`, `watch`, `validate`, and `extract` were removed in v0.3.x.
 - **AI Providers**: OpenAI, Anthropic, Google, xAI
 - **Build System**: Bun for fast compilation to standalone binary
 
@@ -133,6 +134,7 @@ After recent changes:
 - All tests pass - run with `cd packages/cli && bun test`
 - To release: Create a tag and push to trigger GitHub Actions
 - DO NOT make shortcuts, always use the most idiomatic and generic solution
+- **We are in 2025**, when using web search, you should use the most recent information (don't state 2024)
 
 <!-- PROMPTCODE-CLI-START -->
 # PromptCode CLI Integration

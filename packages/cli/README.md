@@ -77,15 +77,32 @@ promptcode generate -t code-review       # Apply template
 
 ### Preset Management
 
-Create and manage file pattern presets:
+Create and manage file pattern presets with automatic optimization:
 
 ```bash
-promptcode preset --list                 # List all presets
-promptcode preset --create api-routes    # Create new preset
-promptcode preset --info api-routes      # Show preset details
-promptcode preset --edit api-routes      # Edit in your editor
-promptcode preset --delete api-routes    # Delete preset
+# Basic commands
+promptcode preset list                         # List all presets
+promptcode preset create backend               # Create basic preset
+promptcode preset info backend                 # Show preset details
+promptcode preset edit backend                 # Edit in your editor
+promptcode preset delete backend               # Delete preset
+
+# Smart preset creation with auto-optimization
+promptcode preset create api --from-files "src/api/**/*.ts"  # Auto-optimized (balanced)
+promptcode preset create api --from-files "src/api/**/*.ts" --optimization-level aggressive
+
+# Optimize existing presets
+promptcode preset optimize backend             # Preview changes (dry-run)
+promptcode preset optimize backend --write     # Apply optimization
+
+# Search presets
+promptcode preset search "auth"                # Find presets by content
 ```
+
+**Optimization levels:**
+- `minimal` - Full directory coverage only (backwards-compatible)
+- `balanced` - Extension grouping + single-file exclusions (default)
+- `aggressive` - Maximum compression with brace notation
 
 ### Expert Consultation
 
@@ -234,7 +251,7 @@ promptcode expert "Write comprehensive documentation for this module" \
 promptcode preset create legacy-code
 promptcode expert "What needs to be refactored for React 18 migration?" \
   --preset legacy-code \
-  --model gpt-4o
+  --model gpt-5
 
 # Get specific migration steps
 promptcode generate --preset legacy-code \
@@ -273,7 +290,7 @@ promptcode preset create old-components
 # Get AI-powered refactoring suggestions
 promptcode expert "How should I refactor these components for better performance?" \
   --preset old-components \
-  --model claude-3-5-sonnet
+  --model sonnet-4
 
 # Generate refactoring prompt for external AI tools
 promptcode generate -p old-components -t refactor | your-ai-tool
@@ -307,7 +324,7 @@ promptcode generate \
 # Get improvement suggestions
 promptcode expert "How can we improve our microservices architecture?" \
   --preset backend \
-  --model gpt-4o
+  --model gpt-5
 ```
 
 ### Quick Fixes
@@ -322,6 +339,32 @@ promptcode expert "How do I fix this TypeScript error?" \
 promptcode expert "Optimize this function for better performance" \
   -f "src/utils/dataProcessor.ts"
 ```
+
+## Cost Threshold
+
+By default, operations estimated above **$0.50** require approval. Configure via:
+
+- CLI: `--cost-threshold <usd>`
+- Env: `PROMPTCODE_COST_THRESHOLD=<usd>`
+
+Use `--yes` or `--force` (alias) to bypass confirmation **only after user approval**.
+
+## Exit Codes
+
+The CLI uses standardized exit codes for programmatic usage:
+
+| Code | Name | Description |
+|------|------|-------------|
+| 0 | SUCCESS | Operation completed successfully |
+| 1 | GENERAL_ERROR | General error |
+| 2 | APPROVAL_REQUIRED | Cost approval needed (non-interactive mode) |
+| 3 | INVALID_INPUT | Invalid command or arguments |
+| 4 | MISSING_API_KEY | API key not configured |
+| 5 | CONTEXT_TOO_LARGE | Context exceeds model limits |
+| 6 | FILE_NOT_FOUND | File or preset not found |
+| 7 | OPERATION_CANCELLED | User cancelled operation |
+| 8 | NETWORK_ERROR | Network or API error |
+| 9 | PERMISSION_DENIED | Permission denied for file operations |
 
 ## Tips
 

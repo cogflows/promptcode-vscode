@@ -1,4 +1,4 @@
-/* PromptCode - Copyright (C) 2025. All Rights Reserved. */
+/* PromptCode - MIT License - Copyright (c) 2025 cogflows */
 
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
@@ -114,6 +114,14 @@ export function activate(context: vscode.ExtensionContext) {
 
 	// Create the file explorer provider and assign to exported variable
 	fileExplorerProvider = new FileExplorerProvider();
+	
+	// Set the context for state persistence
+	fileExplorerProvider.setContext(context);
+
+	// Register the FileDecorationProvider for tri-state visual indication
+	context.subscriptions.push(
+		vscode.window.registerFileDecorationProvider(fileExplorerProvider)
+	);
 
 	// Register the tree data provider
 	const treeView = vscode.window.createTreeView('promptcodeExplorer', {
@@ -148,6 +156,25 @@ export function activate(context: vscode.ExtensionContext) {
 		})
 	);
 
+	// Listen for active editor changes to sync with file tree
+	context.subscriptions.push(
+		vscode.window.onDidChangeActiveTextEditor(async (editor) => {
+			if (editor && treeView.visible) {
+				const filePath = editor.document.uri.fsPath;
+				try {
+					await fileExplorerProvider.revealPath(filePath, { 
+						select: true, 
+						focus: false, 
+						expand: true 
+					});
+				} catch (error) {
+					// Silently ignore if file can't be revealed (e.g., outside workspace)
+					console.log(`Could not reveal file in tree: ${filePath}`);
+				}
+			}
+		})
+	);
+
 	// Create the PromptCode webview provider
 	const promptCodeProvider = new PromptCodeWebViewProvider(context.extensionUri, context);
 
@@ -171,8 +198,8 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 
 	// Register the command to filter files based on search term
-	const filterFilesCommand = vscode.commands.registerCommand('promptcode.filterFiles', async (searchTerm: string, globPattern?: boolean, shouldIncludeFolders?: boolean) => {
-		await fileExplorerProvider.setSearchTerm(searchTerm, globPattern, shouldIncludeFolders);
+	const filterFilesCommand = vscode.commands.registerCommand('promptcode.filterFiles', async (searchTerm: string, isGlob?: boolean, includeFolders?: boolean) => {
+		await fileExplorerProvider.setSearchTerm(searchTerm, isGlob, includeFolders);
 	});
 
 	// If tree view is already visible on activation, show the webview
@@ -760,8 +787,10 @@ export function activate(context: vscode.ExtensionContext) {
 				} catch (error) {
 					// File doesn't exist or other error
 					console.log(`[getSelectedFiles] Error checking ${filePath}:`, error);
-					checkedItems.delete(filePath); // Remove from selection
-					fileTypeCache.delete(filePath); // Remove from cache
+					// DO NOT mutate checkedItems here - this is a read operation!
+					// The cleanup should be done separately by a dedicated cleanup function
+					// checkedItems.delete(filePath); // REMOVED: Don't mutate during read
+					fileTypeCache.delete(filePath); // Remove from cache is OK (cache maintenance)
 					return { filePath, isFile: false };
 				}
 			});
@@ -947,18 +976,18 @@ export function activate(context: vscode.ExtensionContext) {
 				}
 			}
 
-			// Uncheck the file in the checkedItems map
+			// Use centralized mutation to ensure proper ordering
 			if (absoluteFilePath && checkedItems.has(absoluteFilePath)) {
-				checkedItems.set(absoluteFilePath, vscode.TreeItemCheckboxState.Unchecked);
-
-				// Update parent directories' checkbox states
-				await fileExplorerProvider.updateParentStates(absoluteFilePath);
-
-				// Refresh the tree view
-				fileExplorerProvider.refresh();
-
-				// Update the selected files list in the webview
-				vscode.commands.executeCommand('promptcode.getSelectedFiles');
+				fileExplorerProvider.applySelectionMutation(
+					'Deselecting file…',
+					async () => {
+						// Delete the entry (don't store Unchecked state)
+						checkedItems.delete(absoluteFilePath);
+						// Update parent directories' checkbox states
+						await fileExplorerProvider.updateParentStates(absoluteFilePath);
+					},
+					[absoluteFilePath]
+				);
 			} else {
 				console.log(`File not in checked items or path unresolved: ${absoluteFilePath || relativeFilePath}`);
 			}
@@ -1034,24 +1063,31 @@ export function activate(context: vscode.ExtensionContext) {
 
 			console.log(`Found ${filesToDeselect.length} files to deselect in directory: ${dirPath}`);
 
-			// Deselect each file
-            let parentsToUpdate = new Set<string>();
-			for (const filePath of filesToDeselect) {
-				checkedItems.set(filePath, vscode.TreeItemCheckboxState.Unchecked);
-                parentsToUpdate.add(path.dirname(filePath));
+			// Use centralized mutation to ensure proper ordering
+			if (filesToDeselect.length > 0) {
+				const affectedPaths = Array.from(new Set(filesToDeselect.map(f => path.dirname(f))));
+				
+				fileExplorerProvider.applySelectionMutation(
+					`Removing ${filesToDeselect.length} files from directory…`,
+					async () => {
+						// Delete each file (don't store Unchecked state)
+						for (const filePath of filesToDeselect) {
+							checkedItems.delete(filePath);
+						}
+						
+						// Update parent states for affected directories
+						const parentsToUpdate = new Set<string>();
+						for (const filePath of filesToDeselect) {
+							parentsToUpdate.add(path.dirname(filePath));
+						}
+						
+						for(const parentPath of parentsToUpdate) {
+							await fileExplorerProvider.updateParentChain(parentPath);
+						}
+					},
+					affectedPaths
+				);
 			}
-
-             // Update parent states efficiently
-            for(const parentPath of parentsToUpdate) {
-               await fileExplorerProvider.updateParentStates(path.join(parentPath, 'dummyfile')); // Pass a dummy path inside the parent
-            }
-
-
-			// Refresh the tree view
-			fileExplorerProvider.refresh();
-
-			// Update the selected files list in the webview
-			vscode.commands.executeCommand('promptcode.getSelectedFiles');
 		} catch (error) {
 			console.error(`Error removing directory: ${dirPath}`, error);
 		}
@@ -1116,10 +1152,26 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.window.showInformationMessage('File explorer refreshed successfully');
 	});
 
+	// Register cleanup selected files command (removes non-existent and ignored files)
+	const cleanupSelectedFilesCommand = vscode.commands.registerCommand('promptcode.cleanupSelectedFiles', async () => {
+		console.log('Cleaning up selected files (removing non-existent and ignored items)');
+		const beforeCount = [...checkedItems.entries()].filter(([_, checked]) => checked).length;
+		await fileExplorerProvider.cleanupSelectedFiles();
+		const afterCount = [...checkedItems.entries()].filter(([_, checked]) => checked).length;
+		const removedCount = beforeCount - afterCount;
+		if (removedCount > 0) {
+			vscode.window.showInformationMessage(`Removed ${removedCount} invalid items from selection`);
+		} else {
+			vscode.window.showInformationMessage('No invalid items found in selection');
+		}
+	});
+
 	// Register command to open file from tree (triggered by clicking on label)
 	const openFileFromTreeCommand = vscode.commands.registerCommand('promptcode.openFileFromTree', async (resourceUri: vscode.Uri) => {
 		try {
-			const doc = await vscode.workspace.openTextDocument(resourceUri);
+			// Strip query parameters for file:// URIs to avoid issues with decoration isolation
+			const safeUri = resourceUri.scheme === 'file' ? resourceUri.with({ query: '' }) : resourceUri;
+			const doc = await vscode.workspace.openTextDocument(safeUri);
 			await vscode.window.showTextDocument(doc, { preview: false });
 		} catch (error) {
 			console.error('Error opening file:', error);
@@ -1127,8 +1179,8 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	});
 
-	// Register open file in editor command
-	const openFileInEditorCommand = vscode.commands.registerCommand('promptcode.openFileInEditor', (fileItemOrPath: FileItem | string, workspaceFolderRootPath?: string) => {
+	// Register open file in editor command (with auto-reveal in tree)
+	const openFileInEditorCommand = vscode.commands.registerCommand('promptcode.openFileInEditor', async (fileItemOrPath: FileItem | string, workspaceFolderRootPath?: string) => {
 		try {
 			let fileUri: vscode.Uri | undefined;
 
@@ -1174,14 +1226,17 @@ export function activate(context: vscode.ExtensionContext) {
 
 			// Open the document
 			if (fileUri) {
-				vscode.window.showTextDocument(fileUri, { preview: false }) // Open non-preview
-					.then(
-						editor => console.log(`Successfully opened ${fileUri.fsPath}`),
-						error => {
-							console.error(`Failed to open document: ${error}`);
-							vscode.window.showErrorMessage(`Failed to open file: ${error.message}`);
-						}
-					);
+				const editor = await vscode.window.showTextDocument(fileUri, { preview: false }); // Open non-preview
+				console.log(`Successfully opened ${fileUri.fsPath}`);
+				
+				// Auto-reveal in PromptCode tree without stealing focus
+				if (fileExplorerProvider) {
+					await fileExplorerProvider.revealPath(fileUri.fsPath, { 
+						select: true, 
+						focus: false, 
+						expand: true 
+					});
+				}
 			} else {
 				throw new Error('Failed to resolve file URI');
 			}
@@ -1191,6 +1246,78 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	});
 
+	// Register reveal first search match command
+	const revealFirstSearchMatch = vscode.commands.registerCommand('promptcode.revealFirstSearchMatch', async () => {
+		try {
+			const results = await (fileExplorerProvider?.getCurrentSearchResults() ?? Promise.resolve([]));
+			if (results.length > 0) {
+				await fileExplorerProvider.expandToShowFile(results[0]);
+				await fileExplorerProvider.revealPath(results[0], { 
+					select: true, 
+					focus: false, 
+					expand: true 
+				});
+			} else {
+				console.log('No search matches to reveal');
+			}
+		} catch (e) {
+			console.error('revealFirstSearchMatch failed', e);
+		}
+	});
+
+	// Register add to PromptCode selection command (from Explorer context menu)
+	const addToPromptCodeSelection = vscode.commands.registerCommand('promptcode.addToPromptCodeSelection', async (resource?: vscode.Uri, resources?: vscode.Uri[]) => {
+		const uris = (resources && resources.length ? resources : resource ? [resource] : [])
+			.filter(u => u?.scheme === 'file');
+		
+		if (uris.length === 0) {
+			const active = vscode.window.activeTextEditor?.document.uri;
+			if (active?.scheme === 'file') {
+				uris.push(active);
+			}
+		}
+		
+		if (uris.length === 0) {
+			vscode.window.showWarningMessage('No file or folder selected.');
+			return;
+		}
+
+		// Expand directories recursively, respecting ignore rules
+		const toCheck = new Set<string>();
+		const helper = fileExplorerProvider.getIgnoreHelper();
+		
+		const addPath = async (p: string) => {
+			try {
+				const st = await fs.promises.stat(p);
+				if (st.isDirectory()) {
+					const entries = await fs.promises.readdir(p, { withFileTypes: true });
+					for (const e of entries) {
+						const child = path.join(p, e.name);
+						if (helper?.shouldIgnore(child)) {continue;}
+						await addPath(child);
+					}
+				} else if (st.isFile()) {
+					if (!helper || !helper.shouldIgnore(p)) {
+						toCheck.add(p);
+					}
+				}
+			} catch { 
+				// Ignore errors for inaccessible files
+			}
+		};
+		
+		for (const u of uris) {
+			await addPath(u.fsPath);
+		}
+		
+		if (toCheck.size === 0) {
+			vscode.window.showInformationMessage('No non-ignored files to add.');
+			return;
+		}
+		
+		await fileExplorerProvider.setCheckedItems(toCheck, true);
+		vscode.window.showInformationMessage(`Added ${toCheck.size} file(s) to PromptCode selection.`);
+	});
 
 	// Register show new content command
 	const showNewContentCommand = vscode.commands.registerCommand('promptcode.showNewContent', async (message) => {
@@ -1457,7 +1584,10 @@ export function activate(context: vscode.ExtensionContext) {
 		copyRelativeFilePathCommand,
 		clearTokenCacheCommand,
 		refreshFileExplorerCommand,
+		cleanupSelectedFilesCommand,
 		openFileInEditorCommand,
+		revealFirstSearchMatch,
+		addToPromptCodeSelection,
 		showNewContentCommand,
 		showDiffCommand,
 		debugRefreshSelectedFilesCommand,
@@ -1471,10 +1601,26 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 // This method is called when your extension is deactivated
-export function deactivate() {
+export async function deactivate(): Promise<void> {
 	// Send final telemetry event before deactivation
 	const telemetryService = TelemetryService.getInstance();
 	telemetryService.sendTelemetryEvent('extension_deactivated');
+	
+	// Dispose of telemetry reporter to prevent hanging
+	// The telemetry reporter's dispose() is async and is the most common
+	// cause of hanging test runners. We must await it.
+	await telemetryService.dispose();
+	
+	// Dispose of file explorer provider (clears search timers)
+	if (fileExplorerProvider) {
+		fileExplorerProvider.dispose();
+	}
+	
+	// Clear all token and file type caches
+	tokenCache.clear();
+	fileTypeCache.clear();
+	
+	console.log('PromptCode extension deactivated cleanly.');
 }
 
 // Helper function to validate includeOptions
@@ -1531,28 +1677,8 @@ async function generatePrompt(
 		includeFileContents: includeOptions.files
 	});
 
-	// Apply compatibility transformation to maintain existing tag names
-	// Core uses: <instructions>, <file_map>, <file_contents>
-	// Extension expects: <user_instructions>, <file_tree>, <files>
-	let prompt = result.prompt;
-	if (prompt) {
-		// Improved tag translation per O3-pro recommendation
-		// This approach is more maintainable and safer
-		const TAG_MAP = {
-			'instructions': 'user_instructions',
-			'/instructions': '/user_instructions',
-			'file_map': 'file_tree',
-			'/file_map': '/file_tree',
-			'file_contents': 'files',
-			'/file_contents': '/files'
-		} as const;
-		
-		// Replace all tags in a single pass with exact matches only
-		prompt = prompt.replace(/<(\/?)(instructions|file_map|file_contents)>/g, (match, slash, tag) => {
-			const key = `${slash}${tag}` as keyof typeof TAG_MAP;
-			return TAG_MAP[key] ? `<${TAG_MAP[key]}>` : match;
-		});
-	}
+	// No transformation needed - core now uses standard tags
+	const prompt = result.prompt;
 
 	const endTime = performance.now();
 	console.log(`Prompt generation took ${endTime - startTime}ms for ${selectedFiles.length} files`);

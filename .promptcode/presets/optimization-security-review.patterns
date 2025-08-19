@@ -1,0 +1,25 @@
+# optimization-security-review preset
+# Generated: 2025-08-15T08:01:51.726Z
+# Source: from-files (packages/cli/src/commands/preset.ts, packages/cli/src/commands/expert.ts, packages/cli/src/commands/generate.ts, packages/core/src/utils/patternOptimizer.ts, packages/core/src/utils/generatePatternsFromSelection.ts, packages/core/src/utils/filePattern.ts, packages/cli/src/utils/validation.ts, packages/cli/src/utils/constants.ts, packages/cli/src/utils/paths.ts, packages/core/test/patternOptimizer.test.ts, packages/cli/test/commands/expert.test.ts, packages/cli/src/commands/integrate.ts, packages/cli/src/utils/integration-detector.ts, packages/cli/src/utils/canonicalize.ts)
+# Optimization: balanced
+# Stats: files=14, patterns=14, saved=0
+# Applied:
+# - full-directory: packages/core/test (from 1 → 1)
+
+packages/core/test/**
+packages/cli/src/commands/expert.ts
+packages/cli/src/commands/generate.ts
+packages/cli/src/commands/integrate.ts
+packages/cli/src/commands/preset.ts
+packages/cli/src/utils/canonicalize.ts
+packages/cli/src/utils/constants.ts
+packages/cli/src/utils/integration-detector.ts
+packages/cli/src/utils/paths.ts
+packages/cli/src/utils/validation.ts
+packages/cli/test/commands/expert.test.ts
+packages/core/src/utils/filePattern.ts
+packages/core/src/utils/generatePatternsFromSelection.ts
+packages/core/src/utils/patternOptimizer.ts
+!**/node_modules/**
+!**/dist/**
+!**/build/**

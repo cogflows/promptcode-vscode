@@ -1,0 +1,36 @@
+# Integration Enhancement Feature Files
+# Files relevant to improving the installation and update flow with better DX
+
+# Core integration commands
+src/commands/cc.ts
+src/commands/cursor.ts
+src/commands/update.ts
+src/commands/uninstall.ts
+
+# Integration utilities
+src/utils/claude-integration.ts
+src/utils/cursor-integration.ts
+src/utils/integration-helper.ts
+src/utils/environment.ts
+src/utils/update-checker.ts
+src/utils/paths.ts
+
+# Installation scripts
+scripts/install.sh
+scripts/install.ps1
+
+# Main entry point
+src/index.ts
+
+# Build and packaging
+package.json
+scripts/embed-templates.js
+scripts/inject-version.js
+
+# Template files (for reference)
+src/claude-templates/*.md
+src/cursor-templates/*.mdc
+
+# Documentation
+CLAUDE.md
+README.md

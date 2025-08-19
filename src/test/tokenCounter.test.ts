@@ -65,6 +65,10 @@ suite('Token Counter Tests', () => {
     const count1 = await countTokensWithCache(testFile1);
     const cacheEntry1 = tokenCache.get(testFile1);
     const hash1 = cacheEntry1!.sha256;
+    const timestamp1 = cacheEntry1!.timestamp;
+
+    // Wait a tiny bit to ensure timestamp will be different
+    await new Promise(resolve => setTimeout(resolve, 10));
 
     // Modify file with same size but different content
     const content2 = 'Goodbye Universe'; // Also 16 characters
@@ -80,7 +84,7 @@ suite('Token Counter Tests', () => {
     
     // Token counts might be different (depends on tokenization)
     // But the important thing is the cache was invalidated and recomputed
-    assert.ok(cacheEntry2!.timestamp > cacheEntry1!.timestamp, 'Cache should be updated');
+    assert.ok(cacheEntry2!.timestamp > timestamp1, 'Cache should be updated');
   });
 
   test('should reuse cache when content hash is identical', async () => {

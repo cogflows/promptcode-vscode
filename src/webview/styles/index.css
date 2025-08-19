@@ -13,6 +13,7 @@
 @import './cards.css';
 @import './buttons.css';
 @import './forms.css';
+@import './search.css';
 
 /* Tab-specific styles */
 @import './selectfiles.css';

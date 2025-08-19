@@ -1,0 +1,40 @@
+/* Search Box Clear Button Fix */
+#clear-search {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: pointer;
+  font-size: 16px;
+  display: none; /* Hidden by default, shown via JavaScript when there's text */
+  z-index: 1;
+  color: var(--vscode-input-foreground);
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+  /* Increase hit area for better accessibility */
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+#clear-search:hover {
+  opacity: 1;
+}
+
+/* Ensure search input has enough right padding for the clear button */
+#file-search {
+  padding-right: 36px !important; /* Override base styles to make room for X button */
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  #clear-search {
+    opacity: 0.9;
+  }
+  #clear-search:hover {
+    opacity: 1;
+    outline: 1px solid var(--vscode-input-foreground);
+  }
+}

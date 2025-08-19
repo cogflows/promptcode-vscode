@@ -1,0 +1,51 @@
+# Test Infrastructure Review Preset
+# Reviews the comprehensive test implementation for PromptCode VS Code extension
+# Created after implementing P0 priority tests as recommended
+
+# Core test infrastructure
+src/test/runTests.ts
+src/test/index.ts
+
+# P0 Priority test implementations (NEW)
+src/test/extensionActivation.test.ts
+src/test/ignorePatterns.test.ts
+src/test/promptContract.test.ts
+
+# Existing test files for context
+src/test/smoke.test.ts
+src/test/*.test.ts
+
+# Playwright E2E configuration (NEW)
+playwright.config.ts
+test/webview/selectFiles.e2e.spec.ts
+
+# CI/CD workflow updates
+.github/workflows/test.yml
+.github/workflows/release.yml
+
+# Package configuration with test scripts
+package.json
+
+# Build and test scripts
+scripts/build-tests.js
+scripts/build.js
+
+# Core package integration (what we're testing)
+packages/core/src/index.ts
+packages/core/src/scanner.ts
+packages/core/src/builder.ts
+
+# Extension entry point (for context)
+src/extension.ts
+
+# File explorer and selection logic being tested
+src/fileExplorer.ts
+src/promptGenerator.ts
+
+# Webview implementation (for E2E context)
+src/webviewProvider.ts
+src/webview/*.js
+
+# Project documentation
+CLAUDE.md
+README.md

@@ -1,6 +1,6 @@
 ---
-allowed-tools: Bash(promptcode expert:*), Bash(promptcode preset list:*), Bash(promptcode generate:*), Bash(open -a Cursor:*), Read(/tmp/expert-*:*), Write(/tmp/expert-consultation-*.md), Task
-description: Consult AI expert (O3/O3-pro) for complex problems with code context - supports ensemble mode for multiple models
+allowed-tools: Bash(promptcode expert:*), Bash(promptcode preset:*), Bash(promptcode generate:*), Bash(open:*), Read(/tmp/*), Write(/tmp/*), Task, Bash(command -v:*), Bash(cursor:*), Bash(code:*), Bash(echo:*), Bash(cat:*), Bash(wait:*), Bash([ -n:*), Bash(test:*)
+description: Consult AI expert for complex problems with code context - supports ensemble mode for multiple models
 ---
 
 Consult an expert about: $ARGUMENTS
@@ -9,17 +9,26 @@ Consult an expert about: $ARGUMENTS
 
 1. Analyze the request in $ARGUMENTS:
    - Extract the main question/problem
-   - Identify if code context would help (look for keywords matching our presets)
+   - Identify if code context would help (look for keywords about implementation, feature, code review, etc.)
    - Check for multiple model requests (e.g., "compare using o3 and gpt-5", "ask o3, gpt-5, and gemini")
-   - Available models from our MODELS list: o3, o3-pro, o3-mini, gpt-5, gpt-5-mini, gpt-5-nano, sonnet-4, opus-4, gemini-2.5-pro, gemini-2.5-flash, grok-4
+   - Get available models dynamically: `promptcode expert --models --json` (parse the JSON for model list)
    - If 2+ models detected → use ensemble mode
    - For single model: determine preference (if user mentions "o3-pro" or "o3 pro", use o3-pro)
 
-2. If code context needed, list available presets:
+2. Determine code context needs:
    ```bash
    promptcode preset list
    ```
-   Choose relevant preset(s) based on the question.
+   - Check if an existing preset matches the request (e.g., "security" → look for security-related presets)
+   - If no suitable preset exists, use the `/promptcode-preset-create` command:
+     ```
+     /promptcode-preset-create {description of what code to include based on the question}
+     ```
+     This will intelligently create a preset with the right patterns.
+   - Verify the preset:
+     ```bash
+     promptcode preset info {preset-name}
+     ```
 
 3. Prepare consultation file for review:
    - Create a consultation file at `/tmp/expert-consultation-{timestamp}.md`
@@ -32,36 +41,46 @@ Consult an expert about: $ARGUMENTS
      
      ## Context
      {any relevant context or background}
+     
+     ## Code Context
      ```
-   - If a preset would help, append the code context:
+   - Append the code context using the preset:
      ```bash
-     echo -e "\n## Code Context\n" >> "/tmp/expert-consultation-{timestamp}.md"
-     promptcode generate --preset "{preset_name}" >> "/tmp/expert-consultation-{timestamp}.md"
+     promptcode generate --preset "{preset_name}" -o /tmp/code-context-{timestamp}.txt
+     cat /tmp/code-context-{timestamp}.txt >> "/tmp/expert-consultation-{timestamp}.md"
      ```
 
-4. Open consultation for user review (if Cursor is available):
+4. Open consultation for user review:
    ```bash
-   open -a Cursor "/tmp/expert-consultation-{timestamp}.md"
+   # Try cursor first, then code, then EDITOR, then fallback to cat
+   if command -v cursor &> /dev/null; then
+     cursor "/tmp/expert-consultation-{timestamp}.md"
+   elif command -v code &> /dev/null; then
+     code "/tmp/expert-consultation-{timestamp}.md"
+   elif [ -n "$EDITOR" ]; then
+     "$EDITOR" "/tmp/expert-consultation-{timestamp}.md"
+   else
+     echo "📄 Consultation file created at: /tmp/expert-consultation-{timestamp}.md"
+     echo "No editor found. Please open the file manually to review."
+   fi
    ```
    
 5. Estimate cost and get approval:
-   - Model costs (from our pricing):
-     - O3: $2/$8 per million tokens (input/output)
-     - O3-pro: $20/$80 per million tokens (input/output)
-     - GPT-5: $1.25/$10 per million tokens
-     - GPT-5-mini: $0.25/$2 per million tokens
-     - Sonnet-4: $5/$20 per million tokens
-     - Opus-4: $25/$100 per million tokens
-     - Gemini-2.5-pro: $3/$12 per million tokens
-     - Grok-4: $5/$15 per million tokens
-   - Calculate based on file size (roughly: file_size_bytes / 4 = tokens)
+   - Use the CLI's built-in cost estimation:
+     ```bash
+     promptcode expert --prompt-file "/tmp/expert-consultation-{timestamp}.md" --model <model> --estimate-cost --json
+     ```
+   - Parse the JSON output to get:
+     - `tokens.input` - total input tokens
+     - `cost.total` - estimated total cost
+   - Check the exit code: 0 = success, 2 = approval required (cost > threshold)
    
    **For single model:**
-   - Say: "I've prepared the expert consultation (~{tokens} tokens). Model: {model}. You can edit the file to refine your question. Reply 'yes' to send to the expert (estimated cost: ${cost})."
+   - Say: "I've prepared the expert consultation using preset '{preset_name}' (~{tokens} tokens). Model: {model}. The consultation file is open in Cursor for review. Reply 'yes' to send to the expert (estimated cost: ${cost from CLI})."
    
    **For ensemble mode (multiple models):**
-   - Calculate total cost across all models
-   - Say: "I've prepared an ensemble consultation (~{tokens} tokens) with {models}. Total estimated cost: ${total_cost} ({model1}: ${cost1}, {model2}: ${cost2}, ...). Reply 'yes' to proceed with all models in parallel."
+   - Run --estimate-cost for each model in parallel to get costs
+   - Say: "I've prepared an ensemble consultation using preset '{preset_name}' (~{tokens} tokens) with {models}. Total estimated cost: ${total_cost} ({model1}: ${cost1}, {model2}: ${cost2}, ...). The consultation file is open for review. Reply 'yes' to proceed with all models in parallel."
 
 6. Execute based on mode:
 
@@ -71,18 +90,27 @@ Consult an expert about: $ARGUMENTS
    ```
    
    **Ensemble Mode (Parallel Execution):**
-   - Use Task tool to run multiple models in parallel
-   - Each task runs the same consultation file with different models
-   - Store each result in separate file: `/tmp/expert-{model}-{timestamp}.txt`
-   - Example for 3 models (run these in PARALLEL using Task tool):
+   - Use a SINGLE parent Task that orchestrates parallel sub-tasks (idiomatic for Claude Code)
+   - The parent Task:
+     1. Launches parallel sub-tasks for each model
+     2. Waits for all sub-tasks to complete
+     3. Reads all response files
+     4. Creates the synthesis report (Step 7)
+   - Structure:
      ```
-     Task 1: promptcode expert --prompt-file "/tmp/expert-consultation-{timestamp}.md" --model o3 --yes > /tmp/expert-o3-{timestamp}.txt
-     Task 2: promptcode expert --prompt-file "/tmp/expert-consultation-{timestamp}.md" --model gpt-5 --yes > /tmp/expert-gpt5-{timestamp}.txt  
-     Task 3: promptcode expert --prompt-file "/tmp/expert-consultation-{timestamp}.md" --model gemini-2.5-pro --yes > /tmp/expert-gemini-{timestamp}.txt
+     Task: "Ensemble consultation with {model1} and {model2}"
+     Prompt: "
+       Step 1: Run these consultations in PARALLEL as sub-tasks:
+       - Sub-task 1: promptcode expert --prompt-file '/tmp/expert-consultation-{timestamp}.md' --model {model1} --yes > /tmp/expert-{model1}-{timestamp}.txt 2>&1
+       - Sub-task 2: promptcode expert --prompt-file '/tmp/expert-consultation-{timestamp}.md' --model {model2} --yes > /tmp/expert-{model2}-{timestamp}.txt 2>&1
+       
+       Step 2: After both complete, read the response files
+       Step 3: Create synthesis report as described in Step 7
+       Step 4: Report back with synthesis and winner
+     "
      ```
-   - IMPORTANT: Launch all tasks at once for true parallel execution
-   - Wait for all tasks to complete
    - Note: The --yes flag confirms we have user approval for the cost
+   - The allowed-tools configuration permits these commands to run without additional prompts
 
 7. Handle the response:
 
@@ -152,10 +180,15 @@ Consult an expert about: $ARGUMENTS
    - For other errors: Report exact error message
 
 ## Important:
-- Default to O3 model unless O3-pro explicitly requested or needed for complex reasoning
+- **Always use presets** - either existing or create new ones for code context
+- **Create presets intelligently** - analyze the question to determine which files are relevant
+- **Show the preset name** to the user so they know what context is being used
+- Default to GPT-5 model unless another model is explicitly requested
 - For ensemble mode: limit to maximum 4 models to prevent resource exhaustion
 - Always show cost estimate before sending
 - Keep questions clear and specific
 - Include relevant code context when asking about specific functionality
-- NEVER automatically add --yes without user approval
+- NEVER automatically add --yes/--force without user approval
+- Only ask for approval ONCE before sending to expert (not for preparatory steps)
 - Reasoning effort defaults to 'high' (set in CLI) - no need to specify
+- Use `promptcode generate -o` to avoid stdout redirection issues

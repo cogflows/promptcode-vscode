@@ -61,13 +61,18 @@ export async function runCLI(
         PROMPTCODE_TEST: '1', // flag for CLI to detect test mode
         ...options.env,
       },
-      stdio: ['ignore', 'pipe', 'pipe'], // no stdin to prevent hanging
+      stdio: ['pipe', 'pipe', 'pipe'], // pipe all to ensure non-TTY
       detached: process.platform !== 'win32' // own process group for proper cleanup (not on Windows)
     });
     
     let stdout = '';
     let stderr = '';
     let timedOut = false;
+    
+    // Close stdin immediately to prevent hanging
+    if (child.stdin) {
+      child.stdin.end();
+    }
     
     // Set timeout if provided (shorter default for CI)
     const timeout = options.timeout || 10000; // Default 10s timeout (reduced from 30s)

@@ -39,7 +39,12 @@ export function findPromptcodeFolder(startPath: string): string | null {
   while (currentPath !== root) {
     const candidatePath = path.join(currentPath, '.promptcode');
     if (fsSync.existsSync(candidatePath)) {
-      return candidatePath;
+      try {
+        const st = fsSync.lstatSync(candidatePath);
+        if (st.isDirectory() && !st.isSymbolicLink()) {
+          return candidatePath;
+        }
+      } catch { /* continue */ }
     }
     
     const parentPath = path.dirname(currentPath);
@@ -48,6 +53,20 @@ export function findPromptcodeFolder(startPath: string): string | null {
   }
   
   return null;
+}
+
+/**
+ * Get the project root directory (parent of .promptcode folder)
+ * This is where preset patterns are relative to
+ */
+export function getProjectRoot(startPath: string): string {
+  const promptcodeFolder = findPromptcodeFolder(startPath);
+  if (promptcodeFolder) {
+    // Return parent of .promptcode
+    return path.dirname(promptcodeFolder);
+  }
+  // Default to current directory if no .promptcode found
+  return path.resolve(startPath);
 }
 
 /**
@@ -141,6 +160,15 @@ export function getPresetDir(projectPath: string): string {
   }
   // Default to creating in current project directory
   return path.join(projectPath, '.promptcode', 'presets');
+}
+
+/**
+ * Get the full path to a preset file
+ * Searches for existing .promptcode folder in parent directories
+ */
+export function getPresetPath(projectPath: string, presetName: string): string {
+  const presetsDir = getPresetDir(projectPath);
+  return path.join(presetsDir, `${presetName}.patterns`);
 }
 
 /**
@@ -242,9 +270,22 @@ export function assertInsideRoot(root: string, candidatePath: string): void {
 
 /**
  * Resolve project path from options or current directory
+ * Intelligently finds the project root by looking for .promptcode folder
  */
 export function resolveProjectPath(pathOption?: string): string {
-  return path.resolve(pathOption || process.cwd());
+  // Start from the provided path or current directory
+  const startPath = path.resolve(pathOption || process.cwd());
+  
+  // Try to find project root by looking for .promptcode folder
+  const promptcodeFolder = findPromptcodeFolder(startPath);
+  if (promptcodeFolder) {
+    // Return the parent of .promptcode (the project root)
+    return path.dirname(promptcodeFolder);
+  }
+  
+  // If no .promptcode found, return the resolved start path
+  // This allows the tool to work in projects without .promptcode yet
+  return startPath;
 }
 
 /**

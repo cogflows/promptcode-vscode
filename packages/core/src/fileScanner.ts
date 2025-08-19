@@ -2,8 +2,8 @@ import * as path from 'path';
 import * as fs from 'fs';
 import fg from 'fast-glob';
 import ignore from 'ignore';
-import { SelectedFile } from './types';
-import { countTokensWithCacheDetailed } from './tokenCounter';
+import { SelectedFile } from './types/index.js';
+import { countTokensWithCacheDetailed } from './tokenCounter.js';
 
 export interface ScanOptions {
   cwd: string;                    // workspace root
@@ -11,6 +11,7 @@ export interface ScanOptions {
   respectGitignore: boolean;
   customIgnoreFile?: string;      // .promptcode_ignore
   workspaceName?: string;         // Name of the workspace
+  followSymlinks?: boolean;       // Whether to follow symbolic links (default: false)
 }
 
 /**
@@ -35,7 +36,7 @@ async function loadIgnoreFile(filePath: string): Promise<string[]> {
  * @returns Array of selected files with metadata
  */
 export async function scanFiles(options: ScanOptions): Promise<SelectedFile[]> {
-  const { cwd, patterns, respectGitignore, customIgnoreFile, workspaceName = 'workspace' } = options;
+  const { cwd, patterns, respectGitignore, customIgnoreFile, workspaceName = 'workspace', followSymlinks = false } = options;
   
   // Initialize ignore instance
   const ig = ignore();
@@ -53,15 +54,62 @@ export async function scanFiles(options: ScanOptions): Promise<SelectedFile[]> {
     ig.add(customPatterns);
   }
   
-  // Always ignore these patterns
+  // Always ignore these patterns (comprehensive security-focused excludes)
   const defaultIgnores = [
+    // Dependencies and version control
     'node_modules/**',
     '.git/**',
+    '.svn/**',
+    '.hg/**',
+    
+    // Build outputs
     'dist/**',
     'out/**',
+    'build/**',
+    '.cache/**',
+    
+    // IDE and system files
     '.vscode/**',
-    '**/*.log',
-    '**/.DS_Store'
+    '**/.DS_Store',
+    
+    // Sensitive files and secrets
+    '**/.env*',
+    '**/*.pem',
+    '**/*.key',
+    '**/.ssh/**',
+    '**/.aws/**',
+    '**/.azure/**',
+    '**/.gcp/**',
+    '**/.kube/**',
+    '**/.gnupg/**',
+    '**/*.p12',
+    '**/*.pfx',
+    '**/*.pkcs12',
+    '**/*.jks',
+    '**/*.keystore',
+    '**/*.asc',
+    '**/*.enc',
+    
+    // Databases and backups
+    '**/*.sqlite',
+    '**/*.db',
+    '**/*.bak',
+    
+    // Archives and media (binary files)
+    '**/*.zip',
+    '**/*.tar',
+    '**/*.tar.gz',
+    '**/*.7z',
+    '**/*.jpg',
+    '**/*.jpeg',
+    '**/*.png',
+    '**/*.gif',
+    '**/*.mp4',
+    '**/*.avi',
+    '**/*.mov',
+    
+    // Logs
+    '**/*.log'
   ];
   ig.add(defaultIgnores);
   
@@ -71,6 +119,7 @@ export async function scanFiles(options: ScanOptions): Promise<SelectedFile[]> {
     absolute: true,
     dot: true,
     onlyFiles: true,
+    followSymbolicLinks: followSymlinks,
     ignore: [] // We'll handle ignoring ourselves
   });
   

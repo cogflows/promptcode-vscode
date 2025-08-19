@@ -3,7 +3,7 @@
   "name": "promptcode",
   "displayName": "promptcode",
   "description": "Generate prompt for LLM from your code",
-  "version": "0.5.1",
+  "version": "0.6.2",
   "license": "SEE LICENSE IN LICENSE",
   "repository": {
     "type": "git",
@@ -77,6 +77,14 @@
       {
         "command": "promptcode.openFileInEditor",
         "title": "Open in Editor"
+      },
+      {
+        "command": "promptcode.revealFirstSearchMatch",
+        "title": "PromptCode: Reveal First Search Match"
+      },
+      {
+        "command": "promptcode.addToPromptCodeSelection",
+        "title": "Add to PromptCode"
       }
     ],
     "configuration": {
@@ -177,6 +185,13 @@
           "when": "view == promptcodeExplorer && (viewItem == file || viewItem == directory)",
           "group": "1_copy@2"
         }
+      ],
+      "explorer/context": [
+        {
+          "command": "promptcode.addToPromptCodeSelection",
+          "group": "navigation@5",
+          "when": "resourceScheme == file"
+        }
       ]
     }
   },
@@ -191,6 +206,8 @@
     "lint": "eslint src",
     "test": "vscode-test",
     "test:unit": "npm run compile && npm run compile:tests && node ./out/test/runTests.js",
+    "test:extension": "npm run compile && npm run compile:tests && node ./out/test/runTests.js",
+    "test:webview": "playwright test -c playwright.config.ts",
     "compile:tests": "node ./scripts/build-tests.js",
     "build:prod": "node ./scripts/build.js --minify --publish",
     "build:dev": "node ./scripts/build.js",

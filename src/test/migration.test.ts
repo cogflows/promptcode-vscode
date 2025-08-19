@@ -3,7 +3,7 @@ import { buildPrompt, buildTreeFromSelection, generatePatternsFromSelection, cou
 import type { SelectedFile } from '@promptcode/core';
 
 suite('Core Migration Test', () => {
-    test('buildPrompt should generate correct output with tag compatibility', async () => {
+    test('buildPrompt should generate correct output with standard tags', async () => {
         const selectedFiles: SelectedFile[] = [
             {
                 path: 'file1.ts',
@@ -31,7 +31,7 @@ suite('Core Migration Test', () => {
 
         const prompt = result.prompt;
 
-        // Verify the prompt contains expected tags
+        // Verify the prompt contains expected standard tags
         assert.ok(prompt.includes('<user_instructions>'));
         assert.ok(prompt.includes('Test instructions'));
         assert.ok(prompt.includes('</user_instructions>'));
@@ -127,25 +127,4 @@ suite('Core Migration Test', () => {
         assert.ok(tokens < 100); // Should be much less than 100 for this short string
     });
 
-    test('Tag compatibility layer should transform old tags to new ones', () => {
-        // This tests the tag transformation that happens in extension.ts
-        const oldPrompt = '<instructions>Test</instructions><file_map>tree</file_map><file_contents>content</file_contents>';
-        
-        // Simulate the tag transformation logic from extension.ts
-        const TAG_MAP = {
-            'instructions': 'user_instructions',
-            '/instructions': '/user_instructions',
-            'file_map': 'file_tree',
-            '/file_map': '/file_tree',
-            'file_contents': 'files',
-            '/file_contents': '/files'
-        } as const;
-        
-        const newPrompt = oldPrompt.replace(/<(\/?)(instructions|file_map|file_contents)>/g, (match, slash, tag) => {
-            const key = `${slash}${tag}` as keyof typeof TAG_MAP;
-            return TAG_MAP[key] ? `<${TAG_MAP[key]}>` : match;
-        });
-        
-        assert.strictEqual(newPrompt, '<user_instructions>Test</user_instructions><file_tree>tree</file_tree><files>content</files>');
-    });
 });

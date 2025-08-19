@@ -1,0 +1,16 @@
+# preset-optimization-changes preset
+# Generated: 2025-08-14T19:02:54.923Z
+# Source: from-files (packages/core/src/utils/patternOptimizer.ts, packages/cli/src/commands/preset.ts, packages/cli/src/commands/expert.ts, packages/cli/src/commands/generate.ts, packages/cli/src/utils/paths.ts, packages/core/src/utils/generatePatternsFromSelection.ts, packages/cli/src/claude-templates/promptcode-preset-create.md, packages/cli/test/commands/preset-optimize.test.ts, packages/core/test/utils/patternOptimizer.test.ts)
+# Optimization: minimal
+# Stats: files=7, patterns=7, saved=0
+
+packages/cli/src/claude-templates/promptcode-preset-create.md
+packages/cli/src/commands/expert.ts
+packages/cli/src/commands/generate.ts
+packages/cli/src/commands/preset.ts
+packages/cli/src/utils/paths.ts
+packages/core/src/utils/generatePatternsFromSelection.ts
+packages/core/src/utils/patternOptimizer.ts
+!**/node_modules/**
+!**/dist/**
+!**/build/**

@@ -5,16 +5,43 @@ alwaysApply: false
 
 Create a new promptcode preset based on a description.
 
+## Basic Usage
+
 When asked to create a preset, run:
 ```bash
 promptcode preset create <preset-name>
 ```
 
-This will:
-1. Create a new preset file in `.promptcode/presets/`
-2. Add the specified file patterns
-3. Make it available for use with other commands
+This creates a basic preset template that you can edit manually.
 
-After creation, edit `.promptcode/presets/<preset-name>.patterns` to refine the file patterns.
+## Smart Creation with Auto-Optimization
 
-Example: `promptcode preset create authentication-system`
+For better results, create presets from existing files:
+```bash
+# Automatically optimizes patterns from concrete files
+promptcode preset create <preset-name> --from-files "src/api/**/*.ts" "src/utils/**/*.ts"
+
+# Control optimization level (default: balanced)
+promptcode preset create <preset-name> --from-files "**/*.ts" --optimization-level aggressive
+```
+
+Optimization levels:
+- **minimal**: Light optimization, preserves most patterns
+- **balanced**: Default, good balance of pattern reduction
+- **aggressive**: Maximum reduction, fewer patterns
+
+## What It Does
+
+1. Creates preset file in `.promptcode/presets/<preset-name>.patterns`
+2. If using `--from-files`: Analyzes files and generates optimized patterns
+3. Makes preset available for all promptcode commands
+
+## Optimizing Existing Presets
+
+You can also optimize presets after creation:
+```bash
+promptcode preset optimize <preset-name>           # Preview changes
+promptcode preset optimize <preset-name> --write   # Apply optimization
+```
+
+Example: `promptcode preset create api-endpoints --from-files "src/api/**/*.ts"`

@@ -15,5 +15,16 @@ This displays:
 - Total file count
 - Token count estimate
 - List of matched files
+- Usage examples
+
+## Optimizing Presets
+
+If the preset has too many patterns or includes too many files, optimize it:
+```bash
+promptcode preset optimize <preset-name>           # Preview changes
+promptcode preset optimize <preset-name> --write   # Apply optimization
+```
+
+Optimization intelligently reduces pattern count while maintaining file coverage.
 
 Example: `promptcode preset info backend`

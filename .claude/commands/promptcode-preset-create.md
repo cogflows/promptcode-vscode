@@ -21,13 +21,16 @@ Create a promptcode preset for: $ARGUMENTS
    - Use kebab-case (e.g., "auth-system", "microlearning-utils")
    - Keep it concise but descriptive
 
-4. Create the preset:
+4. Create the preset (automatically optimized from concrete files):
    ```bash
-   promptcode preset create "{preset_name}"
+   # When you identify specific files, always use --from-files for smart optimization
+   promptcode preset create "{preset_name}" --from-files {file-globs...}
+   # default optimization-level is "balanced"
+   # to control: --optimization-level minimal|balanced|aggressive
    ```
-   This creates `.promptcode/presets/{preset_name}.patterns`
+   This creates `.promptcode/presets/{preset_name}.patterns` with optimized patterns.
 
-5. Edit the preset file to add patterns:
+5. Edit the preset file to add patterns (if needed):
    - Start with a header comment explaining what the preset captures
    - Add inclusion patterns for the main code
    - Add patterns for related tests and documentation

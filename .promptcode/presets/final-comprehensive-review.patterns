@@ -1,0 +1,49 @@
+# Final Comprehensive Review - All Recent Changes & OSS Readiness
+# This preset includes all files modified in our recent security fixes
+# plus critical infrastructure files for OSS release assessment
+
+# Core extension files with recent changes
+src/extension.ts
+src/fileExplorer.ts
+src/webviewProvider.ts
+
+# Webview files with recent changes
+src/webview/selectFilesTab.js
+
+# Test files to show our comprehensive test coverage
+src/test/suite/decorationIsolation.test.ts
+src/test/suite/fileExplorerDecorationWebviewBug.test.ts
+src/test/suite/fileExplorerCheckbox.test.ts
+src/test/suite/fileExplorerSearch.test.ts
+src/test/suite/fileExplorer.test.ts
+
+# CLI files with recent fix
+packages/cli/src/commands/expert.ts
+packages/cli/test/commands/expert.test.ts
+
+# Critical configuration files for OSS release
+package.json
+LICENSE
+README.md
+CHANGELOG.md
+.github/workflows/*.yml
+
+# Security and quality configurations
+.eslintrc.json
+tsconfig.json
+.gitignore
+
+# Documentation
+CLAUDE.md
+packages/cli/README.md
+
+# Build and deployment scripts
+scripts/build.js
+scripts/*.js
+
+# Exclude build outputs and dependencies
+!node_modules
+!out
+!dist
+!.vscode-test
+!*.vsix

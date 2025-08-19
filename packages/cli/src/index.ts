@@ -13,8 +13,59 @@ import { ccCommand } from './commands/cc';
 import { cursorCommand } from './commands/cursor';
 import { updateCommand } from './commands/update';
 import { uninstallCommand } from './commands/uninstall';
+import { integrateCommand } from './commands/integrate';
+import { modelsCommand } from './commands/models';
 import { BUILD_VERSION } from './version';
 import { startUpdateCheck } from './utils/update-checker';
+import { exitWithCode, EXIT_CODES } from './utils/exit-codes';
+
+// Windows update auto-finalization
+// Completes pending update by swapping .new binary on startup
+(async function completePendingWindowsUpdate() {
+  if (process.platform !== 'win32') return;
+  
+  try {
+    const currentBinary = process.execPath;
+    const stagedBinary = `${currentBinary}.new`;
+    
+    // Check if there's a pending update
+    if (fs.existsSync(stagedBinary)) {
+      const backupPath = `${currentBinary}.bak`;
+      
+      try {
+        // Try atomic replacement
+        // First backup current binary
+        fs.renameSync(currentBinary, backupPath);
+        
+        // Move staged binary to current location
+        fs.renameSync(stagedBinary, currentBinary);
+        
+        // Clean up backup after successful swap
+        try { 
+          fs.unlinkSync(backupPath); 
+        } catch {
+          // Ignore cleanup errors
+        }
+        
+        // Notify user (to stderr to avoid polluting stdout)
+        console.error(chalk.green('[promptcode] Applied pending update successfully.'));
+        
+      } catch (err) {
+        // If swap failed, try to restore backup
+        if (fs.existsSync(backupPath) && !fs.existsSync(currentBinary)) {
+          try {
+            fs.renameSync(backupPath, currentBinary);
+          } catch {
+            // Can't restore, leave .new file for manual intervention
+          }
+        }
+        // Silent failure - don't break normal operation
+      }
+    }
+  } catch {
+    // Ignore all errors - don't interfere with normal CLI operation
+  }
+})();
 
 
 /**
@@ -42,7 +93,7 @@ function showHelpOrError(args: string[]): void {
   console.error(chalk.gray('  promptcode expert "Why is this slow?" -f "src/**/*.ts"'));
   console.error(chalk.gray('  promptcode preset create backend\n'));
   console.error(chalk.gray('For more help: promptcode --help'));
-  process.exit(1);
+  exitWithCode(EXIT_CODES.INVALID_INPUT);
 }
 
 const program = new Command()
@@ -86,12 +137,13 @@ Examples:
   $ promptcode generate -f "src/**/*.ts"     # Specific patterns
   $ promptcode generate -p backend           # Use preset
   $ promptcode generate -t code-review       # Apply template
-  $ promptcode generate -p api -o prompt.md  # Save to file`)
+  $ promptcode generate -p api -o prompt.md  # Save to file
+  $ promptcode generate -p api -i "Review for security issues"  # Inline instructions`)
   .option('-p, --preset <name>', 'use a preset (shorthand for -l)')
   .option('-f, --files <patterns...>', 'file glob patterns')
   .option('-l, --list <file>', 'file list or preset name (deprecated, use -p)')
   .option('-t, --template <name>', 'apply a template')
-  .option('-i, --instructions <file>', 'custom instructions file')
+  .option('-i, --instructions <text|file>', 'instructions text or path to instructions file')
   .option('-o, --out <file>', 'output file (default: stdout)')
   .option('--output <file>', 'output file (alias for --out)')
   .option('--json', 'output JSON with metadata')
@@ -100,6 +152,9 @@ Examples:
   .option('--save-preset <name>', 'save file patterns as a preset')
   .option('--dry-run', 'show what would be included without generating')
   .option('--token-warning <n>', 'token threshold for warning (default: 50000)')
+  .option('--estimate-cost', 'estimate cost without generating')
+  .option('--cost-threshold <usd>', 'maximum allowed cost before approval', process.env.PROMPTCODE_COST_THRESHOLD || '0.50')
+  .option('--model <name>', 'model to use for cost estimation (default: gpt-5)')
   .option('-y, --yes', 'skip confirmation prompts')
   .allowExcessArguments(false)
   .action(async (options) => {
@@ -130,21 +185,28 @@ program
   .description('Manage file pattern presets for quick context switching')
   .addHelpText('after', `
 Actions:
-  list              List all presets (default)
-  create <name>     Create a new preset
-  info <name>       Show preset details and token count
-  search <query>    Search presets by name or content
-  edit <name>       Edit preset in your editor
-  delete <name>     Delete a preset
+  list                List all presets (default)
+  create <name>       Create a new preset (auto-optimizes with --from-files)
+  info <name>         Show preset details and token count
+  optimize <name>     Optimize existing preset patterns (dry-run by default)
+  search <query>      Search presets by name or content
+  edit <name>         Edit preset in your editor
+  delete <name>       Delete a preset
 
 Examples:
   $ promptcode preset list
-  $ promptcode preset create backend
+  $ promptcode preset create api --from-files "src/api/**/*.ts"
   $ promptcode preset info backend
+  $ promptcode preset optimize backend           # Preview changes
+  $ promptcode preset optimize backend --write   # Apply changes
   $ promptcode preset search "auth"
   $ promptcode generate -p backend
-  $ promptcode preset list --json        # JSON output
-  $ promptcode preset info backend --json # JSON with token counts
+
+Options:
+  --from-files <patterns...>     File patterns for create (auto-optimizes)
+  --optimization-level <level>   Optimization level: minimal|balanced|aggressive (default: balanced)
+  --write                        Apply optimization changes (for optimize command)
+  --json                         Output in JSON format
 
 Legacy flags (still supported):
   $ promptcode preset --create backend
@@ -153,13 +215,19 @@ Legacy flags (still supported):
   .option('--list', 'list all presets (legacy)')
   .option('--create <name>', 'create a new preset (legacy)')
   .option('--info <name>', 'show preset info (legacy)')
+  .option('--optimize <name>', 'optimize preset patterns (legacy)')
   .option('--edit <name>', 'edit preset (legacy)')
   .option('--delete <name>', 'delete a preset (legacy)')
   .option('--search <query>', 'search presets (legacy)')
+  .option('--from-files <patterns...>', 'file patterns (space/comma separated)')
+  .option('--optimization-level <level>', 'optimization level: minimal|balanced|aggressive', 'balanced')
+  .option('--level <level>', 'alias for --optimization-level')
+  .option('--write', 'apply optimization changes (for optimize command)')
+  .option('--dry-run', 'preview changes without writing')
   .option('--json', 'output in JSON format (for list and info)')
   .action(async (action, name, options) => {
     // Handle direct subcommand syntax
-    if (action && ['list', 'create', 'info', 'edit', 'delete', 'search'].includes(action)) {
+    if (action && ['list', 'create', 'info', 'optimize', 'edit', 'delete', 'search'].includes(action)) {
       if (action === 'list') {
         options.list = true;
       } else if (name) {
@@ -206,12 +274,15 @@ Examples:
   .option('--stream', 'stream response in real-time')
   .option('--save-preset <name>', 'save file patterns as a preset')
   .option('-y, --yes', 'automatically confirm prompts')
+  .option('--force', 'alias for --yes (skip cost confirmation)')
   .option('--web-search', 'enable web search for current information (enabled by default for supported models)')
   .option('--no-web-search', 'disable web search even for supported models')
   .option('--verbosity <level>', 'response verbosity: low (concise), medium, high (detailed)', 'low')
   .option('--reasoning-effort <level>', 'reasoning depth: minimal, low, medium, high (default)', 'high')
   .option('--service-tier <tier>', 'service tier: auto, flex (50% cheaper), priority (enterprise)')
   .option('--json', 'output response in JSON format with usage stats')
+  .option('--estimate-cost', 'estimate cost without running the query (dry-run)')
+  .option('--cost-threshold <usd>', 'cost threshold for requiring approval (default: 0.50)', parseFloat)
   .allowExcessArguments(false)
   .action(async (question, options) => {
     await expertCommand(question, options);
@@ -225,6 +296,21 @@ program
   .option('--reset', 'reset all configuration')
   .action(async (options) => {
     await configCommand(options);
+  });
+
+// Models command - List available AI models
+program
+  .command('models')
+  .description('List available AI models and their capabilities')
+  .option('--json', 'output in JSON format')
+  .option('--all', 'show all models including unavailable ones')
+  .addHelpText('after', `
+Examples:
+  $ promptcode models                 # List available models
+  $ promptcode models --all           # Show all models (including unavailable)
+  $ promptcode models --json          # Output as JSON for scripting`)
+  .action(async (options) => {
+    await modelsCommand(options);
   });
 
 // CC command - Claude integration setup
@@ -275,12 +361,34 @@ Examples:
     await cursorCommand(options);
   });
 
+// Integrate command - Unified integration setup
+program
+  .command('integrate')
+  .description('Automatically detect and set up AI environment integrations')
+  .addHelpText('after', `
+This command detects Claude Code and Cursor environments and offers to set them up.
+Used automatically after install/update, or can be run manually.
+
+Examples:
+  $ promptcode integrate              # Detect and set up integrations
+  $ promptcode integrate --auto-detect # Offer setup only if environments found
+  $ promptcode integrate --skip-modified # Skip files with local changes`)
+  .option('--path <dir>', 'project directory', process.cwd())
+  .option('--auto-detect', 'automatically detect and offer integrations')
+  .option('-y, --yes', 'skip confirmation prompts')
+  .option('--skip-modified', 'skip files that have local modifications')
+  .option('--force', 'force overwrite all files')
+  .action(async (options) => {
+    await integrateCommand(options);
+  });
+
 // Stats command (quick stats about current directory)
 program
   .command('stats')
   .description('Show token statistics for current project or preset')
   .option('--path <dir>', 'project root directory', process.cwd())
   .option('-l, --preset <name>', 'analyze a specific preset')
+  .option('--json', 'output in JSON format')
   .addHelpText('after', '\nShows file count, total tokens, and breakdown by file type.')
   .action(async (options) => {
     const { scanFiles, initializeTokenCounter } = await import('@promptcode/core');
@@ -338,7 +446,37 @@ program
         filesByExt[ext].tokens += file.tokenCount;
       }
       
-      // Display results
+      // Sort extensions by token count
+      const sortedExts = Object.entries(filesByExt)
+        .sort((a, b) => b[1].tokens - a[1].tokens);
+      
+      // Output JSON format if requested
+      if (options.json) {
+        const output = {
+          project: path.basename(projectPath),
+          preset: options.preset || null,
+          totalFiles: files.length,
+          totalTokens,
+          averageTokensPerFile: Math.round(totalTokens / files.length),
+          fileTypes: sortedExts.map(([ext, stats]) => ({
+            extension: ext,
+            fileCount: stats.count,
+            tokenCount: stats.tokens,
+            percentage: parseFloat(((stats.tokens / totalTokens) * 100).toFixed(2))
+          })),
+          topFiles: files
+            .sort((a, b) => b.tokenCount - a.tokenCount)
+            .slice(0, 10)
+            .map(f => ({
+              path: path.relative(projectPath, f.path),
+              tokens: f.tokenCount
+            }))
+        };
+        console.log(JSON.stringify(output, null, 2));
+        return;
+      }
+      
+      // Display human-readable results
       const title = options.preset 
         ? `Preset Statistics: ${chalk.cyan(options.preset)}`
         : `Project Statistics: ${chalk.cyan(path.basename(projectPath))}`;
@@ -350,11 +488,9 @@ program
       console.log(`Average tokens/file: ${chalk.cyan(Math.round(totalTokens / files.length).toLocaleString())}`);
       
       console.log(chalk.bold('\nTop file types by token count:'));
-      const sortedExts = Object.entries(filesByExt)
-        .sort((a, b) => b[1].tokens - a[1].tokens)
-        .slice(0, 10);
+      const topExts = sortedExts.slice(0, 10);
         
-      for (const [ext, stats] of sortedExts) {
+      for (const [ext, stats] of topExts) {
         const percentage = ((stats.tokens / totalTokens) * 100).toFixed(1);
         console.log(`  ${ext.padEnd(15)} ${chalk.cyan(stats.count.toString().padStart(5))} files  ${chalk.cyan(stats.tokens.toLocaleString().padStart(10))} tokens  ${chalk.gray(`(${percentage}%)`)}`);
       }
@@ -436,7 +572,7 @@ if (args[0] && args[0].startsWith('--')) {
   const possibleCommand = args[0].substring(2);
   const knownCommandNames = [
     'generate', 'cache', 'templates', 'list-templates', 'preset',
-    'expert', 'config', 'cc', 'stats', 'history', 'update', 'uninstall'
+    'expert', 'config', 'models', 'cc', 'stats', 'history', 'update', 'uninstall'
   ];
   
   if (knownCommandNames.includes(possibleCommand)) {
@@ -449,7 +585,7 @@ if (args[0] && args[0].startsWith('--')) {
 
 const knownCommands = [
   'generate', 'cache', 'templates', 'list-templates', 'preset', 
-  'expert', 'config', 'cc', 'cursor', 'stats', 'history', 'update', 'uninstall',
+  'expert', 'config', 'models', 'cc', 'cursor', 'integrate', 'stats', 'history', 'update', 'uninstall',
   '--help', '-h', '--version', '-V', '--detailed'
 ];
 

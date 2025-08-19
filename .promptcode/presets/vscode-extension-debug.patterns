@@ -1,0 +1,16 @@
+# All source and test files for debugging
+src/**/*.ts
+src/**/*.js
+scripts/*.js
+src/test/**/*.ts
+out/test/**/*.js
+out/*.js
+package.json
+tsconfig.json
+.github/workflows/*.yml
+
+# Exclude
+!node_modules/**
+!*.map
+!.vscode-test/**
+!coverage/**

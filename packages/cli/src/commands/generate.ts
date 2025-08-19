@@ -11,8 +11,11 @@ import {
   loadInstructionsFromOptions,
   getPatternsFromOptions,
   handlePresetSave,
-  outputResults
+  outputResults,
+  getPresetPath,
+  getProjectRoot
 } from '../utils';
+import { validatePatterns } from '../utils/validation';
 import { 
   getTokenThreshold,
   shouldSkipConfirmation,
@@ -20,6 +23,9 @@ import {
   exitInTestMode
 } from '../utils/environment';
 import { spinner } from '../utils/spinner';
+import { estimateCost, formatCost } from '../utils/cost';
+import { EXIT_CODES, exitWithCode } from '../utils/exit-codes';
+import { DEFAULT_MODEL } from '../providers/models';
 
 export interface GenerateOptions {
   path?: string;
@@ -37,6 +43,9 @@ export interface GenerateOptions {
   dryRun?: boolean;
   tokenWarning?: number;
   yes?: boolean;
+  estimateCost?: boolean;
+  costThreshold?: string;
+  model?: string;  // For cost estimation
 }
 
 export async function generateCommand(options: GenerateOptions): Promise<void> {
@@ -47,6 +56,7 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
   try {
     // Initialize and validate
     initializeTokenCounter(getCacheDir(), CACHE_VERSION);
+    // This now intelligently finds the project root
     const projectPath = resolveProjectPath(options.path);
     
     if (!fs.existsSync(projectPath)) {
@@ -66,8 +76,9 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
     // Get patterns from preset or options
     let patterns: string[];
     if (options.preset) {
-      // Load preset patterns
-      const presetPath = path.join(projectPath, '.promptcode', 'presets', `${options.preset}.patterns`);
+      // Load preset patterns using helper (projectPath is now the root)
+      const presetPath = getPresetPath(projectPath, options.preset);
+        
       if (fs.existsSync(presetPath)) {
         const content = await fs.promises.readFile(presetPath, 'utf8');
         patterns = content
@@ -75,7 +86,7 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
           .map(line => line.trim())
           .filter(line => line && !line.startsWith('#'));
         
-        if (!options.json) {
+        if (!options.json && !options.dryRun) {
           console.log(chalk.gray(`📋 Using preset: ${options.preset}`));
         }
       } else {
@@ -85,6 +96,9 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
       patterns = await getPatternsFromOptions(options, projectPath);
     }
     
+    // Validate patterns for security
+    validatePatterns(patterns);
+    
     // Save preset if requested
     if (options.savePreset && patterns.length > 0) {
       await handlePresetSave(options.savePreset, patterns, projectPath, options.json);
@@ -93,16 +107,81 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
     // Scan files
     spin.text = 'Scanning files...';
     
-    const selectedFiles = await scanFiles({
-      cwd: projectPath,
-      patterns,
+    // Separate absolute paths from relative patterns
+    const absolutePaths = patterns.filter(p => path.isAbsolute(p));
+    const relativePatterns = patterns.filter(p => !path.isAbsolute(p));
+    
+    // projectPath is already the project root thanks to resolveProjectPath
+    const scanRoot = projectPath;
+    
+    // Scan relative patterns normally
+    let selectedFiles = relativePatterns.length > 0 ? await scanFiles({
+      cwd: scanRoot,
+      patterns: relativePatterns,
       respectGitignore: !options.ignoreGitignore,
-      customIgnoreFile: options.ignoreFile || path.join(projectPath, IGNORE_FILE_NAME),
-      workspaceName: path.basename(projectPath)
-    });
+      customIgnoreFile: options.ignoreFile || path.join(scanRoot, IGNORE_FILE_NAME),
+      workspaceName: path.basename(scanRoot),
+      followSymlinks: true  // Match VS Code extension behavior
+    }) : [];
+    
+    // Handle absolute paths directly
+    if (absolutePaths.length > 0) {
+      const { countTokensWithCacheDetailed } = await import('@promptcode/core');
+      for (const absPath of absolutePaths) {
+        try {
+          // Check if file exists
+          if (fs.existsSync(absPath) && fs.statSync(absPath).isFile()) {
+            const { count: tokenCount } = await countTokensWithCacheDetailed(absPath);
+            // For absolute paths, use just the filename as the "relative" path
+            // This prevents buildPrompt from skipping them
+            selectedFiles.push({
+              path: path.basename(absPath),
+              absolutePath: absPath,
+              tokenCount,
+              workspaceFolderRootPath: path.dirname(absPath),
+              workspaceFolderName: 'external'
+            });
+          }
+        } catch (err) {
+          // Skip files that can't be read
+          console.warn(chalk.gray(`Skipping unreadable file: ${absPath}`));
+        }
+      }
+    }
     
     if (selectedFiles.length === 0) {
       throw new Error('No files found matching the specified patterns');
+    }
+    
+    // Check for files outside project root (informational warning)
+    // Use the actual project root (where .promptcode lives) for the check
+    const projectRoot = fs.realpathSync(scanRoot) + path.sep;
+    const externalFiles = selectedFiles.filter((f) => {
+      try {
+        const realPath = fs.realpathSync(f.absolutePath || f.path);
+        return !realPath.startsWith(projectRoot);
+      } catch {
+        // If realpath fails (e.g., broken symlink), count as external
+        return true;
+      }
+    });
+    
+    if (externalFiles.length > 0) {
+      if (!options.json) {
+        console.warn(chalk.yellow(`\n⚠️  Note: Including ${externalFiles.length} file(s) from outside the project directory`));
+        if (process.env.VERBOSE || options.dryRun) {
+          console.warn(chalk.gray('   External files:'));
+          externalFiles.forEach(f => {
+            const relPath = path.relative(projectPath, f.absolutePath || f.path);
+            console.warn(chalk.gray(`   - ${relPath}`));
+          });
+        }
+      }
+      
+      // Optional CI policy: fail if external files detected
+      if (process.env.PROMPTCODE_EXTERNAL_FILES === 'deny') {
+        throw new Error(`External files detected (${externalFiles.length}). Failing due to PROMPTCODE_EXTERNAL_FILES=deny.`);
+      }
     }
     
     // Calculate total tokens for dry run or warning
@@ -158,23 +237,101 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
       return;
     }
     
-    // Token warning threshold check
-    const threshold = getTokenThreshold(options);
+    // Cost estimation and threshold checking
+    const modelKey = options.model || DEFAULT_MODEL;
+    const expectedCompletion = 4000; // Default expected completion tokens
+    const estimatedTotalCost = estimateCost(modelKey, totalTokens, expectedCompletion);
     
-    if (totalTokens > threshold && !shouldSkipConfirmation(options)) {
+    // Handle --estimate-cost flag
+    if (options.estimateCost) {
       spin.stop();
       
-      // Estimate cost (rough approximation)
-      const estimatedCost = (totalTokens / 1000000) * 5; // Assuming ~$5 per million tokens
+      if (options.json) {
+        const output = {
+          model: modelKey,
+          inputTokens: totalTokens,
+          expectedCompletionTokens: expectedCompletion,
+          estimatedCost: estimatedTotalCost,
+          estimatedCostFormatted: formatCost(estimatedTotalCost),
+          fileCount: selectedFiles.length
+        };
+        console.log(JSON.stringify(output, null, 2));
+      } else {
+        console.log(chalk.bold('\nCost Estimation:'));
+        console.log(`Model: ${chalk.cyan(modelKey)}`);
+        console.log(`Input tokens: ${chalk.cyan(totalTokens.toLocaleString())}`);
+        console.log(`Expected completion: ${chalk.cyan(expectedCompletion.toLocaleString())}`);
+        console.log(`Estimated cost: ${chalk.yellow(formatCost(estimatedTotalCost))}`);
+      }
+      return;
+    }
+    
+    // Determine cost threshold
+    const costThreshold = options.costThreshold 
+      ? parseFloat(options.costThreshold)
+      : parseFloat(process.env.PROMPTCODE_COST_THRESHOLD || '0.50');
+    
+    // Check cost threshold
+    if (estimatedTotalCost > costThreshold) {
+      spin.stop();
       
-      console.log(chalk.yellow(`\n⚠️  Large prompt detected:`));
-      console.log(`   Files: ${selectedFiles.length}`);
-      console.log(`   Tokens: ${chalk.bold(totalTokens.toLocaleString())}`);
-      console.log(`   Estimated cost: ~$${estimatedCost.toFixed(2)}`);
+      if (!options.json) {
+        console.log(chalk.yellow(`\n⚠️  Cost threshold check:`));
+        console.log(`   Estimated cost: ${chalk.bold(formatCost(estimatedTotalCost))}`);
+        console.log(`   Threshold: ${chalk.bold(formatCost(costThreshold))}`);
+        console.log(`   Files: ${selectedFiles.length}`);
+        console.log(`   Tokens: ${totalTokens.toLocaleString()}`);
+      }
       
-      // Check if interactive
+      if (!shouldSkipConfirmation(options)) {
+        // Check if interactive
+        if (!isInteractive()) {
+          if (options.json) {
+            console.log(JSON.stringify({
+              error: 'Cost approval required',
+              errorCode: 'APPROVAL_REQUIRED',
+              estimatedCost: estimatedTotalCost,
+              costThreshold,
+              message: 'Use --yes to proceed without confirmation in non-interactive mode'
+            }));
+          } else {
+            console.log(chalk.yellow('\nNon-interactive environment detected.'));
+            console.log('Cost approval required. Use --yes to proceed without confirmation.');
+          }
+          exitWithCode(EXIT_CODES.APPROVAL_REQUIRED);
+        }
+        
+        const readline = await import('readline');
+        const rl = readline.createInterface({
+          input: process.stdin,
+          output: process.stdout
+        });
+        
+        const answer = await new Promise<string>((resolve) => {
+          rl.question(chalk.bold('\nProceed? (y/N): '), resolve);
+        });
+        
+        rl.close();
+        
+        if (answer.toLowerCase() !== 'yes' && answer.toLowerCase() !== 'y') {
+          console.log(chalk.gray('\nCancelled by user.'));
+          exitWithCode(EXIT_CODES.OPERATION_CANCELLED);
+        }
+      }
+      
+      spin.start('Building prompt...');
+    }
+    
+    // Legacy token warning check (kept for backward compatibility)
+    const tokenThreshold = getTokenThreshold(options);
+    if (totalTokens > tokenThreshold && !options.costThreshold && !shouldSkipConfirmation(options)) {
+      spin.stop();
+      
+      console.log(chalk.yellow(`\n⚠️  Large prompt detected (${totalTokens.toLocaleString()} tokens)`));
+      console.log(`Estimated cost: ${formatCost(estimatedTotalCost)}`);
+      
       if (!isInteractive()) {
-        console.log(chalk.yellow('\nNon-interactive environment. Use --yes to proceed without confirmation.'));
+        console.log(chalk.yellow('Use --yes to proceed without confirmation.'));
         process.exit(1);
       }
       
@@ -185,13 +342,13 @@ export async function generateCommand(options: GenerateOptions): Promise<void> {
       });
       
       const answer = await new Promise<string>((resolve) => {
-        rl.question(chalk.bold('\nProceed? (y/N): '), resolve);
+        rl.question(chalk.bold('Proceed? (y/N): '), resolve);
       });
       
       rl.close();
       
       if (answer.toLowerCase() !== 'yes' && answer.toLowerCase() !== 'y') {
-        console.log(chalk.gray('\nCancelled.'));
+        console.log(chalk.gray('Cancelled.'));
         process.exit(0);
       }
       

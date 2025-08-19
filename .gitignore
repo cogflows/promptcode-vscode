@@ -31,6 +31,10 @@ logs/
 coverage/
 .nyc_output/
 
+# Playwright test results
+test-results/
+playwright-report/
+
 # VS Code extension specific
 .vscode-test/
 *.vsix
@@ -52,6 +56,17 @@ packages/core/dist/
 *.tmp
 *.temp
 .cache/
+
+# Analysis and review files
+*-analysis.md
+*-review.md
+*-analysis.txt
+*-review.txt
+gpt*.md
+claude*.md
+!CLAUDE.md
+!packages/cli/src/claude-templates/**
+!.claude/**
 
 # TypeScript build info
 *.tsbuildinfo

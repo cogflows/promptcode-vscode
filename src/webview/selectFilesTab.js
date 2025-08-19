@@ -192,20 +192,27 @@ if (typeof window !== 'undefined') {
                         const workspaceInfo = file.workspaceFolderName ? ` (${file.workspaceFolderName})` : '';
                         const fullTooltip = file.workspaceFolderName ? `${file.workspaceFolderName}: ${file.path}` : file.path;
                         
-                        // Simplified structure with cleaner action buttons using codicons
+                        // Escape all user-controlled values to prevent XSS
+                        const escPath = escapeHtml(file.path || '');
+                        const escWsName = escapeHtml(file.workspaceFolderName || '');
+                        const escRoot = escapeHtml(file.workspaceFolderRootPath || '');
+                        const escTitle = escapeHtml(fullTooltip || '');
+                        const escName = escapeHtml(truncatedName);
+                        
+                        // Use data attributes instead of inline onclick for security
                         return `
-                            <div class="selected-file-item" data-path="${file.path}" data-workspace-folder="${file.workspaceFolderName || ''}">
+                            <div class="selected-file-item" data-path="${escPath}" data-workspace-folder="${escWsName}">
                                 <div class="file-info">
                                     <div class="file-header">
                                         <div class="file-name-container">
                                             <span class="codicon codicon-file"></span>
-                                            <span class="file-name" title="${fullTooltip}">${truncatedName}</span>
+                                            <span class="file-name" title="${escTitle}">${escName}</span>
                                         </div>
                                         <div class="file-actions">
-                                            <a class="action-button" onclick="window.openFile('${file.path}', '${file.workspaceFolderRootPath || ''}')" title="Open file">
+                                            <a class="action-button js-file-action" data-action="open" data-path="${escPath}" data-root="${escRoot}" title="Open file">
                                                 <span class="codicon codicon-open-preview"></span>
                                             </a>
-                                            <a class="action-button" onclick="window.deselectFile('${file.path}', '${file.workspaceFolderRootPath || ''}')" title="Remove from selection">
+                                            <a class="action-button js-file-action" data-action="remove" data-path="${escPath}" data-root="${escRoot}" title="Remove from selection">
                                                 <span class="codicon codicon-trash"></span>
                                             </a>
                                         </div>
@@ -285,7 +292,8 @@ if (typeof window !== 'undefined') {
                                 }
                             }
                             
-                            const dirKey = dirPath;
+                            // Include workspace in key to properly separate multi-root directories
+                            const dirKey = `${file.workspaceFolderName || ''}:${dirPath}`;
                             
                             if (!acc[dirKey]) {
                                 acc[dirKey] = {
@@ -335,7 +343,10 @@ if (typeof window !== 'undefined') {
                                         </div>
                                         <div class="header-right">
                                             <span class="directory-stats">${formatTokenCount(dirTokens)} tokens (${dirPercentage}%)</span>
-                                            <button class="trash-btn action-button" title="Remove all files in this directory" onclick="event.stopPropagation(); removeDirectory('${dirPath}', '${workspaceFolderName}');">
+                                            <button class="trash-btn action-button js-dir-remove"
+                                                    data-dir="${escapeHtml(dirPath)}"
+                                                    data-workspace="${escapeHtml(workspaceFolderName)}"
+                                                    title="Remove all files in this directory">
                                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                                     <path d="M3 6h18"/>
                                                     <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
@@ -397,8 +408,8 @@ if (typeof window !== 'undefined') {
                         console.log('Search term entered');
                     } else {
                         searchContainer?.classList.remove('active-filter');
-                        console.log('Search term cleared, collapsing all directories');
-                        vscode.postMessage({ command: 'collapseAll' });
+                        console.log('Search term cleared, restoring tree state');
+                        // Don't collapse all - let the tree restore to its previous state
                     }
                 }
                 
@@ -780,6 +791,56 @@ if (typeof window !== 'undefined') {
                             vscode.postMessage({ command: 'deselectAll' });
                         }
                     });
+
+                    // Add safe event delegation for file actions (replaces inline onclick)
+                    const selectedFilesListEl = document.getElementById('selected-files-list');
+                    if (selectedFilesListEl) {
+                        // Handle file open/remove actions
+                        selectedFilesListEl.addEventListener('click', (e) => {
+                            const el = e.target.closest('.js-file-action');
+                            if (!el) {return;}
+
+                            const action = el.getAttribute('data-action');
+                            const path = el.getAttribute('data-path') || '';
+                            const root = el.getAttribute('data-root') || '';
+
+                            // Prevent bubbling
+                            e.preventDefault();
+                            e.stopPropagation();
+
+                            if (action === 'open' && window.openFile) {
+                                window.openFile(path, root);
+                            } else if (action === 'remove' && window.deselectFile) {
+                                window.deselectFile(path, root);
+                            } else {
+                                // Fallback to message passing
+                                vscode.postMessage({ 
+                                    command: action === 'open' ? 'openFile' : 'deselectFile', 
+                                    path, 
+                                    root 
+                                });
+                            }
+                        });
+
+                        // Handle directory remove actions
+                        selectedFilesListEl.addEventListener('click', (e) => {
+                            const btn = e.target.closest('.js-dir-remove');
+                            if (!btn) {return;}
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const dir = btn.getAttribute('data-dir') || '';
+                            const ws = btn.getAttribute('data-workspace') || '';
+                            if (window.removeDirectory) {
+                                window.removeDirectory(dir, ws);
+                            } else {
+                                vscode.postMessage({ 
+                                    command: 'removeDirectory', 
+                                    dirPath: dir, 
+                                    workspaceFolderName: ws 
+                                });
+                            }
+                        });
+                    }
 
                     // Add listener for preset updates from host
                     // This listener needs to be accessible to the global message handler

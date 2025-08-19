@@ -40,6 +40,42 @@
   border-radius: var(--border-radius-md);
 }
 
+/* Search toggles container */
+.search-toggles {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* Toggle chip buttons */
+.toggle-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background-color: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  border: 1px solid var(--vscode-input-border);
+  border-radius: var(--border-radius-sm);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all var(--transition-speed) ease;
+}
+
+.toggle-chip:hover {
+  background-color: var(--vscode-button-secondaryHoverBackground);
+}
+
+.toggle-chip.active {
+  background-color: var(--accent-color);
+  color: var(--vscode-button-foreground);
+  border-color: var(--accent-color);
+}
+
+.toggle-chip .codicon {
+  font-size: 12px;
+}
+
 /* Search input */
 .search-container input {
   width: 100%;

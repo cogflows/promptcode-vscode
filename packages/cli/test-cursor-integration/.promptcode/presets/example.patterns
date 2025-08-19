@@ -1,4 +1,0 @@
-# Example preset for testing
-src/**/*.ts
-!**/node_modules/**
-!**/*.test.ts

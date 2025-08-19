@@ -31,8 +31,8 @@ describe('CLI argument parsing', () => {
         cwd: fixture.dir
       });
       
-      // Should fail with error about invalid usage
-      expect(result.exitCode).toBe(1);
+      // Should fail with error about invalid usage (EXIT_CODES.INVALID_INPUT = 3)
+      expect(result.exitCode).toBe(3);
       const output = result.stdout + result.stderr;
       expect(output.toLowerCase()).toContain('invalid usage');
     }
@@ -42,7 +42,7 @@ describe('CLI argument parsing', () => {
       cwd: fixture.dir,
       env: { ...process.env, OPENAI_API_KEY: '', ANTHROPIC_API_KEY: '', GOOGLE_API_KEY: '', XAI_API_KEY: '', GROK_API_KEY: '' }
     });
-    expect(result.exitCode).toBe(1);
+    expect(result.exitCode).toBe(4); // EXIT_CODES.MISSING_API_KEY
     expect(result.stdout + result.stderr).toContain('API key');
   });
   
@@ -64,8 +64,8 @@ describe('CLI argument parsing', () => {
     for (const testCase of testCases) {
       const result = await runCLI(testCase.args, { cwd: fixture.dir });
       
-      // Should fail with invalid usage error
-      expect(result.exitCode).toBe(1);
+      // Should fail with invalid usage error (EXIT_CODES.INVALID_INPUT = 3)
+      expect(result.exitCode).toBe(3);
       const output = result.stdout + result.stderr;
       expect(output.toLowerCase()).toContain('invalid usage');
     }
@@ -84,7 +84,7 @@ describe('CLI argument parsing', () => {
     
     // @ prefix no longer works without explicit command
     const result1 = await runCLI(['@backend/**/*.ts'], { cwd: fixture.dir });
-    expect(result1.exitCode).toBe(1);
+    expect(result1.exitCode).toBe(3); // EXIT_CODES.INVALID_INPUT
     expect((result1.stdout + result1.stderr).toLowerCase()).toContain('invalid usage');
     
     // @ prefix should be stripped with explicit command
@@ -101,7 +101,7 @@ describe('CLI argument parsing', () => {
     
     // Should fail without explicit command
     const result = await runCLI(['src/**/*.ts', '--save-preset', 'my-files'], { cwd: fixture.dir });
-    expect(result.exitCode).toBe(1);
+    expect(result.exitCode).toBe(3); // EXIT_CODES.INVALID_INPUT
     expect((result.stdout + result.stderr).toLowerCase()).toContain('invalid usage');
     
     // Test that explicit generate command with --save-preset works

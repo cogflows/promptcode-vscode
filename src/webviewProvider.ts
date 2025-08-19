@@ -1,4 +1,4 @@
-/* PromptCode - Copyright (C) 2025. All Rights Reserved. */
+/* PromptCode - MIT License - Copyright (c) 2025 cogflows */
 
 import * as vscode from 'vscode';
 import * as path from 'path';
@@ -87,8 +87,8 @@ export class PromptCodeWebViewProvider {
 
                 switch (message.command) {
                     case 'search':
-                        console.log('Search command received in webview provider, searchTerm:', message.searchTerm, 'glob:', message.globPattern, 'includeFolders:', message.shouldIncludeFolders);
-                        Promise.resolve(vscode.commands.executeCommand('promptcode.filterFiles', message.searchTerm, message.globPattern, message.shouldIncludeFolders))
+                        console.log('Search command received in webview provider, searchTerm:', message.searchTerm, 'glob:', message.isGlob, 'folders:', message.includeFolders);
+                        Promise.resolve(vscode.commands.executeCommand('promptcode.filterFiles', message.searchTerm, message.isGlob, message.includeFolders))
                             .then(() => {
                                 console.log("Search filtering complete");
                             })
@@ -103,6 +103,10 @@ export class PromptCodeWebViewProvider {
                     case 'collapseAll':
                         console.log('CollapseAll command received in webview provider');
                         vscode.commands.executeCommand('promptcode.collapseAll');
+                        return;
+                    case 'revealFirstSearchMatch':
+                        console.log('RevealFirstSearchMatch command received in webview provider');
+                        vscode.commands.executeCommand('promptcode.revealFirstSearchMatch');
                         return;
                     case 'selectAll':
                         console.log('SelectAll command received in webview provider');
@@ -119,6 +123,12 @@ export class PromptCodeWebViewProvider {
                     case 'copyPrompt':
                         console.log('CopyPrompt command received in webview provider');
                         vscode.commands.executeCommand('promptcode.copyPromptDirectly');
+                        return;
+                    case 'openExternal':
+                        console.log('OpenExternal command received:', message.url);
+                        if (message.url) {
+                            vscode.env.openExternal(vscode.Uri.parse(message.url));
+                        }
                         return;
                     case 'saveIgnoreConfig':
                         console.log('SaveIgnoreConfig command received in webview provider');
@@ -533,30 +543,9 @@ export class PromptCodeWebViewProvider {
                                 return;
                             }
                             
-                            // Check if there are already selected files
-                            const currentSelectedPaths = fileExplorerProvider.getSelectedPaths();
-                            let addToExisting = false;
-                            
-                            if (currentSelectedPaths.length > 0) {
-                                // Ask user if they want to replace or add to existing selection
-                                const choice = await vscode.window.showQuickPick(
-                                    ['Replace current selection', 'Add to current selection'],
-                                    { 
-                                        placeHolder: `You have ${currentSelectedPaths.length} files selected. How should the preset be applied?`,
-                                        title: `Apply Preset: ${presetName}`
-                                    }
-                                );
-                                
-                                if (!choice) {
-                                    // User cancelled
-                                    return;
-                                }
-                                
-                                addToExisting = choice === 'Add to current selection';
-                            }
-                            
-                            await fileExplorerProvider.selectFiles(filesToSelect, addToExisting);
-                            console.log(`Applied preset "${presetName}" successfully (addToExisting: ${addToExisting}).`);
+                            // Apply preset - always replace current selection (original behavior)
+                            await fileExplorerProvider.selectFiles(filesToSelect);
+                            console.log(`Applied preset "${presetName}" successfully.`);
                             
                             // Store the applied preset name in workspace state
                             await this._extensionContext.workspaceState.update('promptcode.appliedPresetName', presetName);
@@ -736,6 +725,15 @@ export class PromptCodeWebViewProvider {
         }
     }
 
+    private getNonce(): string {
+        let text = '';
+        const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        for (let i = 0; i < 32; i++) {
+            text += possible.charAt(Math.floor(Math.random() * possible.length));
+        }
+        return text;
+    }
+
     private _getHtmlForWebview(webview: vscode.Webview, prompts: Prompt[]): string {
         // When packaging extensions, resources should be accessed relative to the extension
         // In development they're in src/, in production they're copied to out/
@@ -770,6 +768,19 @@ export class PromptCodeWebViewProvider {
         const codiconsUri = getWebviewResource('codicons/codicon.css');
 
         const promptsJson = JSON.stringify(prompts);
+        
+        // Generate nonce for CSP
+        const nonce = this.getNonce();
+        
+        // Content Security Policy for defense in depth
+        const csp = `
+            default-src 'none';
+            style-src ${webview.cspSource} 'unsafe-inline';
+            script-src 'nonce-${nonce}';
+            font-src ${webview.cspSource};
+            img-src ${webview.cspSource} data: https:;
+            connect-src ${webview.cspSource};
+        `.replace(/\s+/g, ' ').trim();
 
         return /* html */ `
             <!DOCTYPE html>
@@ -777,10 +788,11 @@ export class PromptCodeWebViewProvider {
             <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <meta http-equiv="Content-Security-Policy" content="${csp}">
                 <title>PromptCode</title>
                 <link rel="stylesheet" href="${cssUri}">
                 <link rel="stylesheet" href="${codiconsUri}">
-                <script>
+                <script nonce="${nonce}">
                     // Global error handler
                     window.onerror = function(msg, url, line, col, error) {
                         console.error('Global error:', { msg, url, line, col, error });
@@ -852,41 +864,41 @@ export class PromptCodeWebViewProvider {
                     <footer class="footer">
                         <p>
                             PromptCode v${this.packageVersion} •
-                            <a href="#" target="_blank" rel="noopener noreferrer">Documentation</a> •
-                            <a href="#" target="_blank" rel="noopener noreferrer">Report Issue</a>
+                            <a href="#" id="documentation-link">Documentation</a> •
+                            <a href="#" id="report-issue-link">Report Issue</a>
                         </p>
                     </footer>
                 </div>
-                <script>
+                <script nonce="${nonce}">
                     window.samplePrompts = ${promptsJson};
                 </script>
                 
                 <!-- Load selectFilesTab.js first -->
-                <script src="${selectFilesTabJsUri}" 
+                <script src="${selectFilesTabJsUri}" nonce="${nonce}"
                     onload="window._scriptLoaded.selectFilesTab = true; console.log('selectFilesTab.js loaded')" 
                     onerror="console.error('Failed to load selectFilesTab.js')">
                 </script>
 
                 <!-- Load instructionsTab.js next -->
-                <script src="${instructionsTabJsUri}"
+                <script src="${instructionsTabJsUri}" nonce="${nonce}"
                     onload="window._scriptLoaded.instructionsTab = true; console.log('instructionsTab.js loaded')"
                     onerror="console.error('Failed to load instructionsTab.js')">
                 </script>
                 
                 <!-- Load generatePromptTab.js -->
-                <script src="${generatePromptTabJsUri}"
+                <script src="${generatePromptTabJsUri}" nonce="${nonce}"
                     onload="window._scriptLoaded.generatePromptTab = true; console.log('generatePromptTab.js loaded')"
                     onerror="console.error('Failed to load generatePromptTab.js')">
                 </script>
 
                 <!-- Load mergeTab.js -->
-                <script src="${mergeTabJsUri}"
+                <script src="${mergeTabJsUri}" nonce="${nonce}"
                     onload="window._scriptLoaded.mergeTab = true; console.log('mergeTab.js loaded')"
                     onerror="console.error('Failed to load mergeTab.js')">
                 </script>
 
                 <!-- Then load webview.js which depends on them -->
-                <script src="${jsUri}" 
+                <script src="${jsUri}" nonce="${nonce}"
                     onload="window._scriptLoaded.webview = true; console.log('webview.js loaded')" 
                     onerror="console.error('Failed to load webview.js')">
                 </script>
