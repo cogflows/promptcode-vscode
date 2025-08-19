@@ -854,10 +854,10 @@ if (typeof window !== 'undefined') {
                             // Enable the re-apply button for the selected preset
                             reapplyPresetBtn.disabled = !selectPreset || selectPreset === 'none';
                             
-                            // If current selection is not 'none', auto-apply it
+                            // Don't auto-apply after save - the current selection IS what we just saved
+                            // Auto-applying would overwrite any careful deselections with the broader pattern
                             if (selectPreset !== 'none') {
-                                console.log(`[Frontend] Auto-applying newly saved preset: "${selectPreset}"`);
-                                vscode.postMessage({ command: 'applyFilePreset', presetName: selectPreset });
+                                console.log(`[Frontend] Preset "${selectPreset}" saved - current selection preserved`);
                                 currentPresetName = selectPreset;
                             }
                         }
