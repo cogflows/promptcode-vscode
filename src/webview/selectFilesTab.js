@@ -292,7 +292,8 @@ if (typeof window !== 'undefined') {
                                 }
                             }
                             
-                            const dirKey = dirPath;
+                            // Include workspace in key to properly separate multi-root directories
+                            const dirKey = `${file.workspaceFolderName || ''}:${dirPath}`;
                             
                             if (!acc[dirKey]) {
                                 acc[dirKey] = {

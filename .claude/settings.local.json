@@ -154,7 +154,9 @@
       "Bash(git checkout:*)",
       "Bash(git fetch:*)",
       "Bash(npx esbuild:*)",
-      "Bash(npx vsce ls:*)"
+      "Bash(npx vsce ls:*)",
+      "Bash(PROMPTCODE_TEST=1 PROMPTCODE_MOCK_LLM=1 OPENAI_API_KEY=test-key ./dist/promptcode expert \"Analyze\" --model o3-pro --json)",
+      "Bash(PROMPTCODE_TEST=1 PROMPTCODE_MOCK_LLM=1 OPENAI_API_KEY=test-key ./dist/promptcode expert \"Analyze\" --model o3-pro --json --yes)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits",

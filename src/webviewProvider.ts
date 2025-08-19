@@ -1,4 +1,4 @@
-/* PromptCode - Copyright (C) 2025. All Rights Reserved. */
+/* PromptCode - MIT License - Copyright (c) 2025 cogflows */
 
 import * as vscode from 'vscode';
 import * as path from 'path';
@@ -725,6 +725,15 @@ export class PromptCodeWebViewProvider {
         }
     }
 
+    private getNonce(): string {
+        let text = '';
+        const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        for (let i = 0; i < 32; i++) {
+            text += possible.charAt(Math.floor(Math.random() * possible.length));
+        }
+        return text;
+    }
+
     private _getHtmlForWebview(webview: vscode.Webview, prompts: Prompt[]): string {
         // When packaging extensions, resources should be accessed relative to the extension
         // In development they're in src/, in production they're copied to out/
@@ -759,6 +768,19 @@ export class PromptCodeWebViewProvider {
         const codiconsUri = getWebviewResource('codicons/codicon.css');
 
         const promptsJson = JSON.stringify(prompts);
+        
+        // Generate nonce for CSP
+        const nonce = this.getNonce();
+        
+        // Content Security Policy for defense in depth
+        const csp = `
+            default-src 'none';
+            style-src ${webview.cspSource} 'unsafe-inline';
+            script-src 'nonce-${nonce}';
+            font-src ${webview.cspSource};
+            img-src ${webview.cspSource} data: https:;
+            connect-src ${webview.cspSource};
+        `.replace(/\s+/g, ' ').trim();
 
         return /* html */ `
             <!DOCTYPE html>
@@ -766,10 +788,11 @@ export class PromptCodeWebViewProvider {
             <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <meta http-equiv="Content-Security-Policy" content="${csp}">
                 <title>PromptCode</title>
                 <link rel="stylesheet" href="${cssUri}">
                 <link rel="stylesheet" href="${codiconsUri}">
-                <script>
+                <script nonce="${nonce}">
                     // Global error handler
                     window.onerror = function(msg, url, line, col, error) {
                         console.error('Global error:', { msg, url, line, col, error });
@@ -851,31 +874,31 @@ export class PromptCodeWebViewProvider {
                 </script>
                 
                 <!-- Load selectFilesTab.js first -->
-                <script src="${selectFilesTabJsUri}" 
+                <script src="${selectFilesTabJsUri}" nonce="${nonce}"
                     onload="window._scriptLoaded.selectFilesTab = true; console.log('selectFilesTab.js loaded')" 
                     onerror="console.error('Failed to load selectFilesTab.js')">
                 </script>
 
                 <!-- Load instructionsTab.js next -->
-                <script src="${instructionsTabJsUri}"
+                <script src="${instructionsTabJsUri}" nonce="${nonce}"
                     onload="window._scriptLoaded.instructionsTab = true; console.log('instructionsTab.js loaded')"
                     onerror="console.error('Failed to load instructionsTab.js')">
                 </script>
                 
                 <!-- Load generatePromptTab.js -->
-                <script src="${generatePromptTabJsUri}"
+                <script src="${generatePromptTabJsUri}" nonce="${nonce}"
                     onload="window._scriptLoaded.generatePromptTab = true; console.log('generatePromptTab.js loaded')"
                     onerror="console.error('Failed to load generatePromptTab.js')">
                 </script>
 
                 <!-- Load mergeTab.js -->
-                <script src="${mergeTabJsUri}"
+                <script src="${mergeTabJsUri}" nonce="${nonce}"
                     onload="window._scriptLoaded.mergeTab = true; console.log('mergeTab.js loaded')"
                     onerror="console.error('Failed to load mergeTab.js')">
                 </script>
 
                 <!-- Then load webview.js which depends on them -->
-                <script src="${jsUri}" 
+                <script src="${jsUri}" nonce="${nonce}"
                     onload="window._scriptLoaded.webview = true; console.log('webview.js loaded')" 
                     onerror="console.error('Failed to load webview.js')">
                 </script>

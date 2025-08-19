@@ -262,10 +262,11 @@ suite('FileExplorer Checkbox Behavior Tests', () => {
             
             // Since only one file is checked but not all, parent should be unchecked
             // (VS Code doesn't have a mixed state, so it defaults to unchecked)
+            // With delete-on-uncheck, mixed state means no entry (undefined)
             assert.strictEqual(
                 parentState,
-                vscode.TreeItemCheckboxState.Unchecked,
-                'Parent directory should be unchecked when only some children are checked'
+                undefined,
+                'Parent directory should have no entry (undefined) when only some children are checked'
             );
         });
 
@@ -332,10 +333,11 @@ suite('FileExplorer Checkbox Behavior Tests', () => {
             const parentState = checkedItems.get(dir1Path);
             
             // Since not all files in dir1 are checked (only the subdir), parent should be unchecked
+            // With delete-on-uncheck, mixed state means no entry (undefined)
             assert.strictEqual(
                 parentState,
-                vscode.TreeItemCheckboxState.Unchecked,
-                'Parent directory should be unchecked when only some descendants are checked'
+                undefined,
+                'Parent directory should have no entry (undefined) when only some descendants are checked'
             );
         });
     });

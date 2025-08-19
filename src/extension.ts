@@ -1,4 +1,4 @@
-/* PromptCode - Copyright (C) 2025. All Rights Reserved. */
+/* PromptCode - MIT License - Copyright (c) 2025 cogflows */
 
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
@@ -1156,7 +1156,7 @@ export function activate(context: vscode.ExtensionContext) {
 	const cleanupSelectedFilesCommand = vscode.commands.registerCommand('promptcode.cleanupSelectedFiles', async () => {
 		console.log('Cleaning up selected files (removing non-existent and ignored items)');
 		const beforeCount = [...checkedItems.entries()].filter(([_, checked]) => checked).length;
-		fileExplorerProvider.cleanupSelectedFiles();
+		await fileExplorerProvider.cleanupSelectedFiles();
 		const afterCount = [...checkedItems.entries()].filter(([_, checked]) => checked).length;
 		const removedCount = beforeCount - afterCount;
 		if (removedCount > 0) {
@@ -1169,7 +1169,9 @@ export function activate(context: vscode.ExtensionContext) {
 	// Register command to open file from tree (triggered by clicking on label)
 	const openFileFromTreeCommand = vscode.commands.registerCommand('promptcode.openFileFromTree', async (resourceUri: vscode.Uri) => {
 		try {
-			const doc = await vscode.workspace.openTextDocument(resourceUri);
+			// Strip query parameters for file:// URIs to avoid issues with decoration isolation
+			const safeUri = resourceUri.scheme === 'file' ? resourceUri.with({ query: '' }) : resourceUri;
+			const doc = await vscode.workspace.openTextDocument(safeUri);
 			await vscode.window.showTextDocument(doc, { preview: false });
 		} catch (error) {
 			console.error('Error opening file:', error);

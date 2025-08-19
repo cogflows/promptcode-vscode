@@ -8,6 +8,10 @@ export const checkedItems = new Map<string, vscode.TreeItemCheckboxState>();
 // Map to track expanded nodes
 export const expandedItems = new Map<string, boolean>();
 
+// Decoration isolation: add a query flag to URIs in our tree only
+const DECORATION_QUERY = 'pc=1';
+const withDecorQuery = (uri: vscode.Uri) => uri.with({ query: DECORATION_QUERY });
+
 export class FileItem extends vscode.TreeItem {
   // ... (rest of the FileItem class remains the same) ...
   public readonly workspaceFolderName?: string;
@@ -44,8 +48,9 @@ export class FileItem extends vscode.TreeItem {
 
     // Add command to open file when clicking on the label (not checkbox)
     if (!isDirectory) {
+      // This command accepts a Uri and opens it; matches our argument type
       this.command = {
-        command: 'promptcode.openFileInEditor',
+        command: 'promptcode.openFileFromTree',
         title: 'Open File',
         arguments: [resourceUri]
       };
@@ -71,7 +76,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
   private ignoreHelper: IgnoreHelper | undefined;
   private workspaceRoots: Map<string, string> = new Map(); // Uri string -> fsPath
   private includedPaths: Set<string> = new Set();
-  private checkboxQueue: Promise<void> = Promise.resolve(); // Added queue field
+  private checkboxQueue: Promise<void> = Promise.resolve(); // selection mutation queue
   private searchSequence: number = 0; // For search cancellation
   private expandRunId: number = 0; // For expansion cancellation
   private pendingExpansion: Promise<void> | null = null; // Track pending expansion for tests
@@ -118,9 +123,18 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
 
     // Also listen for VS Code's built-in file events
     this.disposables.push(
-      vscode.workspace.onDidCreateFiles(() => this.refresh()),
-      vscode.workspace.onDidDeleteFiles(() => this.refresh()),
-      vscode.workspace.onDidRenameFiles(() => this.refresh())
+      vscode.workspace.onDidCreateFiles(() => {
+        this.refreshDecorations();
+        this.refresh();
+      }),
+      vscode.workspace.onDidDeleteFiles(() => {
+        this.refreshDecorations();
+        this.refresh();
+      }),
+      vscode.workspace.onDidRenameFiles(() => {
+        this.refreshDecorations();
+        this.refresh();
+      })
     );
   }
 
@@ -154,11 +168,25 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
   }
 
   private removeFilesFromSelection(rootPath: string): void {
-    // Remove all selected files that start with this path
+    // Collect paths to remove
+    const pathsToRemove: string[] = [];
     for (const [path, checked] of checkedItems.entries()) {
       if (path.startsWith(rootPath)) {
-        checkedItems.delete(path);
+        pathsToRemove.push(path);
       }
+    }
+    
+    // Use centralized mutation if there are paths to remove
+    if (pathsToRemove.length > 0) {
+      this.applySelectionMutation(
+        `Removing ${pathsToRemove.length} files from deleted workspace…`,
+        async () => {
+          for (const path of pathsToRemove) {
+            checkedItems.delete(path);
+          }
+        },
+        pathsToRemove
+      );
     }
   }
 
@@ -183,25 +211,39 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
       fileWatcher.onDidCreate((uri) => {
         const fileName = path.basename(uri.fsPath);
         if (fileName === '.gitignore' || fileName === '.promptcode_ignore') {
-          this.refreshIgnoreHelper();
+          this.refreshIgnoreHelper().finally(() => {
+            // Ignore rules changed => totals changed even if selection didn't
+            this.refreshDecorations();
+            this.refresh();
+          });
         } else {
+          // File structure changed => totals changed
+          this.refreshDecorations([uri.fsPath]);
           this.refresh();
         }
       }),
       fileWatcher.onDidDelete((uri) => {
         const fileName = path.basename(uri.fsPath);
         if (fileName === '.gitignore' || fileName === '.promptcode_ignore') {
-          this.refreshIgnoreHelper();
+          this.refreshIgnoreHelper().finally(() => {
+            this.refreshDecorations();
+            this.refresh();
+          });
         } else {
+          this.refreshDecorations([uri.fsPath]);
           this.refresh();
         }
       }),
       fileWatcher.onDidChange((uri) => {
         const fileName = path.basename(uri.fsPath);
         if (fileName === '.gitignore' || fileName === '.promptcode_ignore') {
-          this.refreshIgnoreHelper();
+          this.refreshIgnoreHelper().finally(() => {
+            this.refreshDecorations();
+            this.refresh();
+          });
         } else {
-          this.refresh(); // Refresh on general file changes too
+          // File content changes don't affect decorations, only structure changes do
+          // this.refresh();
         }
       })
     );
@@ -269,6 +311,8 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
       await this.ignoreHelper.initialize();
       // After ignore patterns are reloaded, clean up any selected files that are now ignored
       this.cleanupSelectedFiles();
+      // Ignore rules affect totals for every directory - must rebuild cache
+      this.refreshDecorations();
       this.refresh();
     } catch (error) {
       console.error('Error refreshing ignore helper:', error);
@@ -276,7 +320,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
   }
 
   // Remove ignored and non-existent files from selection
-  public cleanupSelectedFiles(): void {
+  public cleanupSelectedFiles(): Promise<void> {
     // Create a list of items to remove
     const itemsToRemove: string[] = [];
     const reasons: Map<string, string> = new Map();
@@ -301,29 +345,30 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
       }
     }
 
-    // Remove the items from selection
-    for (const itemPath of itemsToRemove) {
-      checkedItems.delete(itemPath);
-
-      // Update parent states for this path
-      this.updateParentStates(itemPath).catch(error => {
-        console.error(`Error updating parent states for ${itemPath}:`, error);
-      });
-
-      const reason = reasons.get(itemPath) || 'unknown';
-      this.debugLog(`Removed ${reason} item from selection: ${itemPath}`);
-    }
-
-    // If any items were removed, update decorations and notify the webview
+    // If any items need to be removed, use centralized mutation
     if (itemsToRemove.length > 0) {
-      console.log(`Cleaned up ${itemsToRemove.length} items from selection`);
-      // Update decoration cache since we modified checkedItems
-      this.updateDecorationCache();
-      // Fire decoration change event for all items
-      this._onDidChangeFileDecorations.fire(undefined);
-      // Notify the webview
-      vscode.commands.executeCommand('promptcode.getSelectedFiles');
+      return this.applySelectionMutation(
+        `Cleaning up ${itemsToRemove.length} invalid items…`,
+        async () => {
+          // Remove the items from selection
+          for (const itemPath of itemsToRemove) {
+            checkedItems.delete(itemPath);
+
+            // Update parent states for this path
+            await this.updateParentStates(itemPath).catch(error => {
+              console.error(`Error updating parent states for ${itemPath}:`, error);
+            });
+
+            const reason = reasons.get(itemPath) || 'unknown';
+            this.debugLog(`Removed ${reason} item from selection: ${itemPath}`);
+          }
+          console.log(`Cleaned up ${itemsToRemove.length} items from selection`);
+        },
+        itemsToRemove
+      );
     }
+    // Nothing to do; still let callers await queue idleness
+    return this.waitForSelectionIdle();
   }
 
   // Shared debounce helper that resolves all waiters
@@ -839,7 +884,8 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
     collapsibleState?: vscode.TreeItemCollapsibleState
   ): FileItem {
     const fullPath = path.join(directoryPath, entry.name);
-    const resourceUri = vscode.Uri.file(fullPath);
+    // IMPORTANT: add query flag so only our tree's URIs get decorations
+    const resourceUri = withDecorQuery(vscode.Uri.file(fullPath));
     const isDirectory = entry.isDirectory();
 
     // Check if this item should be expanded based on expandedItems map
@@ -1016,11 +1062,12 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
 
   // Centralized method for all selection mutations to ensure consistent ordering
   public applySelectionMutation(
-    label: string, 
-    mutator: () => Promise<void> | void, 
-    affectedPaths?: string[]
-  ): void {
-    this.checkboxQueue = this.checkboxQueue
+    label: string,
+    mutator: () => Promise<void> | void,
+    affectedPaths?: string[],
+    useIncrementalUpdate: boolean = false
+  ): Promise<void> {
+    const run = this.checkboxQueue = this.checkboxQueue
       .then(() => vscode.window.withProgress({
         cancellable: false,
         location: vscode.ProgressLocation.Window,
@@ -1028,10 +1075,25 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
       }, async () => {
         try {
           // Step 1: Apply the mutation to checkedItems
+          const previousState = affectedPaths && affectedPaths.length === 1 ? 
+            checkedItems.get(affectedPaths[0]) : undefined;
           await mutator();
           
-          // Step 2: Rebuild the decoration cache
-          this.updateDecorationCache();
+          // Step 2: Update the decoration cache
+          // Use incremental update for single file changes, full rebuild otherwise
+          if (useIncrementalUpdate && affectedPaths && affectedPaths.length === 1) {
+            const filePath = affectedPaths[0];
+            const currentState = checkedItems.get(filePath);
+            const isNowChecked = currentState === vscode.TreeItemCheckboxState.Checked;
+            const wasChecked = previousState === vscode.TreeItemCheckboxState.Checked;
+            
+            if (isNowChecked !== wasChecked) {
+              this.updateDecorationCacheForFile(filePath, isNowChecked);
+            }
+          } else {
+            // Full rebuild for directories or bulk operations
+            this.updateDecorationCache();
+          }
           
           // Step 3: Fire decoration change events
           if (affectedPaths && affectedPaths.length > 0) {
@@ -1055,8 +1117,8 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
       .catch(err => {
         console.error('Checkbox queue error:', err);
         this.refresh();
-        return Promise.resolve();
       });
+    return run;
   }
 
   // Handle checkbox state changes
@@ -1064,12 +1126,16 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
     // Ignore no-ops – saves queue slots
     if (checkedItems.get(item.fullPath) === state) { return; }
 
+    // For single file changes, use optimized incremental update
+    const isSingleFile = !item.isDirectory;
+    
     this.applySelectionMutation(
       'Updating selection…',
       async () => {
         await this.processCheckboxChange(item, state);
       },
-      [item.fullPath]
+      [item.fullPath],
+      isSingleFile // Pass flag to use incremental update
     );
   }
 
@@ -1155,9 +1221,9 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
       // Determine parent state based on children
       if (childStates.length === 0) {
           // No visible children - preserve existing state if it was explicitly set
-          // Only set to unchecked if it wasn't previously in the map
+          // Only delete if it wasn't previously in the map
           if (!checkedItems.has(dirPath)) {
-            checkedItems.set(dirPath, vscode.TreeItemCheckboxState.Unchecked);
+            checkedItems.delete(dirPath);
           }
           // Otherwise keep the existing state (user may have explicitly checked an empty dir)
       } else {
@@ -1168,11 +1234,11 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
           // All children checked -> parent checked
           checkedItems.set(dirPath, vscode.TreeItemCheckboxState.Checked);
         } else if (allUnchecked) {
-          // All children unchecked -> parent unchecked
-          checkedItems.set(dirPath, vscode.TreeItemCheckboxState.Unchecked);
+          // All children unchecked -> delete parent entry
+          checkedItems.delete(dirPath);
         } else {
-          // Mixed state -> parent is unchecked (VS Code doesn't have a Mixed state)
-          checkedItems.set(dirPath, vscode.TreeItemCheckboxState.Unchecked);
+          // Mixed state -> delete parent entry (indeterminate)
+          checkedItems.delete(dirPath);
         }
       }
 
@@ -1295,6 +1361,15 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
     const p = this.pendingExpansion;
     if (p) { 
       await p; 
+    }
+  }
+  
+  /** Test/helper: await until current selection-mutation queue is idle */
+  public async waitForSelectionIdle(): Promise<void> {
+    try {
+      await this.checkboxQueue;
+    } catch {
+      // Swallow errors so callers don't get stuck on a rejected queue
     }
   }
 
@@ -1858,11 +1933,26 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
 
   // FileDecorationProvider implementation for tri-state visual indication
   provideFileDecoration(uri: vscode.Uri): vscode.FileDecoration | undefined {
+    // Only decorate resources from our tree (file:// + our query flag)
+    if (uri.scheme !== 'file' || uri.query !== DECORATION_QUERY) {
+      return undefined;
+    }
+    
     const filePath = uri.fsPath;
     
-    // Use cache for O(1) lookup
+    // Only provide decorations for items in our checkedItems or dirDecorationCache
+    // This limits decorations to files/folders we're actually tracking
     const stats = this.dirDecorationCache.get(filePath);
     if (!stats || stats.total === 0) {
+      // Check if it's an individual file we're tracking
+      const itemState = checkedItems.get(filePath);
+      if (itemState === vscode.TreeItemCheckboxState.Checked) {
+        return {
+          badge: '●',
+          tooltip: 'Selected',
+          color: new vscode.ThemeColor('gitDecoration.addedResourceForeground')
+        };
+      }
       return undefined;
     }
     
@@ -1884,6 +1974,12 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
       tooltip: 'Partially selected',
       color: new vscode.ThemeColor('gitDecoration.modifiedResourceForeground')
     };
+  }
+
+  // Debug helper to check decoration stats for a directory
+  public dumpDecorationStats(dirPath: string): void {
+    const s = this.dirDecorationCache.get(dirPath);
+    console.log('[Decorations]', dirPath, s ? `checked=${s.checked}, total=${s.total}` : 'no-entry');
   }
 
   // Rebuild decoration cache from current checkedItems
@@ -1911,6 +2007,11 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
           if (entry.isSymbolicLink && entry.isSymbolicLink()) {continue;}
           
           const fullPath = path.join(dirPath, entry.name);
+          
+          // Never count our internal metadata folder in decoration totals
+          if (entry.isDirectory() && entry.name === '.promptcode') {
+            continue;
+          }
           
           // Skip ignored files
           if (this.ignoreHelper?.shouldIgnore(fullPath)) {
@@ -1947,17 +2048,40 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
     }
   }
 
+  // Incremental update for single file selection changes (performance optimization)
+  private updateDecorationCacheForFile(filePath: string, isChecked: boolean): void {
+    // Only use incremental updates for single file changes
+    // For directory changes or bulk operations, fall back to full rebuild
+    
+    // Update counts for all parent directories up to workspace root
+    let dir = path.dirname(filePath);
+    const delta = isChecked ? 1 : -1;
+    
+    while (dir && dir !== path.dirname(dir)) {
+      const entry = this.dirDecorationCache.get(dir);
+      if (entry) {
+        entry.checked = Math.max(0, Math.min(entry.total, entry.checked + delta));
+      }
+      
+      // Stop at workspace root
+      if (Array.from(this.workspaceRoots.values()).includes(dir)) {
+        break;
+      }
+      dir = path.dirname(dir);
+    }
+  }
+
   // Trigger decoration updates when selection changes
   private updateDecorations(paths?: string[]): void {
     if (paths && paths.length > 0) {
       // Update decorations for specific paths and their parents
       const uris: vscode.Uri[] = [];
       for (const filePath of paths) {
-        uris.push(vscode.Uri.file(filePath));
+        uris.push(withDecorQuery(vscode.Uri.file(filePath)));
         // Also update parent directories
         let parentPath = path.dirname(filePath);
         while (parentPath && parentPath !== path.dirname(parentPath)) {
-          uris.push(vscode.Uri.file(parentPath));
+          uris.push(withDecorQuery(vscode.Uri.file(parentPath)));
           parentPath = path.dirname(parentPath);
         }
       }
