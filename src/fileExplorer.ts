@@ -471,16 +471,8 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
       this.pendingExpansion = null;
     }
 
-    // Optional single-result auto-select
-    const files = await this.getCurrentSearchResults();
-    if (sequence === this.searchSequence && files.length === 1) {
-      const singlePath = files[0];
-      checkedItems.clear();
-      checkedItems.set(singlePath, vscode.TreeItemCheckboxState.Checked);
-      this.updateDecorationCache();
-      this.refresh();
-      vscode.commands.executeCommand('promptcode.getSelectedFiles');
-    }
+    // Removed auto-select behavior - users should explicitly select files
+    // even when there's only one search result
   }
 
   // --- ADDED: Simple Glob to Regex Converter ---
