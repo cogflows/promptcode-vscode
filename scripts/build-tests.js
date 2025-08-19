@@ -19,6 +19,7 @@ const testEntryPoints = [
   'src/test/suite/fileExplorer.test.ts',
   'src/test/suite/fileExplorerCheckbox.test.ts',
   'src/test/suite/fileExplorerSearch.test.ts',
+  'src/test/suite/fileExplorerDecorationWebviewBug.test.ts',
   // Also compile the utils that tests depend on
   'src/utils/filePattern.ts',
   'src/utils/generatePatternsFromSelection.ts',

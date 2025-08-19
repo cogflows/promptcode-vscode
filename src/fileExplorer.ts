@@ -1029,10 +1029,8 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
             vscode.TreeItemCollapsibleState.None
         );
 
-        // Ensure checkbox state is preserved
-        if (checkedItems.has(fullPath)) {
-          fileItem.checkboxState = checkedItems.get(fullPath) ?? vscode.TreeItemCheckboxState.Unchecked;
-        }
+        // The FileItem constructor already sets the checkbox state correctly from checkedItems
+        // No need to override it here
 
         return fileItem;
       });

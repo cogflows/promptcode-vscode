@@ -5,6 +5,10 @@ import * as path from 'path';
 import * as os from 'os';
 import { FileExplorerProvider, FileItem, checkedItems, expandedItems } from '../../fileExplorer';
 
+// Match the DECORATION_QUERY constant from fileExplorer.ts
+const DECORATION_QUERY = 'pc=1';
+const withDecorQuery = (uri: vscode.Uri) => uri.with({ query: DECORATION_QUERY });
+
 suite('FileExplorer Decoration Webview Command Bug Reproduction', () => {
     let tempDir: string;
     let workspaceFolder: vscode.WorkspaceFolder;
@@ -84,7 +88,7 @@ suite('FileExplorer Decoration Webview Command Bug Reproduction', () => {
             (fileExplorer as any).updateDecorationCache();
             
             // Verify decoration is correct after normal selection
-            const decorationAfterSelect = fileExplorer.provideFileDecoration(vscode.Uri.file(testDir));
+            const decorationAfterSelect = fileExplorer.provideFileDecoration(withDecorQuery(vscode.Uri.file(testDir)));
             console.log('After selecting 2 files:', decorationAfterSelect);
             assert.ok(decorationAfterSelect, 'Decoration should exist after selection');
             assert.strictEqual(decorationAfterSelect!.badge, '◐', 'Should show half-circle for partial selection');
@@ -99,7 +103,7 @@ suite('FileExplorer Decoration Webview Command Bug Reproduction', () => {
             (fileExplorer as any).updateDecorationCache(); // THIS IS THE FIX!
             
             // Check if decoration is now correct (verifying the fix!)
-            const decorationAfterDeselect = fileExplorer.provideFileDecoration(vscode.Uri.file(testDir));
+            const decorationAfterDeselect = fileExplorer.provideFileDecoration(withDecorQuery(vscode.Uri.file(testDir)));
             console.log('After deselectFile (WITH cache update from fix):', decorationAfterDeselect);
             
             // With the fix: decoration should now be correct
@@ -132,7 +136,7 @@ suite('FileExplorer Decoration Webview Command Bug Reproduction', () => {
             (fileExplorer as any).updateDecorationCache();
             
             // Verify decorations are correct initially
-            const rootDecorationBefore = fileExplorer.provideFileDecoration(vscode.Uri.file(tempDir));
+            const rootDecorationBefore = fileExplorer.provideFileDecoration(withDecorQuery(vscode.Uri.file(tempDir)));
             console.log('Root decoration before:', rootDecorationBefore);
             assert.ok(rootDecorationBefore, 'Root should have decoration');
             
@@ -151,7 +155,7 @@ suite('FileExplorer Decoration Webview Command Bug Reproduction', () => {
             (fileExplorer as any).updateDecorationCache(); // THIS IS THE FIX!
             
             // Check if decoration is properly updated (verifying the fix!)
-            const rootDecorationAfter = fileExplorer.provideFileDecoration(vscode.Uri.file(tempDir));
+            const rootDecorationAfter = fileExplorer.provideFileDecoration(withDecorQuery(vscode.Uri.file(tempDir)));
             console.log('Root decoration after removeDirectory (WITH cache update from fix):', rootDecorationAfter);
             
             const cache = (fileExplorer as any).dirDecorationCache;
@@ -182,7 +186,7 @@ suite('FileExplorer Decoration Webview Command Bug Reproduction', () => {
             (fileExplorer as any).updateDecorationCache();
             
             // Verify decoration shows 2 files
-            const decorationBefore = fileExplorer.provideFileDecoration(vscode.Uri.file(testDir));
+            const decorationBefore = fileExplorer.provideFileDecoration(withDecorQuery(vscode.Uri.file(testDir)));
             console.log('Before modifying ignore:', decorationBefore);
             const cacheBefore = (fileExplorer as any).dirDecorationCache.get(testDir);
             console.log('Cache before:', cacheBefore);
@@ -218,7 +222,7 @@ suite('FileExplorer Decoration Webview Command Bug Reproduction', () => {
             console.log('After cleanup, CHECKED items in test dir:', remainingChecked.length, 'items:', remainingChecked.map(([p]) => path.basename(p)));
             
             // Check if decoration is now correct (this is the fix!)
-            const decorationAfter = fileExplorer.provideFileDecoration(vscode.Uri.file(testDir));
+            const decorationAfter = fileExplorer.provideFileDecoration(withDecorQuery(vscode.Uri.file(testDir)));
             console.log('After cleanup (WITH our fix):', decorationAfter);
             
             const cache = (fileExplorer as any).dirDecorationCache;
@@ -264,7 +268,7 @@ suite('FileExplorer Decoration Webview Command Bug Reproduction', () => {
             (fileExplorer as any).updateDecorationCache();
             (fileExplorer as any).updateDecorations([fileItem.fullPath]);
             
-            const decoration = fileExplorer.provideFileDecoration(vscode.Uri.file(testDir));
+            const decoration = fileExplorer.provideFileDecoration(withDecorQuery(vscode.Uri.file(testDir)));
             console.log('After proper checkbox toggle:', decoration);
             
             assert.ok(decoration, 'Decoration should exist');
