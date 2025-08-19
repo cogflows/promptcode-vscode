@@ -153,7 +153,8 @@
       "Bash(git restore:*)",
       "Bash(git checkout:*)",
       "Bash(git fetch:*)",
-      "Bash(npx esbuild:*)"
+      "Bash(npx esbuild:*)",
+      "Bash(npx vsce ls:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits",

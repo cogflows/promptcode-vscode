@@ -1021,10 +1021,13 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem>, 
             // Step 2: Rebuild the decoration cache based on the new model state
             this.updateDecorationCache();
             
-            // Step 3: Trigger a single UI refresh (updates both checkboxes AND decorations)
+            // Step 3: Fire decoration change event for updated paths
+            this.updateDecorations([item.fullPath]);
+            
+            // Step 4: Refresh the tree view to update checkboxes
             this.refresh();
             
-            // Step 4: Notify the webview of the change
+            // Step 5: Notify the webview of the change
             await vscode.commands.executeCommand('promptcode.getSelectedFiles');
           } catch (error) {
             // Propagate error to be caught by outer catch
