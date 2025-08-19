@@ -869,7 +869,7 @@ export class PromptCodeWebViewProvider {
                         </p>
                     </footer>
                 </div>
-                <script>
+                <script nonce="${nonce}">
                     window.samplePrompts = ${promptsJson};
                 </script>
                 
