@@ -213,14 +213,15 @@ jobs:
             cli-*/*
           draft: false
           prerelease: false
+          make_latest: false  # Manual promotion control
           generate_release_notes: true
           body: |
             ## Installation
 
             ### VS Code Extension
-            1. Download `promptcode-${{ github.ref_name }}.vsix`
+            1. Download the `promptcode-*.vsix` file from the assets below
             2. Install via Command Palette: `Extensions: Install from VSIX...`
-            3. Or via CLI: `code --install-extension promptcode-${{ github.ref_name }}.vsix`
+            3. Or via CLI: `code --install-extension promptcode-*.vsix`
 
             ### CLI Tool
 

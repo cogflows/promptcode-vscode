@@ -107,16 +107,35 @@ Per the Cursor rules in `.cursor/rules/css-rules.md`:
 
 ## Release Process
 
-### GitHub Actions Workflow
-1. **Push to main** triggers release workflow
-2. **Create tag**: `git tag v0.3.3 && git push origin v0.3.3`
-3. **Actions automatically**:
-   - Build extension VSIX
-   - Build CLI binaries (macOS, Linux, Windows)
-   - Run tests
-   - Create GitHub release with artifacts
+### Overview
+We use the "Node.js way" - build everything on tag push, promote selectively:
+- Version numbers are cheap - increment freely if issues found
+- Never force-push tags - each release is immutable
+- Control user updates via GitHub's "latest" flag and marketplace publishing
 
-### Manual Release
+### GitHub Actions Workflow
+1. **Create and push tag**: `git tag v0.7.0 && git push origin v0.7.0`
+2. **Automatic build**: GitHub Actions builds all artifacts with `make_latest: false`
+3. **Test artifacts**: Download and verify from GitHub Release
+4. **Promote when ready**:
+   - CLI only: `gh workflow run promote-cli.yml -f tag=v0.7.0`
+   - Extension only: `gh workflow run publish-extension.yml -f tag=v0.7.0`
+   - Both: `gh workflow run promote-all.yml -f tag=v0.7.0`
+
+### Quick Commands
+```bash
+# Standard release (both products)
+npm version patch && git push origin main --tags
+# After testing: gh workflow run promote-all.yml -f tag=v0.7.0
+
+# Hotfix workflow
+# Found bug in v0.7.0? Just increment:
+npm version patch  # Creates v0.7.1
+git push origin main --tags
+# Test and promote v0.7.1 instead
+```
+
+### Manual Builds (Development)
 ```bash
 # Extension
 npm run package  # Creates .vsix file

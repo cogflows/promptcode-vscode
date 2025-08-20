@@ -1,0 +1,38 @@
+name: Publish Extension to Marketplace
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to publish (e.g., v0.7.1)'
+        required: true
+        type: string
+
+jobs:
+  publish-extension:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Download VSIX from Release
+        run: |
+          echo "📦 Downloading VSIX from ${{ inputs.tag }} release..."
+          gh release download ${{ inputs.tag }} \
+            --pattern "*.vsix" \
+            --repo ${{ github.repository }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Publish to VS Code Marketplace
+        run: |
+          echo "📤 Publishing to VS Code Marketplace..."
+          npx @vscode/vsce publish -p ${{ secrets.VSCE_TOKEN }}
+      
+      - name: Summary
+        run: |
+          echo "✅ Extension ${{ inputs.tag }} published to marketplace"
+          echo "Users will see update in VS Code within 1-2 hours"

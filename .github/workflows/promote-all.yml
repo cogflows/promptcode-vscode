@@ -1,0 +1,33 @@
+name: Promote Both CLI and Extension
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to promote (e.g., v0.7.1)'
+        required: true
+        type: string
+
+jobs:
+  promote-all:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Promote CLI
+        run: |
+          gh workflow run promote-cli.yml \
+            -f tag=${{ inputs.tag }} \
+            --repo ${{ github.repository }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Publish Extension
+        run: |
+          gh workflow run publish-extension.yml \
+            -f tag=${{ inputs.tag }} \
+            --repo ${{ github.repository }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Summary
+        run: |
+          echo "✅ Released ${{ inputs.tag }} to both CLI and Marketplace"

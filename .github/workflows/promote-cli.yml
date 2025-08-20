@@ -1,0 +1,29 @@
+name: Promote CLI to Latest
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to promote (e.g., v0.7.1)'
+        required: true
+        type: string
+
+jobs:
+  promote-cli:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Promote to Latest
+        run: |
+          echo "🚀 Promoting CLI ${{ inputs.tag }} to latest..."
+          gh release edit ${{ inputs.tag }} \
+            --latest \
+            --repo ${{ github.repository }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Summary
+        run: |
+          echo "✅ CLI ${{ inputs.tag }} is now available for auto-update"
+          echo "Users will see update notification on next CLI usage"

@@ -53,24 +53,57 @@ Platform: darwin arm64
 - Added support for multiple AI SDK token formats
 - Documented pricing conventions
 
-## Distribution Commands
+## Release Process
 
-### Publish VS Code Extension
+### Build and Stage (Automatic)
+When you push a tag, GitHub Actions automatically:
+1. Builds all artifacts (CLI binaries, VS Code extension VSIX)
+2. Creates a GitHub Release with all artifacts
+3. Does NOT mark as "latest" (manual control)
+
+### Promote to Users (Manual)
+
+#### VS Code Extension
 ```bash
-cd <project-root>
-vsce publish
+# Publish specific version to marketplace
+gh workflow run publish-extension.yml -f tag=v0.7.0
 ```
 
-### Publish Core Package to npm
+#### CLI Auto-Updates
+```bash
+# Enable auto-updates for specific version
+gh workflow run promote-cli.yml -f tag=v0.7.0
+```
+
+#### Both Products
+```bash
+# Promote both CLI and extension
+gh workflow run promote-all.yml -f tag=v0.7.0
+```
+
+### Quick Release Workflow
+```bash
+# 1. Update version
+npm version patch  # or minor/major
+
+# 2. Push tag
+git push origin main --tags
+
+# 3. Wait for build, then test artifacts
+
+# 4. If good, promote
+gh workflow run promote-all.yml -f tag=v0.7.0
+
+# 5. If bad, increment and try again
+npm version patch
+git push origin main --tags
+```
+
+### Publish Core Package to npm (if needed)
 ```bash
 cd packages/core
 npm publish --access public
 ```
-
-### Distribute CLI Binary
-- Upload to GitHub Releases
-- Consider creating install script for different platforms
-- Build for other platforms: `bun build src/index.ts --compile --target=bun-linux-x64`
 
 ## Testing Distribution
 ```bash
