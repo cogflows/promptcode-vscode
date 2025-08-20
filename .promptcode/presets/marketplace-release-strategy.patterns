@@ -1,0 +1,14 @@
+# Marketplace Release Strategy Context
+.github/workflows/release.yml
+.github/workflows/test.yml
+.github/workflows/publish-marketplace.yml
+package.json
+packages/cli/package.json
+packages/core/package.json
+scripts/resolveVersion.js
+scripts/build.js
+scripts/prepare-release.sh
+packages/cli/scripts/inject-version.js
+MARKETPLACE_RELEASE_PLAN.md
+README.md
+.vscodeignore

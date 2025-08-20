@@ -30,7 +30,9 @@ jobs:
       - name: Publish to VS Code Marketplace
         run: |
           echo "📤 Publishing to VS Code Marketplace..."
-          npx @vscode/vsce publish -p ${{ secrets.VSCE_TOKEN }}
+          VSIX_FILE=$(ls *.vsix)
+          echo "Publishing $VSIX_FILE..."
+          npx @vscode/vsce publish --packagePath "$VSIX_FILE" -p ${{ secrets.VSCE_TOKEN }}
       
       - name: Summary
         run: |
