@@ -69,7 +69,7 @@ export const MODELS: Record<string, ModelConfig> = {
     provider: 'openai',
     modelId: 'o3',
     name: 'O3',
-    description: 'Advanced reasoning model with deep thinking capabilities',
+    description: 'Reasoning-focused model with deep thinking capabilities',
     contextWindow: 200000,
     pricing: { input: 2, output: 8 },
     supportsWebSearch: true
@@ -78,7 +78,7 @@ export const MODELS: Record<string, ModelConfig> = {
     provider: 'openai',
     modelId: 'o3-pro',
     name: 'O3 Pro',
-    description: 'Most advanced reasoning model with extended thinking',
+    description: 'Premium reasoning model with extended thinking time',
     contextWindow: 200000,
     pricing: { input: 20, output: 80 },
     supportsWebSearch: true
