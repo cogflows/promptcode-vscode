@@ -200,10 +200,10 @@ async function setupClaudeCommands(projectPath: string, options?: CcOptions): Pr
   
   // Report what was done
   const actions = [];
-  if (stats.created > 0) actions.push(`${stats.created} new`);
-  if (stats.updated > 0) actions.push(`${stats.updated} updated`);
-  if (stats.kept > 0) actions.push(`${stats.kept} kept`);
-  if (stats.unchanged > 0) actions.push(`${stats.unchanged} unchanged`);
+  if (stats.created > 0) { actions.push(`${stats.created} new`); }
+  if (stats.updated > 0) { actions.push(`${stats.updated} updated`); }
+  if (stats.kept > 0) { actions.push(`${stats.kept} kept`); }
+  if (stats.unchanged > 0) { actions.push(`${stats.unchanged} unchanged`); }
   
   if (actions.length > 0) {
     console.log(chalk.green(`✓ Claude commands: ${actions.join(', ')}`));

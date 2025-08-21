@@ -32,7 +32,7 @@ Consult an expert about: $ARGUMENTS
 
 3. Prepare consultation file for review:
    - Set temp directory: `TMP="${TMPDIR:-/tmp}"`
-   - Create unique files: `PROMPT_FILE="$(mktemp "$TMP/expert-consultation.XXXXXX.md")"`
+   - Create unique files: `PROMPT_FILE="$(mktemp "${TMP%/}/expert-consultation-XXXXXX")"`
    - Structure the file with:
      ```markdown
      # Expert Consultation
@@ -47,7 +47,7 @@ Consult an expert about: $ARGUMENTS
      ```
    - Append the code context using the preset:
      ```bash
-     CODE_FILE="$(mktemp "$TMP/code-context.XXXXXX.txt")"
+     CODE_FILE="$(mktemp "${TMP%/}/code-context-XXXXXX")"
      promptcode generate --preset "{preset_name}" --output "$CODE_FILE"
      cat "$CODE_FILE" >> "$PROMPT_FILE"
      ```
@@ -126,7 +126,7 @@ Consult an expert about: $ARGUMENTS
    **Ensemble Mode (Synthesis):**
    - Read all response text files
    - Extract key insights from each model's response
-   - Create synthesis report: `SYNTHESIS_FILE="$(mktemp "$TMP/expert-synthesis.XXXXXX.md")"`
+   - Create synthesis report: `SYNTHESIS_FILE="$(mktemp "${TMP%/}/expert-synthesis-XXXXXX")"`
    
    ```markdown
    # Ensemble Expert Consultation Results
