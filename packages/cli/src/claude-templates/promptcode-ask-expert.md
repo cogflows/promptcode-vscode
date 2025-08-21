@@ -1,5 +1,5 @@
 ---
-allowed-tools: Bash(promptcode expert:*), Bash(promptcode preset:*), Bash(promptcode generate:*), Bash(open:*), Read(/tmp/*), Write(/tmp/*), Task, Bash(command -v:*), Bash(cursor:*), Bash(code:*), Bash(echo:*), Bash(cat:*), Bash(wait:*), Bash([ -n:*), Bash(test:*)
+allowed-tools: Bash(promptcode expert:*), Bash(promptcode expert --estimate-cost:* --json), Bash(promptcode expert --models --json), Bash(promptcode preset:*), Bash(promptcode generate:*), Bash(promptcode generate --preset:* --output:*), Bash(mktemp:*), Read(/tmp/*), Write(/tmp/*), Task, Bash(command -v:*), Bash(cursor:*), Bash(code:*), Bash(echo:*), Bash(cat:*), Bash(xdg-open:*), Bash(open:*)
 description: Consult AI expert for complex problems with code context - supports ensemble mode for multiple models
 ---
 
@@ -20,9 +20,9 @@ Consult an expert about: $ARGUMENTS
    promptcode preset list
    ```
    - Check if an existing preset matches the request (e.g., "security" → look for security-related presets)
-   - If no suitable preset exists, use the `/promptcode-preset-create` command:
-     ```
-     /promptcode-preset-create {description of what code to include based on the question}
+   - If no suitable preset exists, create one directly:
+     ```bash
+     promptcode preset create {descriptive-name} --from-context "{description}"
      ```
      This will intelligently create a preset with the right patterns.
    - Verify the preset:
@@ -31,7 +31,8 @@ Consult an expert about: $ARGUMENTS
      ```
 
 3. Prepare consultation file for review:
-   - Create a consultation file at `/tmp/expert-consultation-{timestamp}.md`
+   - Set temp directory: `TMP="${TMPDIR:-/tmp}"`
+   - Create unique files: `PROMPT_FILE="$(mktemp "$TMP/expert-consultation.XXXXXX.md")"`
    - Structure the file with:
      ```markdown
      # Expert Consultation
@@ -46,47 +47,51 @@ Consult an expert about: $ARGUMENTS
      ```
    - Append the code context using the preset:
      ```bash
-     promptcode generate --preset "{preset_name}" -o /tmp/code-context-{timestamp}.txt
-     cat /tmp/code-context-{timestamp}.txt >> "/tmp/expert-consultation-{timestamp}.md"
+     CODE_FILE="$(mktemp "$TMP/code-context.XXXXXX.txt")"
+     promptcode generate --preset "{preset_name}" --output "$CODE_FILE"
+     cat "$CODE_FILE" >> "$PROMPT_FILE"
      ```
 
 4. Open consultation for user review:
    ```bash
-   # Try cursor first, then code, then EDITOR, then fallback to cat
+   # Try cursor first, then code, then EDITOR, then xdg-open/open
    if command -v cursor &> /dev/null; then
-     cursor "/tmp/expert-consultation-{timestamp}.md"
+     cursor "$PROMPT_FILE"
    elif command -v code &> /dev/null; then
-     code "/tmp/expert-consultation-{timestamp}.md"
+     code "$PROMPT_FILE"
    elif [ -n "$EDITOR" ]; then
-     "$EDITOR" "/tmp/expert-consultation-{timestamp}.md"
+     "$EDITOR" "$PROMPT_FILE"
+   elif command -v xdg-open &> /dev/null; then
+     xdg-open "$PROMPT_FILE"
+   elif command -v open &> /dev/null; then
+     open "$PROMPT_FILE"
    else
-     echo "📄 Consultation file created at: /tmp/expert-consultation-{timestamp}.md"
+     echo "📄 Consultation file created at: $PROMPT_FILE"
      echo "No editor found. Please open the file manually to review."
    fi
    ```
    
 5. Estimate cost and get approval:
-   - Use the CLI's built-in cost estimation:
-     ```bash
-     promptcode expert --prompt-file "/tmp/expert-consultation-{timestamp}.md" --model <model> --estimate-cost --json
-     ```
-   - Parse the JSON output to get:
-     - `tokens.input` - total input tokens
-     - `cost.total` - estimated total cost
-   - Check the exit code: 0 = success, 2 = approval required (cost > threshold)
+   ```bash
+   promptcode expert --prompt-file "$PROMPT_FILE" --model <model> --estimate-cost --json
+   ```
+   - Parse JSON for `cost.total` and `tokens.input`
+   - Exit code: 0 = success, 2 = approval required (cost > threshold)
    
    **For single model:**
-   - Say: "I've prepared the expert consultation using preset '{preset_name}' (~{tokens} tokens). Model: {model}. The consultation file is open in Cursor for review. Reply 'yes' to send to the expert (estimated cost: ${cost from CLI})."
+   - Say: "Ready to consult {model} using preset '{preset_name}' ({tokens} tokens, ~${cost}). Reply 'yes' to proceed."
    
    **For ensemble mode (multiple models):**
-   - Run --estimate-cost for each model in parallel to get costs
-   - Say: "I've prepared an ensemble consultation using preset '{preset_name}' (~{tokens} tokens) with {models}. Total estimated cost: ${total_cost} ({model1}: ${cost1}, {model2}: ${cost2}, ...). The consultation file is open for review. Reply 'yes' to proceed with all models in parallel."
+   - Run --estimate-cost for each model in parallel
+   - Say: "Ready for ensemble consultation with {models} ({total_tokens} tokens). Total: ${total_cost} ({model1}: ${cost1}, {model2}: ${cost2}). Reply 'yes' to proceed."
+   
+   **Important: Ask for approval ONLY ONCE - after showing cost estimate**
 
 6. Execute based on mode:
 
    **Single Model Mode:**
    ```bash
-   promptcode expert --prompt-file "/tmp/expert-consultation-{timestamp}.md" --model {model} --yes
+   promptcode expert --prompt-file "$PROMPT_FILE" --model {model} --yes
    ```
    
    **Ensemble Mode (Parallel Execution):**
@@ -101,8 +106,8 @@ Consult an expert about: $ARGUMENTS
      Task: "Ensemble consultation with {model1} and {model2}"
      Prompt: "
        Step 1: Run these consultations in PARALLEL as sub-tasks:
-       - Sub-task 1: promptcode expert --prompt-file '/tmp/expert-consultation-{timestamp}.md' --model {model1} --yes > /tmp/expert-{model1}-{timestamp}.txt 2>&1
-       - Sub-task 2: promptcode expert --prompt-file '/tmp/expert-consultation-{timestamp}.md' --model {model2} --yes > /tmp/expert-{model2}-{timestamp}.txt 2>&1
+       - Sub-task 1: promptcode expert --prompt-file '$PROMPT_FILE' --model {model1} --yes --output /tmp/expert-{model1}.txt
+       - Sub-task 2: promptcode expert --prompt-file '$PROMPT_FILE' --model {model2} --yes --output /tmp/expert-{model2}.txt
        
        Step 2: After both complete, read the response files
        Step 3: Create synthesis report as described in Step 7
@@ -121,7 +126,7 @@ Consult an expert about: $ARGUMENTS
    **Ensemble Mode (Synthesis):**
    - Read all response text files
    - Extract key insights from each model's response
-   - Create synthesis report in `/tmp/expert-ensemble-synthesis-{timestamp}.md`:
+   - Create synthesis report: `SYNTHESIS_FILE="$(mktemp "$TMP/expert-synthesis.XXXXXX.md")"`
    
    ```markdown
    # Ensemble Expert Consultation Results
@@ -181,14 +186,10 @@ Consult an expert about: $ARGUMENTS
 
 ## Important:
 - **Always use presets** - either existing or create new ones for code context
-- **Create presets intelligently** - analyze the question to determine which files are relevant
+- **Single approval flow**: Estimate cost → Ask user ONCE → Execute with --yes
 - **Show the preset name** to the user so they know what context is being used
-- Default to GPT-5 model unless another model is explicitly requested
-- For ensemble mode: limit to maximum 4 models to prevent resource exhaustion
-- Always show cost estimate before sending
-- Keep questions clear and specific
-- Include relevant code context when asking about specific functionality
-- NEVER automatically add --yes/--force without user approval
-- Only ask for approval ONCE before sending to expert (not for preparatory steps)
+- Discover default model via `promptcode expert --models --json` (use model with `default:true` or first in list)
+- For ensemble mode: limit to maximum 4 models
+- NEVER automatically add --yes without user approval
 - Reasoning effort defaults to 'high' (set in CLI) - no need to specify
-- Use `promptcode generate -o` to avoid stdout redirection issues
+- Always use `--output` flag instead of stdout redirection for reliability

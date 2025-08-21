@@ -67,9 +67,9 @@ export async function removeFromClaudeMd(projectPath: string): Promise<boolean> 
     return false;
   }
   
-  // Remove PromptCode section (handle both Unix and Windows line endings)
+  // Remove ALL PromptCode sections (global match to handle multiple occurrences)
   const updatedContent = content.replace(
-    /\r?\n*<!-- PROMPTCODE-CLI-START -->[\s\S]*?<!-- PROMPTCODE-CLI-END -->\r?\n*/,
+    /\r?\n*<!-- PROMPTCODE-CLI-START -->[\s\S]*?<!-- PROMPTCODE-CLI-END -->\r?\n*/g,
     '\n'
   );
   
