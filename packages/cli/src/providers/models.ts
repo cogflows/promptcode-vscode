@@ -8,7 +8,7 @@
  * Example: If a provider charges $0.001 per 1K tokens, 
  * the value here should be 1.0 (1000x conversion)
  * 
- * Pricing last updated: January 2025
+ * Pricing last updated: August 2025
  */
 
 import { z } from 'zod';
