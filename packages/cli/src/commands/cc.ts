@@ -120,9 +120,9 @@ async function updateClaudeMd(claudeDir: string): Promise<void> {
     
     // Check if PromptCode section already exists
     if (existingContent.includes('<!-- PROMPTCODE-CLI-START -->')) {
-      // Replace existing section (non-greedy to handle multiple sections)
+      // Replace ALL existing sections (global match to handle multiple occurrences)
       const updatedContent = existingContent.replace(
-        /<!-- PROMPTCODE-CLI-START -->[\s\S]*?<!-- PROMPTCODE-CLI-END -->/,
+        /<!-- PROMPTCODE-CLI-START -->[\s\S]*?<!-- PROMPTCODE-CLI-END -->/g,
         templateContent.trim()
       );
       await fs.promises.writeFile(claudeMdPath, updatedContent);
@@ -200,10 +200,10 @@ async function setupClaudeCommands(projectPath: string, options?: CcOptions): Pr
   
   // Report what was done
   const actions = [];
-  if (stats.created > 0) actions.push(`${stats.created} new`);
-  if (stats.updated > 0) actions.push(`${stats.updated} updated`);
-  if (stats.kept > 0) actions.push(`${stats.kept} kept`);
-  if (stats.unchanged > 0) actions.push(`${stats.unchanged} unchanged`);
+  if (stats.created > 0) { actions.push(`${stats.created} new`); }
+  if (stats.updated > 0) { actions.push(`${stats.updated} updated`); }
+  if (stats.kept > 0) { actions.push(`${stats.kept} kept`); }
+  if (stats.unchanged > 0) { actions.push(`${stats.unchanged} unchanged`); }
   
   if (actions.length > 0) {
     console.log(chalk.green(`✓ Claude commands: ${actions.join(', ')}`));
@@ -318,7 +318,10 @@ export async function ccCommand(options: CcOptions & { detect?: boolean }): Prom
   try {
     // Set up Claude commands and get the directory
     spin.text = 'Setting up Claude integration...';
-    const { claudeDir, isNew, stats } = await setupClaudeCommands(projectPath, options);
+    const { claudeDir, isNew, stats } = await setupClaudeCommands(projectPath, {
+      ...options,
+      skipModified: options.yes || options.force || !isInteractive()
+    });
     
     if (!claudeDir) {
       spin.fail(chalk.red('Setup cancelled'));
@@ -337,7 +340,7 @@ export async function ccCommand(options: CcOptions & { detect?: boolean }): Prom
     console.log(chalk.bold('\n📝 Updated files:'));
     console.log(chalk.gray(`  ${path.relative(projectPath, claudeMdPath)} - PromptCode usage instructions`));
     if (claudeDir) {
-      console.log(chalk.gray(`  ${path.relative(projectPath, path.join(claudeDir, 'commands/'))} - 5 Claude commands installed`));
+      console.log(chalk.gray(`  ${path.relative(projectPath, path.join(claudeDir, 'commands/'))} - ${PROMPTCODE_CLAUDE_COMMANDS.length} Claude commands installed`));
     }
     
     console.log(chalk.bold('\n🚀 Next steps:'));

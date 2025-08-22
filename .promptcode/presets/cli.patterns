@@ -1,0 +1,54 @@
+# CLI Development Preset
+# Comprehensive patterns for CLI tool development
+# Created: 2025-01-22
+
+# CLI source code
+packages/cli/src/**/*.ts
+packages/cli/src/**/*.js
+
+# Core package (shared logic)
+packages/core/src/**/*.ts
+
+# Templates
+packages/cli/src/claude-templates/**/*.md
+packages/cli/src/cursor-templates/**/*.mdc
+.claude/commands/**/*.md
+
+# Build and scripts
+packages/cli/scripts/**/*.js
+packages/cli/scripts/**/*.sh
+packages/cli/scripts/**/*.ps1
+
+# Tests
+packages/cli/test/**/*.ts
+packages/cli/test/**/*.js
+packages/core/test/**/*.ts
+
+# Configuration
+packages/cli/package.json
+packages/cli/tsconfig.json
+packages/core/package.json
+packages/core/tsconfig.json
+
+# Documentation
+packages/cli/README.md
+packages/core/README.md
+CLAUDE.md
+.claude/README.md
+
+# Root configuration
+package.json
+tsconfig.json
+
+# Exclude patterns
+!**/node_modules/**
+!**/dist/**
+!**/build/**
+!**/.cache/**
+!**/coverage/**
+!**/.git/**
+!**/*.log
+!**/*.tmp
+!**/*.vsix
+!**/*.tgz
+!**/*.zip

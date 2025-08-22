@@ -333,7 +333,7 @@ export async function cursorCommand(options: CursorOptions & { detect?: boolean 
     
     console.log(chalk.bold('\n🔑 API Keys:'));
     console.log(chalk.gray('For expert mode, set environment variables:'));
-    console.log(chalk.gray('  export OPENAI_API_KEY=...   # For O3/GPT models'));
+    console.log(chalk.gray('  export OPENAI_API_KEY=...   # For GPT-5/O3 models'));
     console.log(chalk.gray('  export ANTHROPIC_API_KEY=... # For Claude models'));
     
   } catch (error) {

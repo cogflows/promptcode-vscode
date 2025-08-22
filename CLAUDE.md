@@ -205,7 +205,7 @@ promptcode preset info backend --json
 
 Set API keys via environment variables for expert consultations:
 ```bash
-export OPENAI_API_KEY=sk-...      # For O3/O3-pro models
+export OPENAI_API_KEY=sk-...      # For GPT-5, O3 models
 export ANTHROPIC_API_KEY=sk-...   # For Claude models
 export GOOGLE_API_KEY=...         # For Gemini models
 export XAI_API_KEY=...            # For Grok models
@@ -215,7 +215,6 @@ export XAI_API_KEY=...            # For Grok models
 
 The expert command has built-in cost protection:
 - Operations over $0.50 require explicit approval
-- Premium models (e.g., o3-pro) always require confirmation
 - Use `--yes` flag only after getting user approval
 
 <details>

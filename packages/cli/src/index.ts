@@ -251,7 +251,7 @@ program
   .description('Ask AI expert questions with full codebase context')
   .addHelpText('after', `
 Requires API key for chosen provider. Set via environment variables:
-  $ export OPENAI_API_KEY=<key>     # For O3, O3 Pro
+  $ export OPENAI_API_KEY=<key>     # For GPT-5, O3 models
   $ export ANTHROPIC_API_KEY=<key>  # For Opus 4, Sonnet 4  
   $ export GOOGLE_API_KEY=<key>     # For Gemini 2.5 Pro
   $ export GROK_API_KEY=<key>       # For Grok 4

@@ -7,6 +7,8 @@
  * 
  * Example: If a provider charges $0.001 per 1K tokens, 
  * the value here should be 1.0 (1000x conversion)
+ * 
+ * Pricing last updated: August 2025
  */
 
 import { z } from 'zod';
@@ -69,7 +71,7 @@ export const MODELS: Record<string, ModelConfig> = {
     provider: 'openai',
     modelId: 'o3',
     name: 'O3',
-    description: 'Advanced reasoning model with deep thinking capabilities',
+    description: 'Reasoning-focused model with deep thinking capabilities',
     contextWindow: 200000,
     pricing: { input: 2, output: 8 },
     supportsWebSearch: true
@@ -78,7 +80,7 @@ export const MODELS: Record<string, ModelConfig> = {
     provider: 'openai',
     modelId: 'o3-pro',
     name: 'O3 Pro',
-    description: 'Most advanced reasoning model with extended thinking',
+    description: 'Premium reasoning model with extended thinking time',
     contextWindow: 200000,
     pricing: { input: 20, output: 80 },
     supportsWebSearch: true
@@ -100,7 +102,7 @@ export const MODELS: Record<string, ModelConfig> = {
     name: 'Claude Opus 4',
     description: 'Most advanced Claude model with breakthrough capabilities',
     contextWindow: 500000,
-    pricing: { input: 25, output: 100 },
+    pricing: { input: 15, output: 75 },
     supportsWebSearch: true
   },
   'sonnet-4': {
@@ -109,7 +111,7 @@ export const MODELS: Record<string, ModelConfig> = {
     name: 'Claude Sonnet 4',
     description: 'Balanced power and efficiency for production use',
     contextWindow: 500000,
-    pricing: { input: 5, output: 20 },
+    pricing: { input: 3, output: 15 },
     supportsWebSearch: true
   },
   
@@ -120,7 +122,7 @@ export const MODELS: Record<string, ModelConfig> = {
     name: 'Gemini 2.5 Pro',
     description: 'Latest Gemini with enhanced multimodal understanding',
     contextWindow: 3000000,
-    pricing: { input: 3, output: 12 },
+    pricing: { input: 1.25, output: 10 },
     supportsWebSearch: true
   },
   'gemini-2.5-flash': {
@@ -129,7 +131,7 @@ export const MODELS: Record<string, ModelConfig> = {
     name: 'Gemini 2.5 Flash',
     description: 'Ultra-fast model for real-time applications',
     contextWindow: 1000000,
-    pricing: { input: 0.3, output: 1.2 },
+    pricing: { input: 0.15, output: 0.6 },
     supportsWebSearch: true
   },
   
@@ -140,7 +142,7 @@ export const MODELS: Record<string, ModelConfig> = {
     name: 'Grok 4',
     description: 'xAI\'s most advanced model with real-time web access',
     contextWindow: 200000,
-    pricing: { input: 5, output: 15 },
+    pricing: { input: 3, output: 15 },
     supportsWebSearch: true
   }
 };
