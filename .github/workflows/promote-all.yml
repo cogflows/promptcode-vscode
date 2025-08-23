@@ -11,6 +11,9 @@ on:
 jobs:
   promote-all:
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
     steps:
       - name: Promote CLI
         run: |
