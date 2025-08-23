@@ -1,0 +1,24 @@
+# CSP Fix Testing Preset
+# Files needed to verify the Content Security Policy violations fix
+# for VS Code extension issue #17
+
+# Core webview files with CSP fixes
+src/webview/selectFilesTab.js
+src/webview/tabs/selectFilesTabContent.ts
+src/webviewProvider.ts
+
+# File explorer for context
+src/fileExplorer.ts
+
+# Test files to verify the fix
+src/test/suite/fileExplorerDecorationWebviewBug.test.ts
+src/test/decorationCache.test.ts
+
+# Extension entry point
+src/extension.ts
+
+# Package info
+package.json
+
+# Issue context
+.github/ISSUE_TEMPLATE/bug_report.md

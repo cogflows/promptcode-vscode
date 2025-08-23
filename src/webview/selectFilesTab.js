@@ -334,7 +334,7 @@ if (typeof window !== 'undefined') {
 
                             return `
                                 <div class="directory-section ${isExpanded ? '' : 'collapsed'}" data-dir-id="${id}" data-workspace-folder="${workspaceFolderName}">
-                                    <div class="directory-header" onclick="toggleDirectoryFiles(this)">
+                                    <div class="directory-header">
                                         <div class="header-left">
                                             <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                                 <polyline points="9 6 15 12 9 18"></polyline>
@@ -841,6 +841,19 @@ if (typeof window !== 'undefined') {
                             }
                         });
                     }
+
+                    // Toggle a directory by clicking anywhere on its header (CSP-safe)
+                    selectedFilesListEl.addEventListener('click', (e) => {
+                        const header = e.target.closest('.directory-header');
+                        if (!header || !selectedFilesListEl.contains(header)) {return;}
+                        // Don't toggle if the click was on the remove button inside the header
+                        if (e.target.closest('.js-dir-remove')) {return;}
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (typeof window.toggleDirectoryFiles === 'function') {
+                            window.toggleDirectoryFiles(header);
+                        }
+                    });
 
                     // Add listener for preset updates from host
                     // This listener needs to be accessible to the global message handler
