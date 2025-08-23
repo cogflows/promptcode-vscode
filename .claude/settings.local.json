@@ -193,7 +193,8 @@
       "Bash(\"integration-enhancement.patterns\" )",
       "Bash(\"install-update-flow.patterns\" )",
       "Bash(\"All source and test files for VS Code extension debugging.patterns\" )",
-      "Bash(\"vscode-extension-debug.patterns\")"
+      "Bash(\"vscode-extension-debug.patterns\")",
+      "Bash(npm version:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits",
