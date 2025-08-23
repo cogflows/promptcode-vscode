@@ -158,9 +158,11 @@ export function renderDirectoryHeader(dirPath: string, workspaceFolderName: stri
   window.directoryMap[id] = dirPath || ROOT_DIR_KEY;
   
   return /* html */ `
-    <div class="directory-header flex items-center" onclick="toggleDirectoryFiles(this)" data-dir-id="${id}">
+    <div class="directory-header flex items-center" data-dir-id="${id}">
       <span class="folder-label truncate">${dirPath || 'workspace root'}</span>
-      <button class="trash-btn action-button ml-auto" title="Remove folder" onclick="event.stopPropagation(); removeDirectory('${dirPath || ''}', '${workspaceFolderName}');">
+      <button class="trash-btn action-button ml-auto js-dir-remove" title="Remove folder" 
+              data-dir="${dirPath || ''}" 
+              data-workspace="${workspaceFolderName}">
         <i class="codicon codicon-trash"></i>
       </button>
     </div>

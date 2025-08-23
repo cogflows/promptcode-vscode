@@ -873,58 +873,25 @@ export class PromptCodeWebViewProvider {
                     window.samplePrompts = ${promptsJson};
                 </script>
                 
-                <!-- Load selectFilesTab.js first -->
-                <script src="${selectFilesTabJsUri}" nonce="${nonce}"
-                    onload="window._scriptLoaded.selectFilesTab = true; console.log('selectFilesTab.js loaded')" 
-                    onerror="console.error('Failed to load selectFilesTab.js')">
-                </script>
-
-                <!-- Load instructionsTab.js next -->
-                <script src="${instructionsTabJsUri}" nonce="${nonce}"
-                    onload="window._scriptLoaded.instructionsTab = true; console.log('instructionsTab.js loaded')"
-                    onerror="console.error('Failed to load instructionsTab.js')">
-                </script>
+                <!-- Load all scripts with defer for proper sequencing -->
+                <script src="${selectFilesTabJsUri}" nonce="${nonce}" defer></script>
+                <script src="${instructionsTabJsUri}" nonce="${nonce}" defer></script>
+                <script src="${generatePromptTabJsUri}" nonce="${nonce}" defer></script>
+                <script src="${mergeTabJsUri}" nonce="${nonce}" defer></script>
+                <script src="${jsUri}" nonce="${nonce}" defer></script>
                 
-                <!-- Load generatePromptTab.js -->
-                <script src="${generatePromptTabJsUri}" nonce="${nonce}"
-                    onload="window._scriptLoaded.generatePromptTab = true; console.log('generatePromptTab.js loaded')"
-                    onerror="console.error('Failed to load generatePromptTab.js')">
-                </script>
-
-                <!-- Load mergeTab.js -->
-                <script src="${mergeTabJsUri}" nonce="${nonce}"
-                    onload="window._scriptLoaded.mergeTab = true; console.log('mergeTab.js loaded')"
-                    onerror="console.error('Failed to load mergeTab.js')">
-                </script>
-
-                <!-- Then load webview.js which depends on them -->
-                <script src="${jsUri}" nonce="${nonce}"
-                    onload="window._scriptLoaded.webview = true; console.log('webview.js loaded')" 
-                    onerror="console.error('Failed to load webview.js')">
-                </script>
-                
-                <!-- Verify everything loaded -->
-                <script>
-                    setTimeout(() => {
-                        if (!window._scriptLoaded.selectFilesTab) {
-                            console.error('selectFilesTab.js failed to load properly');
-                        }
-                        if (!window._scriptLoaded.instructionsTab) {
-                            console.error('instructionsTab.js failed to load properly');
-                        }
-                        if (!window._scriptLoaded.webview) {
-                            console.error('webview.js failed to load properly');
-                        }
-                        if (typeof window.initSelectFilesTab !== 'function') {
-                            console.error('initSelectFilesTab is not available');
-                        }
-                        if (typeof window.initInstructionsTab !== 'function') {
-                            console.error('initInstructionsTab is not available');
-                        }
-                        if (typeof window.initMergeTab !== 'function') {
-                            console.error('initMergeTab is not available');
-                        }
-                    }, 1000);
+                <!-- CSP-safe verification using DOMContentLoaded -->
+                <script nonce="${nonce}">
+                  window.addEventListener('DOMContentLoaded', () => {
+                    const checks = [
+                      ['initSelectFilesTab', typeof window.initSelectFilesTab === 'function'],
+                      ['initInstructionsTab', typeof window.initInstructionsTab === 'function'],
+                      ['initGeneratePromptTab', typeof window.initGeneratePromptTab === 'function'],
+                      ['initMergeTab', typeof window.initMergeTab === 'function'],
+                    ];
+                    const missing = checks.filter(([, ok]) => !ok).map(([name]) => name);
+                    if (missing.length) console.error('Missing webview boot functions:', missing);
+                  });
                 </script>
             </body>
             </html>
