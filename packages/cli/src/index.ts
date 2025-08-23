@@ -391,117 +391,42 @@ program
   .option('--json', 'output in JSON format')
   .addHelpText('after', '\nShows file count, total tokens, and breakdown by file type.')
   .action(async (options) => {
-    const { scanFiles, initializeTokenCounter } = await import('@promptcode/core');
+    const { initializeTokenCounter } = await import('@promptcode/core');
     const path = await import('path');
-    
+    const { runStats } = await import('./utils/stats-scanner');
     const { exitInTestMode } = await import('./utils/environment');
-    const { spinner } = await import('./utils/spinner');
-    const spin = spinner();
-    spin.start('Analyzing project...');
+    
+    // Initialize token counter for caching
+    const cacheDir = process.env.XDG_CACHE_HOME || path.join(process.env.HOME || '', '.cache', 'promptcode');
+    initializeTokenCounter(cacheDir, '0.1.0');
+    
+    const projectPath = path.resolve(options.path);
+    
+    // Create abort controller for graceful cancellation
+    const abortController = new AbortController();
+    const handleInterrupt = () => {
+      abortController.abort();
+      // Don't exit immediately - let the stats runner handle it gracefully
+    };
+    
+    process.on('SIGINT', handleInterrupt);
+    process.on('SIGTERM', handleInterrupt);
     
     try {
-      // Initialize token counter
-      const cacheDir = process.env.XDG_CACHE_HOME || path.join(process.env.HOME || '', '.cache', 'promptcode');
-      initializeTokenCounter(cacheDir, '0.1.0');
-      
-      const projectPath = path.resolve(options.path);
-      
-      // Determine patterns
-      let patterns = ['**/*'];
-      if (options.preset) {
-        const presetPath = path.join(projectPath, '.promptcode', 'presets', `${options.preset}.patterns`);
-        if (fs.existsSync(presetPath)) {
-          const content = await fs.promises.readFile(presetPath, 'utf8');
-          patterns = content
-            .split('\n')
-            .map((line: string) => line.trim())
-            .filter((line: string) => line && !line.startsWith('#'));
-        } else {
-          spin.fail(`Preset not found: ${options.preset}`);
-          spin.stop(); // Ensure cleanup
-          return;
-        }
-      }
-      
-      // Scan files
-      const files = await scanFiles({
-        cwd: projectPath,
-        patterns,
-        respectGitignore: true,
-        workspaceName: path.basename(projectPath)
+      await runStats(projectPath, {
+        preset: options.preset,
+        json: options.json,
+        signal: abortController.signal
       });
-      
-      spin.stop();
-      
-      // Calculate statistics
-      const totalTokens = files.reduce((sum, f) => sum + f.tokenCount, 0);
-      const filesByExt: Record<string, { count: number; tokens: number }> = {};
-      
-      for (const file of files) {
-        const ext = path.extname(file.path) || '(no extension)';
-        if (!filesByExt[ext]) {
-          filesByExt[ext] = { count: 0, tokens: 0 };
-        }
-        filesByExt[ext].count++;
-        filesByExt[ext].tokens += file.tokenCount;
-      }
-      
-      // Sort extensions by token count
-      const sortedExts = Object.entries(filesByExt)
-        .sort((a, b) => b[1].tokens - a[1].tokens);
-      
-      // Output JSON format if requested
-      if (options.json) {
-        const output = {
-          project: path.basename(projectPath),
-          preset: options.preset || null,
-          totalFiles: files.length,
-          totalTokens,
-          averageTokensPerFile: Math.round(totalTokens / files.length),
-          fileTypes: sortedExts.map(([ext, stats]) => ({
-            extension: ext,
-            fileCount: stats.count,
-            tokenCount: stats.tokens,
-            percentage: parseFloat(((stats.tokens / totalTokens) * 100).toFixed(2))
-          })),
-          topFiles: files
-            .sort((a, b) => b.tokenCount - a.tokenCount)
-            .slice(0, 10)
-            .map(f => ({
-              path: path.relative(projectPath, f.path),
-              tokens: f.tokenCount
-            }))
-        };
-        console.log(JSON.stringify(output, null, 2));
-        return;
-      }
-      
-      // Display human-readable results
-      const title = options.preset 
-        ? `Preset Statistics: ${chalk.cyan(options.preset)}`
-        : `Project Statistics: ${chalk.cyan(path.basename(projectPath))}`;
-      
-      console.log(chalk.bold(`\n${title}`));
-      console.log(chalk.gray('─'.repeat(50)));
-      console.log(`Total files: ${chalk.cyan(files.length)}`);
-      console.log(`Total tokens: ${chalk.cyan(totalTokens.toLocaleString())}`);
-      console.log(`Average tokens/file: ${chalk.cyan(Math.round(totalTokens / files.length).toLocaleString())}`);
-      
-      console.log(chalk.bold('\nTop file types by token count:'));
-      const topExts = sortedExts.slice(0, 10);
-        
-      for (const [ext, stats] of topExts) {
-        const percentage = ((stats.tokens / totalTokens) * 100).toFixed(1);
-        console.log(`  ${ext.padEnd(15)} ${chalk.cyan(stats.count.toString().padStart(5))} files  ${chalk.cyan(stats.tokens.toLocaleString().padStart(10))} tokens  ${chalk.gray(`(${percentage}%)`)}`);
-      }
       
       // Force exit in test mode
       exitInTestMode(0);
-      
     } catch (error) {
-      spin.fail(chalk.red(`Error: ${(error as Error).message}`));
-      spin.stop(); // Ensure cleanup
+      console.error(chalk.red(`Error: ${(error as Error).message}`));
       process.exit(1);
+    } finally {
+      process.removeListener('SIGINT', handleInterrupt);
+      process.removeListener('SIGTERM', handleInterrupt);
     }
   });
 

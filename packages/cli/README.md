@@ -144,8 +144,16 @@ This creates `.cursor/rules/*.mdc` files that teach Cursor's AI agent about Prom
 
 ```bash
 promptcode stats                         # Whole project
-promptcode stats -p backend              # Specific preset
+promptcode stats -l backend              # Specific preset
+promptcode stats --json                  # Output as JSON
 ```
+
+The stats command uses a high-performance two-phase approach:
+- **Discovery phase**: Quickly counts files without reading content
+- **Processing phase**: Reads files with optimized concurrency and progress tracking
+- Automatically skips symlinks and common large directories (node_modules, .git, etc.)
+- Shows real-time progress with ETA for large projects
+- Handles 100k+ files efficiently without hanging
 
 **Cache** - Manage token cache:
 
@@ -369,7 +377,7 @@ The CLI uses standardized exit codes for programmatic usage:
 ## Tips
 
 1. **Use presets** for different parts of your codebase
-2. **Check token counts** with `stats` before generating
+2. **Check token counts** with `stats` before generating (fast even for large repos)
 3. **Stream responses** for long expert consultations
 4. **Save outputs** to `.promptcode/outputs/` for reference
 5. **Clear cache** occasionally to ensure accurate token counts
