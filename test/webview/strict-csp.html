@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PromptCode Webview Test Harness (Strict CSP)</title>
+    
+    <!-- CSP with static test nonce - matches VS Code production behavior -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-testnonce'; font-src data:; img-src data: https:;">
+    
+    <!-- Load the actual webview styles -->
+    <link rel="stylesheet" href="../../out/webview/styles/index.css">
+    
+    <!-- All scripts use the same static test nonce -->
+    <script nonce="testnonce" src="./strict-csp-setup.js" defer></script>
+    <script nonce="testnonce" src="../../out/webview/selectFilesTab.js" defer></script>
+    <script nonce="testnonce" src="../../out/webview/instructionsTab.js" defer></script>
+    <script nonce="testnonce" src="../../out/webview/generatePromptTab.js" defer></script>
+    <script nonce="testnonce" src="../../out/webview/mergeTab.js" defer></script>
+    <script nonce="testnonce" src="../../out/webview/webview.js" defer></script>
+    <script nonce="testnonce" src="./strict-csp-init.js" defer></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Basic structure for testing -->
+        <div id="selected-files-list"></div>
+        <div id="file-tree-container"></div>
+        
+        <!-- Buttons for interaction testing -->
+        <button id="selectAllBtn">Select All</button>
+        <button id="deselectAllBtn">Deselect All</button>
+    </div>
+</body>
+</html>

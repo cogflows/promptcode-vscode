@@ -29,6 +29,9 @@ jobs:
       - name: Build extension
         run: npm run compile
         
+      - name: Check for CSP violations
+        run: ./scripts/check-csp.sh
+        
       - name: Install Playwright (Chromium)
         run: npx playwright install --with-deps chromium
         
