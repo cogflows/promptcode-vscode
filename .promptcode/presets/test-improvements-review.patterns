@@ -1,0 +1,10 @@
+# Test improvements and CSP compliance review
+test/webview/*.spec.ts
+test/webview/*.html
+test/webview/*.js
+.eslintrc.csp.json
+eslint.config.mjs
+docs/RELEASE_TESTING_CHECKLIST.md
+docs/TEST_IMPROVEMENT_SUMMARY.md
+.github/workflows/test.yml
+package.json
