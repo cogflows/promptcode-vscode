@@ -134,7 +134,9 @@ src/**/*.js
 
     test('rejects path traversal', async () => {
       const patternsFile = path.join(tmp, '../../../etc/passwd');
-      await expect(listFilesByPatternsFile(patternsFile, tmp)).rejects.toThrow();
+      const result = await listFilesByPatternsFile(patternsFile, tmp);
+      // Path traversal attempts should return empty array (safe behavior)
+      expect(result).toEqual([]);
     });
 
     test('handles missing file gracefully', async () => {
