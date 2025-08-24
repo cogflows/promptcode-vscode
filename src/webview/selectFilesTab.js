@@ -58,22 +58,7 @@ if (typeof window !== 'undefined') {
                 const ignorePatterns = document.getElementById('ignore-patterns');
                 const saveIgnoreBtn = document.getElementById('save-ignore-btn');
 
-                // Add debug styles to help identify issues
-                const debugStyle = document.createElement('style');
-                debugStyle.textContent = `
-                    /* Only add styles that modify or extend existing ones */
-                    /* Fix for file view layout */
-                    #selected-files-list > .directory-files {
-                        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); /* Responsive grid for file view */
-                        overflow-x: hidden;
-                    }
-                    
-                    /* Ensure directory files respect container boundaries */
-                    .directory-files {
-                        overflow-x: hidden;
-                    }
-                `;
-                document.head.appendChild(debugStyle);
+                // Styles moved to selectfiles-fixes.css for CSP compliance
 
                 // For expand/collapse/select/deselect
                 const expandAllBtn = document.getElementById('expand-all-btn');

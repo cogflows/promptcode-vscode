@@ -1,0 +1,12 @@
+/* Fixes for file selection view layout */
+
+/* Fix for file view layout */
+#selected-files-list > .directory-files {
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); /* Responsive grid for file view */
+    overflow-x: hidden;
+}
+
+/* Ensure directory files respect container boundaries */
+.directory-files {
+    overflow-x: hidden;
+}

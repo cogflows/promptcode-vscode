@@ -194,7 +194,10 @@
       "Bash(\"install-update-flow.patterns\" )",
       "Bash(\"All source and test files for VS Code extension debugging.patterns\" )",
       "Bash(\"vscode-extension-debug.patterns\")",
-      "Bash(npm version:*)"
+      "Bash(npm version:*)",
+      "Bash(gh issue list:*)",
+      "Bash(./scripts/check-csp.sh:*)",
+      "Bash(npx jest:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits",

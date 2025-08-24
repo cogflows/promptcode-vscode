@@ -192,7 +192,18 @@
   vscode.postMessage({ command: 'loadIgnoreConfig' });
 
   // Listen for extension => webview messages
+  const isTest = typeof process !== 'undefined' && (process.env?.VSCODE_TEST || process.env?.NODE_ENV === 'test');
   window.addEventListener('message', event => {
+      // Origin validation for production (bypassed in test mode)
+      if (!isTest) {
+          const origin = event.origin || '';
+          const sameOrigin = origin === window.location.origin;
+          const isVSCode = origin.startsWith('vscode-webview://');
+          if (!sameOrigin && !isVSCode) {
+              console.warn('Ignoring message from untrusted origin:', origin);
+              return;
+          }
+      }
       const message = event.data;
 
       // Let the generatePromptTab handle relevant commands first

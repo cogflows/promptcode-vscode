@@ -1,0 +1,83 @@
+{
+  "root": true,
+  "parser": "@typescript-eslint/parser",
+  "parserOptions": {
+    "ecmaVersion": 2020,
+    "sourceType": "module"
+  },
+  "plugins": [
+    "@typescript-eslint"
+  ],
+  "extends": [
+    "eslint:recommended",
+    "plugin:@typescript-eslint/recommended"
+  ],
+  "rules": {
+    "@typescript-eslint/no-explicit-any": "warn",
+    "@typescript-eslint/no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
+    
+    "no-restricted-syntax": [
+      "error",
+      {
+        "selector": "Literal[value=/on\\w+\\s*=/]",
+        "message": "Inline event handlers (onclick, onload, etc.) are not allowed due to CSP restrictions in VS Code webviews"
+      },
+      {
+        "selector": "CallExpression[callee.property.name='setAttribute'][arguments.0.value=/^on/]",
+        "message": "Setting inline event handlers via setAttribute is not allowed due to CSP"
+      },
+      {
+        "selector": "AssignmentExpression[left.property.name=/^on/]",
+        "message": "Direct assignment of event handlers (element.onclick = ...) violates CSP. Use addEventListener instead"
+      }
+    ],
+    
+    "no-eval": "error",
+    "no-implied-eval": "error",
+    "no-new-func": "error",
+    "no-script-url": "error"
+  },
+  "overrides": [
+    {
+      "files": ["src/webview/**/*.js", "src/webview/**/*.ts"],
+      "rules": {
+        "no-restricted-syntax": [
+          "error",
+          {
+            "selector": "Literal[value=/on\\w+\\s*=/]",
+            "message": "❌ CSP VIOLATION: Inline event handlers are FORBIDDEN in webviews. Use addEventListener() instead."
+          },
+          {
+            "selector": "TemplateLiteral[quasis.0.value.raw=/on\\w+\\s*=/]",
+            "message": "❌ CSP VIOLATION: Inline event handlers in template literals are FORBIDDEN. Use addEventListener() after element creation."
+          },
+          {
+            "selector": "CallExpression[callee.property.name='innerHTML']",
+            "message": "⚠️ CSP WARNING: innerHTML with event handlers will fail. Ensure no onclick/onload attributes in HTML strings."
+          },
+          {
+            "selector": "AssignmentExpression[left.property.name='innerHTML']",
+            "message": "CSP WARNING: innerHTML assignments must be sanitized and contain no on* or javascript: URLs."
+          }
+        ]
+      }
+    },
+    {
+      "files": ["test/**/*.ts", "test/**/*.js"],
+      "env": {
+        "mocha": true,
+        "node": true
+      },
+      "rules": {
+        "@typescript-eslint/no-explicit-any": "off"
+      }
+    }
+  ],
+  "ignorePatterns": [
+    "out",
+    "dist",
+    "node_modules",
+    "*.min.js",
+    ".vscode-test"
+  ]
+}

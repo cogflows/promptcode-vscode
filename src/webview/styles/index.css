@@ -17,6 +17,7 @@
 
 /* Tab-specific styles */
 @import './selectfiles.css';
+@import './selectfiles-fixes.css';
 @import './instructions.css';
 @import './generate.css';
 @import './merge.css';

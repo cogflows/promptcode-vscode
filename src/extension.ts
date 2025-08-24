@@ -1449,8 +1449,13 @@ export function activate(context: vscode.ExtensionContext) {
     // --- END ADDED ---
 
     // --- ADDED: Command to process pasted file list --- 
-    const processPastedFileListCommand = vscode.commands.registerCommand('promptcode.processPastedFileList', async (content: string) => {
+    const processPastedFileListCommand = vscode.commands.registerCommand('promptcode.processPastedFileList', async (content: string | { content: string }) => {
         try {
+            // Handle both string and object formats
+            const text = typeof content === 'string' ? content : content?.content;
+            if (!text) {
+                throw new Error('No content provided');
+            }
             // Get current selection
             const currentSelection = new Set<string>();
             for (const [path, state] of checkedItems.entries()) {
@@ -1473,7 +1478,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
 
             const processor = new FileListProcessor(currentWorkspaceRoot, currentIgnoreHelper);
-            const { matchedFiles, unmatchedPatterns } = await processor.processList(content);
+            const { matchedFiles, unmatchedPatterns } = await processor.processList(text);
 
             // Combine current selection with newly matched files
             const combinedSelection = new Set<string>([...currentSelection, ...matchedFiles]);
@@ -1598,6 +1603,45 @@ export function activate(context: vscode.ExtensionContext) {
         processPastedFileListCommand // Add the new command to subscriptions
         // --- END ADDED ---
 	);
+
+	// Expose internals for testing (only in test environment)
+	if (process.env.NODE_ENV === 'test' || process.env.VSCODE_TEST) {
+		(global as any).__promptcodeWebviewPanels = [];
+		(global as any).__promptcodeSelectedFiles = [];
+		(global as any).__promptcodeLastGeneratedPrompt = null;
+		
+		// Track webview panels - promptCodeProvider is the actual variable name
+		if (promptCodeProvider && promptCodeProvider._panel) {
+			(global as any).__promptcodeWebviewPanels.push(promptCodeProvider._panel);
+		}
+		
+		// Expose getters for testing
+		(global as any).__promptcodeGetSelectedFiles = () => {
+			const checkedPaths = Array.from(checkedItems.keys());
+			return checkedPaths.filter(p => checkedItems.get(p) === vscode.TreeItemCheckboxState.Checked);
+		};
+		
+		// Track generated prompts
+		const originalGeneratePrompt = generatePromptCommand;
+		context.subscriptions.push(
+			vscode.commands.registerCommand('promptcode.generatePrompt.test', async () => {
+				const result = await vscode.commands.executeCommand('promptcode.generatePrompt');
+				(global as any).__promptcodeLastGeneratedPrompt = lastGeneratedPrompt;
+				return result;
+			})
+		);
+	}
+	
+	// Return API for external extensions and testing
+	return {
+		fileExplorerProvider,
+		getSelectedFiles: () => {
+			const checkedPaths = Array.from(checkedItems.keys());
+			return checkedPaths.filter(p => checkedItems.get(p) === vscode.TreeItemCheckboxState.Checked);
+		},
+		getLastGeneratedPrompt,
+		webviewProvider: promptCodeProvider
+	};
 }
 
 // This method is called when your extension is deactivated

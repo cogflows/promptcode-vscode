@@ -61,8 +61,8 @@ export function getSelectFilesTabHtml(): string {
       <div class="action-groups">
         <div class="search-container">
           <span class="codicon codicon-search search-icon"></span>
-          <input type="text" id="file-search" placeholder="Search by name or glob (*, ?)..."></input>
-          <span class="codicon codicon-close" id="clear-search"></span>
+          <input type="text" id="file-search" data-testid="search-input" placeholder="Search by name or glob (*, ?)..."></input>
+          <span class="codicon codicon-close" id="clear-search" data-testid="search-clear"></span>
         </div>
         <div class="action-group">
           <button id="expand-all-btn" class="button">
@@ -81,31 +81,31 @@ export function getSelectFilesTabHtml(): string {
             <span class="codicon codicon-clear-all"></span>
             Clear All
           </button>
-          <button id="load-file-list-btn" class="button" title="List of file paths or glob patterns (e.g., src/**/*.ts, /Users/me/file.txt), one per line.">
+          <button id="load-file-list-btn" class="button" data-testid="add-files-btn" title="List of file paths or glob patterns (e.g., src/**/*.ts, /Users/me/file.txt), one per line.">
             <span class="codicon codicon-cloud-upload"></span>
             Add Files List
           </button>
         </div>
       </div>
 
-      <div id="file-list-results" class="file-list-results" style="display: none; margin-top: var(--spacing-md);">
+      <div id="file-list-results" class="file-list-results" data-testid="file-list-results" style="display: none; margin-top: var(--spacing-md);">
         <!-- Results will be displayed here -->
       </div>
     </section>
 
     <!-- ADDED: Modal for Adding File List -->
-    <div id="add-list-modal-overlay" class="modal-overlay" style="display: none;">
+    <div id="add-list-modal-overlay" class="modal-overlay" data-testid="add-files-modal" style="display: none;">
       <div id="add-list-modal" class="modal-content">
         <h2>Add Files from List</h2>
         <p>Paste a list of file paths (one per line) or choose a file containing the list.</p>
         
         <div class="modal-option">
           <label for="paste-file-list-area">Paste List:</label>
-          <textarea id="paste-file-list-area" rows="6" placeholder="e.g.,
+          <textarea id="paste-file-list-area" data-testid="file-list-textarea" rows="6" placeholder="e.g.,
 src/app.ts
 src/utils/helper.js
 **/test/*.test.ts"></textarea>
-          <button id="add-pasted-list-btn" class="button">Add Pasted Files</button>
+          <button id="add-pasted-list-btn" class="button" data-testid="add-files-confirm">Add Pasted Files</button>
         </div>
 
         <div class="modal-divider">OR</div>
@@ -129,10 +129,10 @@ src/utils/helper.js
       <div class="files-header">
         <div class="total-stats">
           <span class="stat-label">Total Files:</span>
-          <span class="stat-value" id="total-files">0</span>
+          <span class="stat-value" id="total-files" data-testid="total-files">0</span>
           <span class="stat-spacer"></span>
           <span class="stat-label">Total Tokens:</span>
-          <span class="stat-value" id="total-tokens">0k</span>
+          <span class="stat-value" id="total-tokens" data-testid="total-tokens">0k</span>
         </div>
         <div class="view-mode-buttons">
           <button id="refresh-view-btn" class="view-mode-button" title="Refresh File View">
@@ -146,7 +146,7 @@ src/utils/helper.js
           </button>
         </div>
       </div>
-      <div id="selected-files-list" class="selected-files-list"></div>
+      <div id="selected-files-list" class="selected-files-list" data-testid="selected-files-list"></div>
     </section>
   `;
 }

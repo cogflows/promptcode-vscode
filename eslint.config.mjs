@@ -24,5 +24,10 @@ export default [{
         eqeqeq: "warn",
         "no-throw-literal": "warn",
         semi: "warn",
+        
+        // Basic CSP protection - only flag actual inline handlers
+        "no-eval": "error",
+        "no-implied-eval": "error",
+        "no-new-func": "error",
     },
 }];

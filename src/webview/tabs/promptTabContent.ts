@@ -33,23 +33,23 @@ export function getPromptTabHtml(): string {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
             </svg>
-            <span>Token Count: <strong id="prompt-token-count">0</strong></span>
+            <span>Token Count: <strong id="prompt-token-count" data-testid="prompt-token-count">0</strong></span>
           </div>
-          <div id="generate-spinner" class="generate-spinner hidden">
+          <div id="generate-spinner" class="generate-spinner hidden" data-testid="generation-spinner">
             <span class="codicon codicon-loading codicon-modifier-spin"></span>
             <span>Generating...</span>
           </div>
         </div>
         <div class="prompt-actions">
-          <button class="button primary" id="copy-prompt-btn" title="Copy to Clipboard">
+          <button class="button primary" id="copy-prompt-btn" data-testid="copy-prompt-btn" title="Copy to Clipboard">
             <span class="codicon codicon-copy"></span>
             Copy to Clipboard
           </button>
-          <button class="button primary" id="open-prompt-btn" title="Open in Editor">
+          <button class="button primary" id="open-prompt-btn" data-testid="open-prompt-btn" title="Open in Editor">
             <span class="codicon codicon-go-to-file"></span>
             Open in Editor
           </button>
-          <button class="button primary" id="save-prompt-btn" title="Save to file">
+          <button class="button primary" id="save-prompt-btn" data-testid="save-prompt-btn" title="Save to file">
             <span class="codicon codicon-save"></span>Save to file
           </button>
         </div>
