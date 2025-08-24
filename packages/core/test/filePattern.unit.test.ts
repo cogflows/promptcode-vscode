@@ -3,6 +3,7 @@
  * Tests pattern parsing, matching, and optimization.
  */
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'fs';
+import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { describe, expect, test, beforeEach, afterEach } from '@jest/globals';
@@ -133,9 +134,12 @@ src/**/*.js
     });
 
     test('rejects path traversal', async () => {
-      const patternsFile = path.join(tmp, '../../../etc/passwd');
-      // This will fail to read the file (ENOENT) which is the expected safe behavior
-      await expect(listFilesByPatternsFile(patternsFile, tmp)).rejects.toThrow(/ENOENT/);
+      // Create a patterns file with path traversal attempt
+      const patternsFile = path.join(tmp, 'traversal.patterns');
+      await fs.writeFile(patternsFile, '../../../etc/passwd\n../../src/**/*.ts');
+      
+      // Should reject patterns with path traversal
+      await expect(listFilesByPatternsFile(patternsFile, tmp)).rejects.toThrow(/Unsafe pattern/);
     });
 
     test('handles missing file gracefully', async () => {
