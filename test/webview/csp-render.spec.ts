@@ -23,8 +23,8 @@ test.describe('CSP Render Safety', () => {
             window.postMessage(testData, '*');
         });
         
-        // Wait a bit for any rendering to happen
-        await page.waitForTimeout(500);
+        // Wait for body to be ready
+        await page.waitForSelector('body');
         
         // Get the entire body HTML
         const bodyHtml = await page.locator('body').innerHTML();

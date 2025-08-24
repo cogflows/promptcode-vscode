@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Real Webview Test</title>
+  <link rel="stylesheet" href="/out/webview/styles/index.css">
+</head>
+<body>
+  <div id="app">
+    <main>
+      <div class="tabs">
+        <div class="tabs-list">
+          <button class="tab-trigger active" data-tab="files">
+            <span class="codicon codicon-files"></span>
+            1. Select Files
+          </button>
+          <button class="tab-trigger" data-tab="instructions">
+            <span class="codicon codicon-note"></span>
+            2. Add Instructions
+          </button>
+          <button class="tab-trigger" data-tab="prompt">
+            <span class="codicon codicon-comment-discussion"></span>
+            3. Generate Prompt
+          </button>
+          <button class="tab-trigger" data-tab="merge">
+            <span class="codicon codicon-git-pull-request"></span>
+            4. Apply & Review
+          </button>
+        </div>
+
+        <div class="tab-content active" id="files-tab">
+          <div id="selected-files-list"></div>
+          <input id="file-search" placeholder="Search files..." />
+          <button id="clear-search">×</button>
+        </div>
+
+        <div class="tab-content" id="instructions-tab">
+          <textarea id="instructions-input"></textarea>
+        </div>
+
+        <div class="tab-content" id="prompt-tab">
+          <div id="prompt-preview"></div>
+        </div>
+
+        <div class="tab-content" id="merge-tab">
+          <div id="merge-content"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    // Mock VS Code API for testing
+    window.acquireVsCodeApi = () => ({
+      postMessage: (msg) => {
+        console.log('Message posted:', msg);
+      },
+      getState: () => ({}),
+      setState: (state) => {}
+    });
+    
+    window.samplePrompts = [];
+  </script>
+  
+  <!-- Load real compiled scripts -->
+  <script src="/out/webview/selectFilesTab.js"></script>
+  <script src="/out/webview/instructionsTab.js"></script>
+  <script src="/out/webview/generatePromptTab.js"></script>
+  <script src="/out/webview/mergeTab.js"></script>
+  <script src="/out/webview/webview.js"></script>
+</body>
+</html>
