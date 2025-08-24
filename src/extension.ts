@@ -1640,7 +1640,7 @@ export function activate(context: vscode.ExtensionContext) {
 			return checkedPaths.filter(p => checkedItems.get(p) === vscode.TreeItemCheckboxState.Checked);
 		},
 		getLastGeneratedPrompt,
-		webviewProvider
+		webviewProvider: promptCodeProvider
 	};
 }
 
