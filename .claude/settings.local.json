@@ -207,7 +207,10 @@
       "Bash(tty)",
       "Bash(timeout:*)",
       "Bash(pkill:*)",
-      "Bash(gh issue:*)"
+      "Bash(gh issue:*)",
+      "Bash(PROMPTCODE_TEST=1 CI=true bun test test/cli-parsing.test.ts --bail=1 --timeout 5000)",
+      "Bash(PROMPTCODE_TEST=1 CI=true bun test --bail=1 --timeout 5000)",
+      "Bash(PROMPTCODE_TEST=1 CI=true bun test test/cli-parsing.test.ts --bail=1)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits",
