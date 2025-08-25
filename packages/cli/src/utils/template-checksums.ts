@@ -18,7 +18,7 @@ export const TEMPLATE_CHECKSUMS: Record<string, string[]> = {
     "5fe5043502b273103d422a945c6181b9136d6ea97e9cfd2282eaa1b96c7c2766"
   ],
   "promptcode-ask-expert.md": [
-    "88f6db509bda9ee973c3a52d875903a5ef3737f40b34eadeb53043894767635d",
+    "6db8ee3ab05e3b54405fbfec998879eb19fa5b5bcbba9f023a5647e18767412e",
     "71ca5ff74847b54ed6a33f6f6a6432730962fb6ef38bf02059a2fd72bbc7fff5"
   ],
   "CLAUDE.md.template": [
@@ -45,6 +45,7 @@ export const TEMPLATE_CHECKSUMS: Record<string, string[]> = {
     "468b8549f45ba8072e15140ff4d1324e11a7c67b7f5a04c74430baa5993ff7ed"
   ],
   "promptcode-ask-expert.mdc": [
+    "57589a2cc49002d9d0d8f4d356511f9921708fa368ab182468ec956e98d8a593",
     "919bdae89190e2915c7c5a360a4fde480d4f6a8beb5327d66e89294e8bc591d6"
   ]
 };
