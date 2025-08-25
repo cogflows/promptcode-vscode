@@ -17,6 +17,12 @@ interface CcOptions {
   yes?: boolean;
   uninstall?: boolean;
   skipModified?: boolean;
+  withDocs?: boolean;
+  dryRun?: boolean;
+  all?: boolean;
+  docsOnly?: boolean;
+  diff?: boolean;
+  check?: boolean;
 }
 
 /**
@@ -100,9 +106,23 @@ async function updateTemplateFile(
 }
 
 /**
+ * Create backup of CLAUDE.md if it exists
+ */
+function createBackup(filePath: string): string | null {
+  if (!fs.existsSync(filePath)) {
+    return null;
+  }
+  
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+  const backupPath = `${filePath}.bak-${timestamp}`;
+  fs.copyFileSync(filePath, backupPath);
+  return backupPath;
+}
+
+/**
  * Add PromptCode section to CLAUDE.md or create it
  */
-async function updateClaudeMd(claudeDir: string): Promise<void> {
+async function updateClaudeMd(claudeDir: string, options?: { dryRun?: boolean; diff?: boolean }): Promise<{ updated: boolean; diff?: string; backupPath?: string }> {
   const claudeMdPath = findClaudeMd(claudeDir);
   
   // Read template
@@ -113,32 +133,87 @@ async function updateClaudeMd(claudeDir: string): Promise<void> {
   }
   
   const templateContent = await fs.promises.readFile(templatePath, 'utf8');
+  let diff: string | undefined;
+  let backupPath: string | undefined;
   
   // Check if CLAUDE.md exists
   if (fs.existsSync(claudeMdPath)) {
     const existingContent = await fs.promises.readFile(claudeMdPath, 'utf8');
+    let updatedContent: string;
     
     // Check if PromptCode section already exists
     if (existingContent.includes('<!-- PROMPTCODE-CLI-START -->')) {
       // Replace ALL existing sections (global match to handle multiple occurrences)
-      const updatedContent = existingContent.replace(
+      updatedContent = existingContent.replace(
         /<!-- PROMPTCODE-CLI-START -->[\s\S]*?<!-- PROMPTCODE-CLI-END -->/g,
         templateContent.trim()
       );
-      await fs.promises.writeFile(claudeMdPath, updatedContent);
-      console.log(chalk.green(`✓ Updated PromptCode section in ${claudeMdPath}`));
     } else {
       // Append to existing file
-      const updatedContent = existingContent.trimEnd() + '\n\n' + templateContent;
-      await fs.promises.writeFile(claudeMdPath, updatedContent);
-      console.log(chalk.green(`✓ Added PromptCode section to ${claudeMdPath}`));
+      updatedContent = existingContent.trimEnd() + '\n\n' + templateContent;
+    }
+    
+    if (updatedContent !== existingContent) {
+      diff = createTwoFilesPatch(
+        'CLAUDE.md', 'CLAUDE.md',
+        existingContent, updatedContent,
+        'Current', 'New'
+      );
+      
+      if (options?.diff) {
+        // Just show diff and return
+        console.log(diff);
+        return { updated: false, diff };
+      }
+      
+      if (!options?.dryRun) {
+        // Create backup before modifying
+        const backup = createBackup(claudeMdPath);
+        if (backup) {
+          backupPath = backup;
+        }
+        
+        await fs.promises.writeFile(claudeMdPath, updatedContent);
+        console.log(chalk.green(`✓ Updated PromptCode section in ${claudeMdPath}`));
+        if (backupPath) {
+          console.log(chalk.gray(`  Backup saved to: ${path.basename(backupPath)}`));
+        }
+      } else {
+        console.log(chalk.yellow('\nChanges to be made (dry-run):'));
+        console.log(diff);
+      }
+      return { updated: true, diff, backupPath };
+    } else {
+      if (!options?.dryRun) {
+        console.log(chalk.gray(`✓ ${claudeMdPath} is already up to date`));
+      }
+      return { updated: false };
     }
   } else {
     // Create new CLAUDE.md
-    await fs.promises.writeFile(claudeMdPath, templateContent);
-    console.log(chalk.green(`✓ Created ${claudeMdPath} with PromptCode instructions`));
+    diff = createTwoFilesPatch(
+      'CLAUDE.md', 'CLAUDE.md',
+      '', templateContent,
+      'Current', 'New'
+    );
+    
+    if (options?.diff) {
+      console.log(diff);
+      return { updated: false, diff };
+    }
+    
+    if (!options?.dryRun) {
+      await fs.promises.writeFile(claudeMdPath, templateContent);
+      console.log(chalk.green(`✓ Created ${claudeMdPath} with PromptCode instructions`));
+    } else {
+      console.log(chalk.yellow('\nFile to be created (dry-run):'));
+      console.log(chalk.gray(claudeMdPath));
+      console.log(diff);
+    }
+    return { updated: true, diff };
   }
 }
+
 
 /**
  * Set up Claude commands
@@ -284,7 +359,56 @@ export async function ccCommand(options: CcOptions & { detect?: boolean }): Prom
     const claudeDir = findClaudeFolder(options.path || process.cwd());
     process.exit(claudeDir ? 0 : 1);
   }
+  
   const projectPath = path.resolve(options.path || process.cwd());
+  
+  // Handle docs-only operations
+  if (options.docsOnly) {
+    const claudeDir = findClaudeFolder(projectPath);
+    
+    if (!claudeDir) {
+      console.log(chalk.red('No .claude directory found. Run "promptcode cc" to set up Claude integration first.'));
+      process.exit(1);
+    }
+    
+    if (options.check) {
+      // Check if CLAUDE.md needs updating (for CI)
+      const result = await updateClaudeMd(claudeDir, { dryRun: true });
+      if (result.updated) {
+        console.log(chalk.yellow('CLAUDE.md needs updating'));
+        process.exit(1);
+      } else {
+        console.log(chalk.green('CLAUDE.md is up to date'));
+        process.exit(0);
+      }
+    } else if (options.diff) {
+      // Show diff without writing
+      await updateClaudeMd(claudeDir, { diff: true });
+      return;
+    } else {
+      // Update CLAUDE.md
+      const spin = spinner();
+      spin.start('Updating CLAUDE.md...');
+      
+      try {
+        const result = await updateClaudeMd(claudeDir, { dryRun: options.dryRun });
+        
+        if (result.updated) {
+          if (!options.dryRun) {
+            spin.succeed(chalk.green('CLAUDE.md updated successfully'));
+          } else {
+            spin.succeed(chalk.yellow('Dry-run complete (no changes made)'));
+          }
+        } else {
+          spin.succeed(chalk.gray('CLAUDE.md is already up to date'));
+        }
+      } catch (error) {
+        spin.fail(chalk.red(`Error: ${(error as Error).message}`));
+        process.exit(1);
+      }
+    }
+    return;
+  }
   
   // Handle uninstall
   if (options.uninstall) {
@@ -292,14 +416,18 @@ export async function ccCommand(options: CcOptions & { detect?: boolean }): Prom
     
     let removed = false;
     
-    // Remove from CLAUDE.md
-    if (await removeFromClaudeMd(projectPath)) {
-      removed = true;
-    }
-    
-    // Remove PromptCode commands
+    // Remove commands (always)
     if (await removePromptCodeCommands(projectPath)) {
       removed = true;
+      console.log(chalk.green('✓ Removed Claude commands'));
+    }
+    
+    // Remove from CLAUDE.md if --all flag is provided
+    if (options.all) {
+      if (await removeFromClaudeMd(projectPath)) {
+        removed = true;
+        console.log(chalk.green('✓ Removed PromptCode section from CLAUDE.md'));
+      }
     }
     
     if (!removed) {
@@ -328,29 +456,36 @@ export async function ccCommand(options: CcOptions & { detect?: boolean }): Prom
       return;
     }
     
-    // Update or create CLAUDE.md
-    spin.text = 'Updating project documentation...';
-    await updateClaudeMd(claudeDir);
+    // Update CLAUDE.md only if --with-docs flag is provided
+    if (options.withDocs) {
+      spin.text = 'Updating project documentation...';
+      await updateClaudeMd(claudeDir);
+    }
     
     spin.succeed(chalk.green('PromptCode CLI integration set up successfully!'));
     
-    // Find where things were installed
-    const claudeMdPath = findClaudeMd(claudeDir);
-    
-    console.log(chalk.bold('\n📝 Updated files:'));
-    console.log(chalk.gray(`  ${path.relative(projectPath, claudeMdPath)} - PromptCode usage instructions`));
+    // Show what was installed
+    console.log(chalk.bold('\n📝 Installed:'));
     if (claudeDir) {
-      console.log(chalk.gray(`  ${path.relative(projectPath, path.join(claudeDir, 'commands/'))} - ${PROMPTCODE_CLAUDE_COMMANDS.length} Claude commands installed`));
+      console.log(chalk.gray(`  ${path.relative(projectPath, path.join(claudeDir, 'commands/'))} - ${PROMPTCODE_CLAUDE_COMMANDS.length} Claude commands`));
+    }
+    if (options.withDocs) {
+      const claudeMdPath = findClaudeMd(claudeDir);
+      console.log(chalk.gray(`  ${path.relative(projectPath, claudeMdPath)} - PromptCode usage instructions`));
     }
     
     console.log(chalk.bold('\n🚀 Next steps:'));
-    console.log(chalk.gray('1. Review the PromptCode section in CLAUDE.md'));
-    console.log(chalk.gray('2. Set up API keys via environment variables (e.g., export OPENAI_API_KEY=...)'));
-    console.log(chalk.gray('3. Create presets with: promptcode preset create <name>'));
+    if (!options.withDocs) {
+      console.log(chalk.gray('1. (Optional) Add docs: promptcode cc docs update'));
+      console.log(chalk.gray('2. Set up API keys via environment variables'));
+    } else {
+      console.log(chalk.gray('1. Review the PromptCode section in CLAUDE.md'));
+      console.log(chalk.gray('2. Set up API keys via environment variables'));
+    }
+    console.log(chalk.gray('3. Use the /promptcode-* commands in Claude Code'));
     
     console.log(chalk.bold('\n💡 Quick start:'));
-    console.log(chalk.cyan('  promptcode preset list                    # See available presets'));
-    console.log(chalk.cyan('  promptcode expert "Explain this code"     # Ask AI with context'));
+    console.log(chalk.cyan('  Open Claude Code and type /promptcode-preset-list'));
     
   } catch (error) {
     spin.fail(chalk.red(`Error: ${(error as Error).message}`));

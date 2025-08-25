@@ -123,11 +123,21 @@ promptcode expert "Review this code" --stream  # Real-time response
 **Claude Code Integration** - Set up integration with Claude Code:
 
 ```bash
-promptcode cc                             # Set up Claude integration
-promptcode cc --uninstall                 # Remove Claude integration
+# Basic usage
+promptcode cc                             # Install commands only
+promptcode cc --with-docs                 # Install commands + CLAUDE.md
+
+# Manage documentation separately
+promptcode cc docs update                 # Update CLAUDE.md
+promptcode cc docs diff                   # Show what would change
+promptcode cc docs check                  # Check if up-to-date (CI-friendly)
+
+# Uninstall
+promptcode cc uninstall                   # Remove commands only
+promptcode cc uninstall --all             # Remove commands + CLAUDE.md
 ```
 
-This creates a `.claude/` folder with custom commands that appear in Claude Code as slash commands like `/promptcode-preset-list`.
+This creates a `.claude/` folder with custom commands that appear in Claude Code as slash commands like `/promptcode-preset-list`. The CLAUDE.md documentation is now optional and can be managed separately.
 
 **Cursor Integration** - Set up integration with Cursor IDE/CLI:
 

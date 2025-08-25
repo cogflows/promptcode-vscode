@@ -314,28 +314,59 @@ Examples:
   });
 
 // CC command - Claude integration setup
-program
-  .command('cc')
-  .description('Set up or remove Claude AI integration (.claude folder)')
+const ccCmd = program
+  .command('cc [action]')
+  .description('Set up or manage Claude Code integration')
   .addHelpText('after', `
-This command creates a .claude folder with:
-  - CLAUDE.md: Instructions for AI agents using promptcode
-  - .env.example: Template for API keys
-  - commands/: Directory for Claude-specific commands
-
-The .claude folder is automatically detected in current or parent directory (for monorepos).
+Actions:
+  (none)           Install commands only (default)
+  install          Install commands (with --with-docs to include CLAUDE.md)
+  docs             Manage CLAUDE.md documentation
+  uninstall        Remove Claude integration
 
 Examples:
-  $ promptcode cc              # Set up Claude integration
-  $ promptcode cc --force      # Recreate/update existing setup
-  $ promptcode cc --uninstall  # Remove Claude integration`)
+  $ promptcode cc                     # Install commands only
+  $ promptcode cc --with-docs         # Install commands + CLAUDE.md
+  $ promptcode cc install --with-docs # Explicit install with docs
+  $ promptcode cc docs update         # Update CLAUDE.md only
+  $ promptcode cc docs diff           # Show CLAUDE.md changes
+  $ promptcode cc docs check          # Check if CLAUDE.md needs update (CI)
+  $ promptcode cc uninstall           # Remove everything
+  $ promptcode cc uninstall --all     # Remove commands and CLAUDE.md`)
   .option('--path <dir>', 'project root directory', process.cwd())
+  .option('--with-docs', 'also update CLAUDE.md when installing')
   .option('--force', 'update existing structure / skip confirmation prompts')
   .option('-y, --yes', 'alias for --force (CI-friendly)')
-  .option('--uninstall', 'remove Claude integration (asks for confirmation)')
+  .option('--dry-run', 'preview changes without applying')
+  .option('--all', 'when uninstalling, remove both commands and docs')
   .option('--detect', 'detect Claude Code environment (exit 0 if found)', false)
-  .action(async (options) => {
-    await ccCommand(options);
+  .action(async (action, options) => {
+    // Handle subcommands
+    if (action === 'docs') {
+      // docs subcommand needs additional parsing
+      const docsAction = process.argv[process.argv.indexOf('docs') + 1];
+      if (docsAction === 'update') {
+        await ccCommand({ ...options, docsOnly: true });
+      } else if (docsAction === 'diff') {
+        await ccCommand({ ...options, docsOnly: true, diff: true });
+      } else if (docsAction === 'check') {
+        await ccCommand({ ...options, docsOnly: true, check: true });
+      } else {
+        // Default to update
+        await ccCommand({ ...options, docsOnly: true });
+      }
+    } else if (action === 'uninstall') {
+      await ccCommand({ ...options, uninstall: true });
+    } else if (action === 'install') {
+      await ccCommand(options);
+    } else if (!action) {
+      // No action = default install (commands only)
+      await ccCommand(options);
+    } else {
+      console.error(chalk.red(`Unknown action: ${action}`));
+      console.error(chalk.gray('Run "promptcode cc --help" for usage'));
+      process.exit(1);
+    }
   });
 
 // Cursor command - Cursor IDE/CLI integration setup
