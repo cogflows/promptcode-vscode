@@ -1,0 +1,33 @@
+# Agent Integration DX Patterns
+# Focus on architecture for integrating coding agents (Codex CLI, Gemini, etc.)
+
+# Core abstractions and provider system
+packages/core/src/**/*.ts
+packages/cli/src/providers/**/*.ts
+packages/cli/src/services/**/*.ts
+
+# Expert command implementation
+packages/cli/src/commands/expert.ts
+packages/cli/src/commands/generate.ts
+packages/cli/src/commands/preset.ts
+
+# Configuration and environment
+packages/cli/src/utils/environment.ts
+packages/cli/src/utils/config.ts
+packages/cli/src/utils/paths.ts
+packages/cli/src/utils/validation.ts
+
+# VS Code extension integration points
+src/extension.ts
+src/commands/**/*.ts
+src/webviewProvider.ts
+
+# Configuration files
+package.json
+packages/*/package.json
+.promptcode/presets/*.patterns
+
+# Documentation
+README.md
+CLAUDE.md
+packages/cli/README.md

@@ -1,0 +1,30 @@
+# cc-command-implementation preset - CC command and CLAUDE.md modification logic
+# Use gitignore syntax for patterns
+
+# Core cc command implementation
+packages/cli/src/commands/cc.ts
+packages/cli/src/commands/uninstall.ts
+packages/cli/src/commands/integrate.ts
+
+# CLI entry point and parsing
+packages/cli/src/index.ts
+
+# Templates and embedded content
+packages/cli/src/embedded-templates.ts
+packages/cli/src/cursor-templates/promptcode-usage.mdc
+
+# Test files for cc command behavior
+packages/cli/test/commands/cc.test.ts
+packages/cli/test/cli-parsing.test.ts
+
+# CLAUDE.md files for understanding the current docs structure
+CLAUDE.md
+packages/cli/CLAUDE.md
+
+# Project documentation that might inform UX decisions
+packages/cli/README.md
+
+# Exclude other files
+!**/node_modules/**
+!**/dist/**
+!**/build/**
