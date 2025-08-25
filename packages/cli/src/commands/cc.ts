@@ -122,7 +122,7 @@ function createBackup(filePath: string): string | null {
 /**
  * Add PromptCode section to CLAUDE.md or create it
  */
-async function updateClaudeMd(claudeDir: string, options?: { dryRun?: boolean; diff?: boolean }): Promise<{ updated: boolean; diff?: string; backupPath?: string }> {
+async function updateClaudeMd(claudeDir: string, options?: { dryRun?: boolean; diff?: boolean; preview?: boolean }): Promise<{ updated: boolean; diff?: string; backupPath?: string }> {
   const claudeMdPath = findClaudeMd(claudeDir);
   
   // Read template
@@ -161,8 +161,7 @@ async function updateClaudeMd(claudeDir: string, options?: { dryRun?: boolean; d
       );
       
       if (options?.diff) {
-        // Just show diff and return
-        console.log(diff);
+        // Just return diff without printing (caller will handle display)
         return { updated: false, diff };
       }
       
@@ -198,7 +197,7 @@ async function updateClaudeMd(claudeDir: string, options?: { dryRun?: boolean; d
     );
     
     if (options?.diff) {
-      console.log(diff);
+      // Just return diff without printing (caller will handle display)
       return { updated: false, diff };
     }
     
@@ -216,6 +215,27 @@ async function updateClaudeMd(claudeDir: string, options?: { dryRun?: boolean; d
 
 
 /**
+ * Show preview of commands to be installed
+ */
+function showCommandsPreview(claudeDir: string, commands: string[]): void {
+  const commandsDir = path.join(claudeDir, 'commands');
+  console.log(chalk.bold('\n📦 Commands to be installed:'));
+  
+  for (const cmd of commands) {
+    const commandPath = path.join(commandsDir, cmd);
+    const exists = fs.existsSync(commandPath);
+    const slashCommand = `/${cmd.replace('.md', '').replace('.mdc', '')}`;
+    
+    if (exists) {
+      console.log(chalk.gray(`  ✓ ${slashCommand} (will update)`));
+    } else {
+      console.log(chalk.green(`  + ${slashCommand} (new)`));
+    }
+  }
+  console.log();
+}
+
+/**
  * Set up Claude commands
  */
 async function setupClaudeCommands(projectPath: string, options?: CcOptions): Promise<{ claudeDir: string | null; isNew: boolean; stats: { created: number; updated: number; kept: number; unchanged: number } }> {
@@ -229,6 +249,11 @@ async function setupClaudeCommands(projectPath: string, options?: CcOptions): Pr
   if (!claudeDir) {
     console.log(chalk.red('Cannot setup Claude integration without .claude directory'));
     return { claudeDir: null, isNew: false, stats: { created: 0, updated: 0, kept: 0, unchanged: 0 } };
+  }
+  
+  // Show preview of what will be installed
+  if (!options?.skipModified) {
+    showCommandsPreview(claudeDir, PROMPTCODE_CLAUDE_COMMANDS);
   }
   
   const commandsDir = path.join(claudeDir, 'commands');
@@ -383,7 +408,12 @@ export async function ccCommand(options: CcOptions & { detect?: boolean }): Prom
       }
     } else if (options.diff) {
       // Show diff without writing
-      await updateClaudeMd(claudeDir, { diff: true });
+      const result = await updateClaudeMd(claudeDir, { diff: true });
+      if (result.diff) {
+        console.log(result.diff);
+      } else {
+        console.log(chalk.gray('No changes needed'));
+      }
       return;
     } else {
       // Update CLAUDE.md
@@ -440,6 +470,21 @@ export async function ccCommand(options: CcOptions & { detect?: boolean }): Prom
   }
   
   // Handle setup
+  
+  // First show what will be installed BEFORE creating directories
+  console.log(chalk.bold('📦 Commands to be installed:'));
+  for (const cmd of PROMPTCODE_CLAUDE_COMMANDS) {
+    const slashCommand = `/${cmd.replace('.md', '').replace('.mdc', '')}`;
+    console.log(chalk.green(`  + ${slashCommand}`));
+  }
+  
+  if (options.withDocs) {
+    console.log(chalk.bold('\n📝 Documentation to be added:'));
+    console.log(chalk.green('  + CLAUDE.md - PromptCode instructions'));
+    console.log(chalk.gray('    Contains: Commands overview, workflow examples, cost protocols'));
+  }
+  console.log();
+  
   const spin = spinner();
   spin.start('Setting up PromptCode CLI integration...');
   
@@ -448,7 +493,7 @@ export async function ccCommand(options: CcOptions & { detect?: boolean }): Prom
     spin.text = 'Setting up Claude integration...';
     const { claudeDir, isNew, stats } = await setupClaudeCommands(projectPath, {
       ...options,
-      skipModified: options.yes || options.force || !isInteractive()
+      skipModified: true // Don't show preview again, we already did
     });
     
     if (!claudeDir) {
