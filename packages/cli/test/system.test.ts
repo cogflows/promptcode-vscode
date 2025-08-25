@@ -130,7 +130,8 @@ describe('system tests - core CLI functionality', () => {
       });
       
       expect(result.exitCode).toBe(0);
-      expect(fs.existsSync(path.join(fixture.dir, 'CLAUDE.md'))).toBe(true);
+      // Now cc doesn't create CLAUDE.md by default, only commands
+      expect(fs.existsSync(path.join(fixture.dir, '.claude/commands/promptcode-ask-expert.md'))).toBe(true);
     });
   });
 

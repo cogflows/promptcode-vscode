@@ -71,8 +71,8 @@ describe('CLI integration tests', () => {
       'src/index.ts': 'console.log("Hello");'
     });
     
-    // Install CC integration
-    let result = await runCLI(['cc'], { cwd: fixture.dir });
+    // Install CC integration with docs
+    let result = await runCLI(['cc', '--with-docs'], { cwd: fixture.dir });
     expect(result.exitCode).toBe(0);
     assertFileExists(path.join(fixture.dir, 'CLAUDE.md'));
     assertFileExists(path.join(fixture.dir, '.claude/commands/promptcode-ask-expert.md'));
@@ -86,8 +86,8 @@ describe('CLI integration tests', () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain('Hello');
     
-    // Uninstall
-    result = await runCLI(['cc', '--uninstall'], { cwd: fixture.dir });
+    // Uninstall everything
+    result = await runCLI(['cc', 'uninstall', '--all'], { cwd: fixture.dir });
     expect(result.exitCode).toBe(0);
     
     // CLAUDE.md should be gone (was empty)
