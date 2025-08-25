@@ -319,22 +319,21 @@ const ccCmd = program
   .description('Set up or manage Claude Code integration')
   .addHelpText('after', `
 Actions:
-  (none)           Install commands only (default)
-  install          Install commands (with --with-docs to include CLAUDE.md)
+  (none)           Install commands (asks about CLAUDE.md)
+  install          Install commands (asks about CLAUDE.md)
   docs             Manage CLAUDE.md documentation
   uninstall        Remove Claude integration
 
 Examples:
-  $ promptcode cc                     # Install commands only
-  $ promptcode cc --with-docs         # Install commands + CLAUDE.md
-  $ promptcode cc install --with-docs # Explicit install with docs
+  $ promptcode cc                     # Install commands, asks about CLAUDE.md
+  $ promptcode cc install             # Same as above
   $ promptcode cc docs update         # Update CLAUDE.md only
   $ promptcode cc docs diff           # Show CLAUDE.md changes
   $ promptcode cc docs check          # Check if CLAUDE.md needs update (CI)
-  $ promptcode cc uninstall           # Remove everything
+  $ promptcode cc uninstall           # Remove commands
   $ promptcode cc uninstall --all     # Remove commands and CLAUDE.md`)
   .option('--path <dir>', 'project root directory', process.cwd())
-  .option('--with-docs', 'also update CLAUDE.md when installing')
+  .option('--with-docs', 'install CLAUDE.md (for backwards compatibility/CI)')
   .option('--force', 'update existing structure / skip confirmation prompts')
   .option('-y, --yes', 'alias for --force (CI-friendly)')
   .option('--dry-run', 'preview changes without applying')

@@ -23,6 +23,7 @@ interface CcOptions {
   docsOnly?: boolean;
   diff?: boolean;
   check?: boolean;
+  skipPreview?: boolean;
 }
 
 /**
@@ -252,7 +253,7 @@ async function setupClaudeCommands(projectPath: string, options?: CcOptions): Pr
   }
   
   // Show preview of what will be installed
-  if (!options?.skipModified) {
+  if (!options?.skipPreview) {
     showCommandsPreview(claudeDir, PROMPTCODE_CLAUDE_COMMANDS);
   }
   
@@ -480,54 +481,105 @@ export async function ccCommand(options: CcOptions & { detect?: boolean }): Prom
     console.log(chalk.green(`  + ${slashCommand}`));
   }
   
-  if (options.withDocs) {
-    console.log(chalk.bold('\n📝 Documentation to be added:'));
-    console.log(chalk.green('  + CLAUDE.md - PromptCode instructions'));
-    console.log(chalk.gray('    Contains: Commands overview, workflow examples, cost protocols'));
-  }
-  
   if (!claudeDirExists) {
     console.log(chalk.bold('\n📁 Directory to be created:'));
     console.log(chalk.green('  + .claude/'));
   }
   console.log();
   
-  const spin = spinner();
-  spin.start('Setting up PromptCode CLI integration...');
-  
   try {
     // Set up Claude commands and get the directory
-    spin.text = 'Setting up Claude integration...';
     const { claudeDir, isNew, stats } = await setupClaudeCommands(projectPath, {
       ...options,
-      skipModified: true // Don't show preview again, we already did
+      skipModified: false, // Allow prompting for modified files
+      skipPreview: true // Don't show preview again, we already did
     });
     
     if (!claudeDir) {
-      spin.fail(chalk.red('Setup cancelled'));
+      console.log(chalk.red('Setup cancelled'));
       return;
     }
     
-    // Update CLAUDE.md only if --with-docs flag is provided
-    if (options.withDocs) {
-      spin.text = 'Updating project documentation...';
-      await updateClaudeMd(claudeDir);
+    console.log(chalk.green('✓ Commands installed successfully!'));
+    
+    // Ask about CLAUDE.md installation/update
+    let installDocs = false;
+    
+    // Check if CLAUDE.md needs updating
+    const claudeMdPath = findClaudeMd(claudeDir);
+    const claudeMdExists = fs.existsSync(claudeMdPath);
+    let claudeMdNeedsUpdate = false;
+    
+    if (claudeMdExists) {
+      const existingContent = await fs.promises.readFile(claudeMdPath, 'utf8');
+      // Check if it has our section and if it's outdated
+      if (existingContent.includes('<!-- PROMPTCODE-CLI-START -->')) {
+        // Check if update is needed by comparing with template
+        const templatesDir = getClaudeTemplatesDir();
+        const templatePath = path.join(templatesDir, 'CLAUDE.md.template');
+        const templateContent = await fs.promises.readFile(templatePath, 'utf8');
+        const currentSection = existingContent.match(/<!-- PROMPTCODE-CLI-START -->[\s\S]*?<!-- PROMPTCODE-CLI-END -->/)?.[0];
+        claudeMdNeedsUpdate = currentSection !== templateContent.trim();
+      } else {
+        claudeMdNeedsUpdate = true; // No section exists
+      }
     }
     
-    spin.succeed(chalk.green('PromptCode CLI integration set up successfully!'));
+    // Determine if we should install docs
+    if (options.withDocs) {
+      // Legacy flag support - always install if flag is provided
+      installDocs = true;
+    } else if (!options.yes && !options.force && isInteractive()) {
+      // Interactive mode - ask user
+      console.log();
+      if (claudeMdExists && claudeMdNeedsUpdate) {
+        console.log(chalk.yellow('📝 CLAUDE.md exists but needs updating'));
+      } else if (!claudeMdExists) {
+        console.log(chalk.yellow('📝 CLAUDE.md not found'));
+      } else {
+        console.log(chalk.green('✓ CLAUDE.md is up to date'));
+      }
+      
+      if (!claudeMdExists || claudeMdNeedsUpdate) {
+        // Show preview of what will be added
+        console.log(chalk.bold('\n📄 CLAUDE.md content to be added:'));
+        console.log(chalk.gray('  • PromptCode CLI usage instructions'));
+        console.log(chalk.gray('  • Command reference (/promptcode-* commands)'));
+        console.log(chalk.gray('  • Workflow examples and best practices'));
+        console.log(chalk.gray('  • API key configuration guide'));
+        console.log(chalk.gray('  • Cost approval protocol for expensive models'));
+        
+        const { updateDocs } = await inquirer.prompt([{
+          type: 'confirm',
+          name: 'updateDocs',
+          message: claudeMdExists ? 
+            'Would you like to update CLAUDE.md with PromptCode instructions?' :
+            'Would you like to add CLAUDE.md with PromptCode instructions?',
+          default: false // Default to No
+        }]);
+        installDocs = updateDocs;
+      }
+    }
+    
+    // Install/update docs if user agreed
+    if (installDocs) {
+      const spin2 = spinner();
+      spin2.start('Updating project documentation...');
+      await updateClaudeMd(claudeDir);
+      spin2.succeed(chalk.green('Documentation updated successfully!'));
+    }
     
     // Show what was installed
     console.log(chalk.bold('\n📝 Installed:'));
     if (claudeDir) {
       console.log(chalk.gray(`  ${path.relative(projectPath, path.join(claudeDir, 'commands/'))} - ${PROMPTCODE_CLAUDE_COMMANDS.length} Claude commands`));
     }
-    if (options.withDocs) {
-      const claudeMdPath = findClaudeMd(claudeDir);
+    if (installDocs) {
       console.log(chalk.gray(`  ${path.relative(projectPath, claudeMdPath)} - PromptCode usage instructions`));
     }
     
     console.log(chalk.bold('\n🚀 Next steps:'));
-    if (!options.withDocs) {
+    if (!installDocs) {
       console.log(chalk.gray('1. (Optional) Add docs: promptcode cc docs update'));
       console.log(chalk.gray('2. Set up API keys via environment variables'));
     } else {
@@ -540,7 +592,7 @@ export async function ccCommand(options: CcOptions & { detect?: boolean }): Prom
     console.log(chalk.cyan('  Open Claude Code and type /promptcode-preset-list'));
     
   } catch (error) {
-    spin.fail(chalk.red(`Error: ${(error as Error).message}`));
+    console.log(chalk.red(`Error: ${(error as Error).message}`));
     process.exit(1);
   }
 }

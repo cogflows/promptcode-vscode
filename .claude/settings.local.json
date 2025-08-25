@@ -197,13 +197,23 @@
       "Bash(npm version:*)",
       "Bash(gh issue list:*)",
       "Bash(./scripts/check-csp.sh:*)",
-      "Bash(npx jest:*)"
+      "Bash(npx jest:*)",
+      "Bash(PROMPTCODE_TEST=1 ./dist/promptcode cc --path /tmp/test-cc-dx --yes)",
+      "Bash(PROMPTCODE_TEST=1 ./dist/promptcode cc docs update --path /tmp/test-cc-dx)",
+      "Bash(PROMPTCODE_TEST=1 ./dist/promptcode cc --with-docs --path /tmp/test-cc-dx --yes)",
+      "Bash(PROMPTCODE_TEST=1 /Users/aviv.s/workspace/reference-projects/promptcode-vscode/packages/cli/dist/promptcode cc --yes)",
+      "Bash(PROMPTCODE_TEST=1 ./dist/promptcode cc --yes)",
+      "Bash(kill:*)",
+      "Bash(tty)",
+      "Bash(timeout:*)",
+      "Bash(pkill:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits",
     "additionalDirectories": [
       "/tmp",
-      "/Users/aviv.s/workspace"
+      "/Users/aviv.s/workspace",
+      "/Users/aviv.s/.local/bin"
     ]
   }
 }

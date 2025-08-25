@@ -10,10 +10,10 @@ Consult an expert about: $ARGUMENTS
 1. Analyze the request in $ARGUMENTS:
    - Extract the main question/problem
    - Identify if code context would help (look for keywords about implementation, feature, code review, etc.)
-   - Check for multiple model requests (e.g., "compare using o3 and gpt-5", "ask o3, gpt-5, and gemini")
+   - Check for multiple model requests (e.g., "compare using gpt-5 and opus-4", "ask gpt-5, sonnet-4, and gemini")
    - Get available models dynamically: `promptcode expert --models --json` (parse the JSON for model list)
    - If 2+ models detected → use ensemble mode
-   - For single model: determine preference (if user mentions "o3-pro" or "o3 pro", use o3-pro)
+   - For single model: Use gpt-5 (the default) unless user explicitly specifies another model
 
 2. Determine code context needs:
    ```bash
@@ -188,7 +188,8 @@ Consult an expert about: $ARGUMENTS
 - **Always use presets** - either existing or create new ones for code context
 - **Single approval flow**: Estimate cost → Ask user ONCE → Execute with --yes
 - **Show the preset name** to the user so they know what context is being used
-- Discover default model via `promptcode expert --models --json` (use model with `default:true` or first in list)
+- **Default model is gpt-5** - use this unless user explicitly requests another model
+- Discover default model via `promptcode expert --models --json` (look for `defaultModel: "gpt-5"`)
 - For ensemble mode: limit to maximum 4 models
 - NEVER automatically add --yes without user approval
 - Reasoning effort defaults to 'high' (set in CLI) - no need to specify
