@@ -472,6 +472,8 @@ export async function ccCommand(options: CcOptions & { detect?: boolean }): Prom
   // Handle setup
   
   // First show what will be installed BEFORE creating directories
+  const claudeDirExists = fs.existsSync(path.join(projectPath, '.claude'));
+  
   console.log(chalk.bold('📦 Commands to be installed:'));
   for (const cmd of PROMPTCODE_CLAUDE_COMMANDS) {
     const slashCommand = `/${cmd.replace('.md', '').replace('.mdc', '')}`;
@@ -482,6 +484,11 @@ export async function ccCommand(options: CcOptions & { detect?: boolean }): Prom
     console.log(chalk.bold('\n📝 Documentation to be added:'));
     console.log(chalk.green('  + CLAUDE.md - PromptCode instructions'));
     console.log(chalk.gray('    Contains: Commands overview, workflow examples, cost protocols'));
+  }
+  
+  if (!claudeDirExists) {
+    console.log(chalk.bold('\n📁 Directory to be created:'));
+    console.log(chalk.green('  + .claude/'));
   }
   console.log();
   
