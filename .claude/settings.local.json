@@ -206,7 +206,8 @@
       "Bash(kill:*)",
       "Bash(tty)",
       "Bash(timeout:*)",
-      "Bash(pkill:*)"
+      "Bash(pkill:*)",
+      "Bash(gh issue:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits",

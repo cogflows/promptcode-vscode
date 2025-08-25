@@ -186,12 +186,6 @@ download_binary() {
     print_error "Downloaded file appears to be HTML/text, not a binary"
   fi
   
-  # Check file size (between 10MB and 100MB)
-  local file_size=$(stat -f%z "$temp_file" 2>/dev/null || stat -c%s "$temp_file" 2>/dev/null || echo 0)
-  if [ "$file_size" -lt 10485760 ] || [ "$file_size" -gt 104857600 ]; then
-    rm -f "$temp_file"
-    print_error "Downloaded file size ($file_size bytes) outside expected range (10MB-100MB)"
-  fi
   
   # Download and verify checksum (MANDATORY for security)
   local checksum_url="${download_url}.sha256"
@@ -438,6 +432,12 @@ main() {
 
   # Download binary
   local temp_binary=$(download_binary "$version" "$platform")
+  
+  # Check if download was successful
+  if [ -z "$temp_binary" ] || [ ! -f "$temp_binary" ]; then
+    print_error "Failed to download binary"
+    exit 1
+  fi
 
   # Install binary
   install_binary "$temp_binary"
