@@ -69,7 +69,7 @@ function Get-LatestVersion {
 
 # Download binary
 function Download-Binary($version, $arch) {
-    $binaryName = "${CLI_NAME}-windows-${arch}.exe"
+    $binaryName = "${CLI_NAME}-win-${arch}.exe"
     $downloadUrl = "https://github.com/$REPO/releases/download/$version/$binaryName"
     $checksumUrl = "https://github.com/$REPO/releases/download/$version/$binaryName.sha256"
     $tempFile = [System.IO.Path]::GetTempFileName() + ".exe"
@@ -270,7 +270,7 @@ function Install-PromptCode {
             
             # For dev versions, inform about --force option
             if ($currentVersion -like "*-dev.*") {
-                Write-Info "Development version detected. To force update to $version:"
+                Write-Info "Development version detected. To force update to ${version}:"
                 Write-Host ""
                 Write-Host "  $CLI_NAME update --force" -ForegroundColor Cyan
                 Write-Host ""

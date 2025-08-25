@@ -1,0 +1,143 @@
+name: Test Installer Scripts
+
+on:
+  pull_request:
+    paths:
+      - 'packages/cli/scripts/install.sh'
+      - 'packages/cli/scripts/install.ps1'
+      - '.github/workflows/test-installer.yml'
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'packages/cli/scripts/install.sh'
+      - 'packages/cli/scripts/install.ps1'
+      - '.github/workflows/test-installer.yml'
+  workflow_dispatch:  # Allow manual testing
+  release:
+    types: [published]
+
+jobs:
+  test-bash-installer:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Test install.sh syntax
+        run: |
+          bash -n packages/cli/scripts/install.sh
+          echo "✓ Bash syntax check passed"
+      
+      - name: Test installer with latest release
+        run: |
+          # Test the installer script
+          export PROMPTCODE_INSTALL_DIR=$(mktemp -d)
+          echo "Installing to: $PROMPTCODE_INSTALL_DIR"
+          
+          # Run installer and capture output
+          if ! bash packages/cli/scripts/install.sh 2>&1 | tee install.log; then
+            echo "ERROR: Installation failed"
+            cat install.log
+            exit 1
+          fi
+          
+          # Check if binary was installed
+          if [ ! -f "$PROMPTCODE_INSTALL_DIR/promptcode" ]; then
+            echo "ERROR: Binary not found at $PROMPTCODE_INSTALL_DIR/promptcode"
+            cat install.log
+            exit 1
+          fi
+          
+          # Test the installed binary - CRITICAL: Must not hang
+          echo "Testing binary with --version (should not hang)..."
+          # Use perl for cross-platform timeout (works on both Linux and macOS)
+          if ! perl -e 'alarm shift; exec @ARGV' 10 "$PROMPTCODE_INSTALL_DIR/promptcode" --version; then
+            echo "ERROR: promptcode --version either failed or hung (timeout after 10s)"
+            exit 1
+          fi
+          
+          # Test help command as well (just make sure it doesn't hang)
+          echo "Testing binary with --help..."
+          perl -e 'alarm shift; exec @ARGV' 10 "$PROMPTCODE_INSTALL_DIR/promptcode" --help > /dev/null 2>&1
+          echo "✓ --help command completed without hanging"
+          
+          echo "✓ Installation and sanity tests successful on ${{ matrix.os }}"
+      
+
+  test-powershell-installer:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Test install.ps1 syntax
+        shell: pwsh
+        run: |
+          # PowerShell syntax check
+          $null = [System.Management.Automation.Language.Parser]::ParseFile(
+            "packages/cli/scripts/install.ps1",
+            [ref]$null,
+            [ref]$null
+          )
+          Write-Host "✓ PowerShell syntax check passed"
+      
+      - name: Test installer with latest release
+        shell: pwsh
+        run: |
+          # Test the installer script
+          $env:PROMPTCODE_INSTALL_DIR = New-TemporaryFile | % { Remove-Item $_; New-Item -ItemType Directory -Path $_ }
+          Write-Host "Installing to: $env:PROMPTCODE_INSTALL_DIR"
+          
+          # Run installer (with -Insecure for CI testing, since checksum might fail)
+          try {
+            & packages/cli/scripts/install.ps1 -Insecure
+          } catch {
+            Write-Error "Installation failed: $_"
+            exit 1
+          }
+          
+          # Check if binary was installed
+          $binaryPath = Join-Path $env:PROMPTCODE_INSTALL_DIR "promptcode.exe"
+          if (!(Test-Path $binaryPath)) {
+            Write-Error "Binary not found at $binaryPath"
+            exit 1
+          }
+          
+          # Test the installed binary - CRITICAL: Must not hang
+          Write-Host "Testing binary with --version (should not hang)..."
+          $job = Start-Job -ScriptBlock { param($path) & $path --version } -ArgumentList $binaryPath
+          if (!(Wait-Job $job -Timeout 10)) {
+            Stop-Job $job
+            Remove-Job $job
+            Write-Error "promptcode --version hung (timeout after 10s)"
+            exit 1
+          }
+          $output = Receive-Job $job
+          Remove-Job $job
+          Write-Host "Version output: $output"
+          
+          # Test help command as well
+          Write-Host "Testing binary with --help..."
+          $job = Start-Job -ScriptBlock { param($path) & $path --help } -ArgumentList $binaryPath
+          if (!(Wait-Job $job -Timeout 10)) {
+            Stop-Job $job
+            Remove-Job $job
+            Write-Error "promptcode --help hung (timeout after 10s)"
+            exit 1
+          }
+          $helpOutput = Receive-Job $job
+          Remove-Job $job
+          # Convert array to string and check if it contains promptcode
+          $helpText = $helpOutput -join " "
+          if ($helpText -notmatch "promptcode") {
+            Write-Error "Help output doesn't contain expected text: $helpText"
+            exit 1
+          }
+          
+          Write-Host "✓ Installation and sanity tests successful on Windows"
+
