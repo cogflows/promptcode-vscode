@@ -41,6 +41,10 @@ npm install -g promptcode-cli
 ### Expert Mode
 
 ```bash
+# Ask questions without code context (pure AI consultation)
+promptcode expert "What are the best practices for API design?"
+promptcode expert "How does OAuth2 work?"
+
 # Ask questions with codebase context using AI experts
 promptcode expert "Why is this API slow?" -f src/**/*.ts
 promptcode expert "Explain the auth flow" -f backend/**/*.ts

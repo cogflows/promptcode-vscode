@@ -248,7 +248,7 @@ Legacy flags (still supported):
 // Expert command - consult AI with codebase context
 program
   .command('expert [question]')
-  .description('Ask AI expert questions with full codebase context')
+  .description('Ask AI expert questions with optional codebase context')
   .addHelpText('after', `
 Requires API key for chosen provider. Set via environment variables:
   $ export OPENAI_API_KEY=<key>     # For GPT-5, O3 models
@@ -257,13 +257,16 @@ Requires API key for chosen provider. Set via environment variables:
   $ export GROK_API_KEY=<key>       # For Grok 4
 
 Examples:
-  $ promptcode expert "How can I optimize the API performance?"
+  $ promptcode expert "How can I optimize the API performance?"  # Pure AI consultation
+  $ promptcode expert "Why is this slow?" -f "src/api/**/*.ts"  # With code context
   $ promptcode expert "Explain the authentication flow" --preset auth
   $ promptcode expert "Find potential security issues" -f "src/api/**/*.ts"
   $ promptcode expert "Review this code" --model opus-4 --stream
   $ promptcode expert --prompt-file analysis.md  # Use prompt from file
   $ promptcode expert --models  # See all available models
-  $ promptcode expert "Analyze security" --preset api --json  # JSON output`)
+  $ promptcode expert "Analyze security" --preset api --json  # JSON output
+
+Note: If both --preset and -f are specified, -f takes precedence (preset is ignored).`)
   .option('--path <dir>', 'project root directory', process.cwd())
   .option('--preset <name>', 'use a preset for context')
   .option('-f, --files <patterns...>', 'file patterns to include')

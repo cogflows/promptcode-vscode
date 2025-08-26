@@ -16,7 +16,7 @@ import {
 import { EXIT_CODES, exitWithCode } from '../utils/exit-codes';
 import { findPromptcodeFolder, getProjectRoot, getPresetPath, getCacheDir, resolveProjectPath } from '../utils/paths';
 import { validatePatterns, validatePresetName } from '../utils/validation';
-import { SAFE_DEFAULT_PATTERNS, DEFAULT_SAFETY_MARGIN } from '../utils/constants';
+import { DEFAULT_SAFETY_MARGIN } from '../utils/constants';
 
 interface ExpertOptions {
   path?: string;
@@ -334,6 +334,9 @@ export async function expertCommand(question: string | undefined, options: Exper
       finalQuestion = await fs.promises.readFile(promptFilePath, 'utf8');
       if (!options.json) {
         console.log(chalk.gray(`📄 Using prompt from: ${options.promptFile}`));
+        if (question) {
+          console.log(chalk.gray('   (Prompt file overrides inline question)'));
+        }
       }
     } catch (error) {
       console.error(chalk.red(`❌ Error reading prompt file: ${(error as Error).message}`));
@@ -370,20 +373,22 @@ export async function expertCommand(question: string | undefined, options: Exper
     exitWithCode(EXIT_CODES.INVALID_INPUT);
   }
   
-  // Check if API key is configured for the provider
-  const availableModels = getAvailableModels();
-  if (!availableModels.includes(modelKey)) {
-    const envVars = {
-      openai: 'OPENAI_API_KEY or OPENAI_KEY',
-      anthropic: 'ANTHROPIC_API_KEY or CLAUDE_API_KEY',
-      google: 'GOOGLE_API_KEY, GOOGLE_CLOUD_API_KEY, or GEMINI_API_KEY',
-      xai: 'XAI_API_KEY or GROK_API_KEY'
-    };
-    console.error(chalk.red(`\n❌ API key not configured for ${modelConfig.provider}.`));
-    console.error(chalk.yellow(`\nTo use ${modelConfig.name}, set the environment variable:`));
-    console.error(chalk.gray(`  export ${envVars[modelConfig.provider as keyof typeof envVars]}=<your-key>`));
-    console.error(chalk.gray(`\nOr use a different model with --model flag. Run 'promptcode expert --models' to see available options.`));
-    exitWithCode(EXIT_CODES.MISSING_API_KEY);
+  // Check if API key is configured for the provider (skip for cost estimation)
+  if (!options.estimateCost) {
+    const availableModels = getAvailableModels();
+    if (!availableModels.includes(modelKey)) {
+      const envVars = {
+        openai: 'OPENAI_API_KEY or OPENAI_KEY',
+        anthropic: 'ANTHROPIC_API_KEY or CLAUDE_API_KEY',
+        google: 'GOOGLE_API_KEY, GOOGLE_CLOUD_API_KEY, or GEMINI_API_KEY',
+        xai: 'XAI_API_KEY or GROK_API_KEY'
+      };
+      console.error(chalk.red(`\n❌ API key not configured for ${modelConfig.provider}.`));
+      console.error(chalk.yellow(`\nTo use ${modelConfig.name}, set the environment variable:`));
+      console.error(chalk.gray(`  export ${envVars[modelConfig.provider as keyof typeof envVars]}=<your-key>`));
+      console.error(chalk.gray(`\nOr use a different model with --model flag. Run 'promptcode expert --models' to see available options.`));
+      exitWithCode(EXIT_CODES.MISSING_API_KEY);
+    }
   }
   
   const spin = (!options.stream && !options.json && shouldShowSpinner({ json: options.json })) ? spinner() : null;
@@ -400,26 +405,36 @@ export async function expertCommand(question: string | undefined, options: Exper
     // This now intelligently finds the project root
     const projectPath = resolveProjectPath(options.path);
     
-    // Determine patterns - prioritize files, then preset, then default (safe)
+    // Determine patterns - handle files, preset, or both
     let patterns: string[] = [];
-    if (options.files && options.files.length > 0) {
+    
+    // Check if both preset and files are specified
+    if (options.files && options.files.length > 0 && options.preset) {
+      // Both specified - files take precedence, warn user
+      if (!options.json) {
+        console.log(chalk.yellow('⚠️  Both --preset and -f specified. Using -f files only (preset ignored).'));
+      }
+      patterns = options.files.map((f) => (f.startsWith('@') ? f.slice(1) : f));
+      validatePatternsWithinProject(patterns);
+    } else if (options.files && options.files.length > 0) {
       patterns = options.files.map((f) => (f.startsWith('@') ? f.slice(1) : f));
       validatePatternsWithinProject(patterns);
     } else if (options.preset) {
       patterns = await loadPreset(projectPath, options.preset);
-    } else if (options.promptFile) {
-      // Prompt-file only: no files by default
-      patterns = [];
-      if (!options.json) {
-        console.log(chalk.gray('💡 No files specified. Use -f or --preset to include code context.'));
-      }
     } else {
-      // Safe default include set (respects .gitignore + conservative excludes)
-      patterns = SAFE_DEFAULT_PATTERNS;
+      // No files specified - run without code context
+      patterns = [];
+      if (!options.json && !options.promptFile) {
+        console.log(chalk.gray('💡 No files or preset specified. Use -f or --preset to include code context.'));
+      }
     }
     
     // Save preset if requested
-    if (options.savePreset && patterns.length > 0) {
+    if (options.savePreset) {
+      if (patterns.length === 0) {
+        console.error(chalk.red('❌ No file patterns to save. Use -f or --preset before --save-preset.'));
+        exitWithCode(EXIT_CODES.INVALID_INPUT);
+      }
       await savePresetSafely(projectPath, options.savePreset, patterns, options);
     }
     

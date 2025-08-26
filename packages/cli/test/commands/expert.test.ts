@@ -136,7 +136,7 @@ describe('expert command', () => {
     });
     
     // Run in non-interactive mode without --yes
-    const result = await runCLI(['expert', 'Analyze this', '--model', 'o3-pro'], { 
+    const result = await runCLI(['expert', 'Analyze this', '-f', 'src/**/*.ts', '--model', 'o3-pro'], { 
       cwd: fixture.dir,
       env: {
         ...process.env,
@@ -249,7 +249,7 @@ describe('expert command', () => {
       'src/index.ts': 'console.log("Test");'.repeat(5000)  // Large file
     });
     
-    const result = await runCLI(['expert', 'Analyze', '--model', 'o3-pro', '--json'], { 
+    const result = await runCLI(['expert', 'Analyze', '-f', 'src/**/*.ts', '--model', 'o3-pro', '--json'], { 
       cwd: fixture.dir,
       env: {
         ...process.env,
@@ -270,7 +270,7 @@ describe('expert command', () => {
       'src/index.ts': 'console.log("Test");'
     });
     
-    const result = await runCLI(['expert', 'Test', '--save-preset', '../../evil'], { 
+    const result = await runCLI(['expert', 'Test', '-f', 'src/**/*.ts', '--save-preset', '../../evil'], { 
       cwd: fixture.dir,
       env: {
         ...process.env,
@@ -377,20 +377,21 @@ describe('expert command', () => {
     expect(hasPathError || hasNoFiles || hasPermissionError || hasPatternRejection || result.exitCode !== 0).toBe(true);
   });
 
-  it('applies safe default excludes on broad scans (no preset/files)', async () => {
+  it('applies safe default excludes on broad scans with explicit pattern', async () => {
     createTestFiles(fixture.dir, {
       'node_modules/pkg/index.js': 'console.log(1)',
       '.git/HEAD': 'ref: refs/heads/main',
       '.env': 'SECRET=1',
       'src/index.ts': 'console.log("ok");'
     });
-    const res = await runCLI(['expert', 'Q', '--estimate-cost', '--json'], {
+    // When explicitly requesting all files, safe excludes should apply
+    const res = await runCLI(['expert', 'Q', '-f', '**/*', '--estimate-cost', '--json'], {
       cwd: fixture.dir,
       env: { ...process.env, OPENAI_API_KEY: 'test-key' }
     });
     expect(res.exitCode).toBe(0);
     const json = JSON.parse(res.stdout);
-    // Only src/index.ts should be counted
+    // Only src/index.ts should be counted (excludes applied)
     expect(json.fileCount).toBe(1);
   });
 
@@ -571,4 +572,29 @@ describe('expert command', () => {
     expect(json.fileCount).toBe(5); // Should include all API files
   });
   
+  it('should handle expert command without files (pure AI consultation)', async () => {
+    // Test that expert command without files doesn't scan the project
+    createTestFiles(fixture.dir, {
+      'src/index.ts': 'console.log("This should not be included");',
+      'package.json': '{"name": "test-project"}',
+      'README.md': '# Test Project'
+    });
+
+    // Run expert without any files or preset specified
+    const result = await runCLI(['expert', 'What are best practices for API design?', '--estimate-cost', '--json'], {
+      cwd: fixture.dir,
+      env: { ...process.env, OPENAI_API_KEY: 'test-key' }
+    });
+    
+    expect(result.exitCode).toBe(0);
+    const json = JSON.parse(result.stdout);
+    
+    // Should have no files included
+    expect(json.fileCount).toBe(0);
+    // Should only have tokens from the question and system prompt
+    expect(json.tokens.input).toBeGreaterThan(0);
+    expect(json.tokens.input).toBeLessThan(500); // Should be small since no files are included
+    expect(json.cost.total).toBeGreaterThan(0);
+  });
+
 });
