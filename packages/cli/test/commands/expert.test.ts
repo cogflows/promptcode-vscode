@@ -419,5 +419,156 @@ describe('expert command', () => {
     // Should succeed with --yes flag (exit code 0)
     expect(res.exitCode).toBe(0);
   });
+
+  // ──────────────────────────────────────────────────────────
+  // Tests for preset create command integration
+  // ──────────────────────────────────────────────────────────
+
+  it('should handle expert command with preset created via --from-files', async () => {
+    // First create a preset using --from-files
+    createTestFiles(fixture.dir, {
+      'src/api/users.ts': 'export class UserController { getUser() { return "user"; } }',
+      'src/api/posts.ts': 'export class PostController { getPost() { return "post"; } }',
+      'src/utils/auth.ts': 'export function authenticate() { return true; }',
+      'tests/api.test.ts': 'describe("API", () => { it("works", () => {}); })'
+    });
+
+    // Create preset with --from-files
+    const createResult = await runCLI(['preset', 'create', 'api-test', '--from-files', 'src/api/**/*.ts', 'tests/**/*.test.ts'], {
+      cwd: fixture.dir
+    });
+    expect(createResult.exitCode).toBe(0);
+    expect(createResult.stdout).toContain('Created preset: api-test');
+
+    // Now use the preset with expert command  
+    const expertResult = await runCLI(['expert', 'What does this API do?', '--preset', 'api-test', '--estimate-cost', '--json'], {
+      cwd: fixture.dir,
+      env: { ...process.env, OPENAI_API_KEY: 'test-key' }
+    });
+    
+    expect(expertResult.exitCode).toBe(0);
+    const json = JSON.parse(expertResult.stdout);
+    
+    // Verify the preset was used and includes the correct files
+    expect(json.fileCount).toBeGreaterThanOrEqual(3); // At least api files + test
+    expect(json.tokens.input).toBeGreaterThan(0);
+  });
+
+  it('should handle expert command with manually created preset', async () => {
+    // Create preset manually (without --from-files)
+    createTestFiles(fixture.dir, {
+      '.promptcode/presets/manual-test.patterns': [
+        '# Manual test preset',
+        'src/**/*.ts',
+        'tests/**/*.test.ts',
+        '!**/node_modules/**',
+        '!**/*.d.ts'
+      ].join('\n'),
+      'src/main.ts': 'export function main() { console.log("main"); }',
+      'src/helpers.ts': 'export function helper() { return 42; }',
+      'tests/main.test.ts': 'test("main", () => { expect(main()).toBe(undefined); })'
+    });
+
+    // Use the manually created preset with expert
+    const result = await runCLI(['expert', 'Explain this codebase', '--preset', 'manual-test', '--estimate-cost', '--json'], {
+      cwd: fixture.dir, 
+      env: { ...process.env, OPENAI_API_KEY: 'test-key' }
+    });
+    
+    expect(result.exitCode).toBe(0);
+    const json = JSON.parse(result.stdout);
+    
+    // Verify preset was loaded correctly
+    expect(json.fileCount).toBe(3); // main.ts, helpers.ts, main.test.ts
+    expect(json.tokens.input).toBeGreaterThan(0);
+    expect(json.cost.total).toBeGreaterThan(0);
+  });
+
+  it('should handle expert command with specific files pattern', async () => {
+    createTestFiles(fixture.dir, {
+      'src/feature/auth.ts': 'export class Auth { login() {} logout() {} }',
+      'src/feature/user.ts': 'export class User { getName() {} }', 
+      'src/other/config.ts': 'export const config = {};',
+      'tests/auth.test.ts': 'test("auth", () => {});'
+    });
+
+    // Use expert with direct file patterns
+    const result = await runCLI(['expert', 'Review authentication code', '-f', 'src/feature/**/*.ts', 'tests/**/*.test.ts', '--estimate-cost', '--json'], {
+      cwd: fixture.dir,
+      env: { ...process.env, OPENAI_API_KEY: 'test-key' }
+    });
+    
+    expect(result.exitCode).toBe(0);
+    const json = JSON.parse(result.stdout);
+    
+    // Should include feature files and test, but not config
+    expect(json.fileCount).toBe(3); // auth.ts, user.ts, auth.test.ts
+    expect(json.tokens.input).toBeGreaterThan(0);
+  });
+
+  it('should error when preset does not exist', async () => {
+    createTestFiles(fixture.dir, {
+      'src/index.ts': 'console.log("test");'
+    });
+
+    const result = await runCLI(['expert', 'Analyze', '--preset', 'non-existent-preset'], {
+      cwd: fixture.dir,
+      env: { ...process.env, OPENAI_API_KEY: 'test-key' }
+    });
+    
+    // Preset not found should result in error
+    expect(result.exitCode).toBeGreaterThan(0);
+    expect(result.stderr).toContain('non-existent-preset');
+  });
+
+  it('should handle combination of preset and additional files', async () => {
+    createTestFiles(fixture.dir, {
+      '.promptcode/presets/base.patterns': 'src/core/**/*.ts',
+      'src/core/engine.ts': 'export class Engine {}',
+      'src/core/parser.ts': 'export class Parser {}',
+      'src/utils/logger.ts': 'export class Logger {}',
+      'docs/README.md': '# Documentation'
+    });
+
+    // Use both preset and additional file patterns
+    const result = await runCLI(['expert', 'Analyze architecture', '--preset', 'base', '-f', 'src/utils/**/*.ts', 'docs/**/*.md', '--estimate-cost', '--json'], {
+      cwd: fixture.dir,
+      env: { ...process.env, OPENAI_API_KEY: 'test-key' }
+    });
+    
+    expect(result.exitCode).toBe(0);
+    const json = JSON.parse(result.stdout);
+    
+    // Should include preset files (engine.ts, parser.ts) and maybe additional patterns
+    // The actual count might vary based on how presets and files are combined
+    expect(json.fileCount).toBeGreaterThanOrEqual(2); // At least the core files
+    expect(json.tokens.input).toBeGreaterThan(0);
+  });
+
+  it('should correctly process preset created with optimization levels', async () => {
+    createTestFiles(fixture.dir, {
+      'src/api/v1/users.ts': 'export class UserV1 {}',
+      'src/api/v1/posts.ts': 'export class PostV1 {}',
+      'src/api/v2/users.ts': 'export class UserV2 {}',
+      'src/api/v2/posts.ts': 'export class PostV2 {}',
+      'src/api/common/base.ts': 'export class BaseController {}'
+    });
+
+    // Create preset with aggressive optimization
+    const createResult = await runCLI(['preset', 'create', 'api-optimized', '--from-files', 'src/api/**/*.ts', '--optimization-level', 'aggressive'], {
+      cwd: fixture.dir
+    });
+    expect(createResult.exitCode).toBe(0);
+
+    // Use the optimized preset
+    const expertResult = await runCLI(['expert', 'Analyze API structure', '--preset', 'api-optimized', '--estimate-cost', '--json'], {
+      cwd: fixture.dir,
+      env: { ...process.env, OPENAI_API_KEY: 'test-key' }
+    });
+    
+    expect(expertResult.exitCode).toBe(0);
+    const json = JSON.parse(expertResult.stdout);
+    expect(json.fileCount).toBe(5); // Should include all API files
+  });
   
 });

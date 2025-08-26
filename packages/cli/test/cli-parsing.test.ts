@@ -119,9 +119,8 @@ describe('CLI argument parsing', () => {
     const output = result.stdout + result.stderr;
     expect(output).toContain('promptcode');
     expect(output).toContain('generate');
-    // Accept exit codes 0, 1, or 3 (commander.js behavior varies across environments)
-    // 0 = success, 1 = help shown, 3 = invalid input (no command)
-    expect([0, 1, 3]).toContain(result.exitCode);
+    // Should exit with 0 after showing help (normalized behavior)
+    expect(result.exitCode).toBe(0);
   });
   
   it('should handle unknown commands with error', async () => {

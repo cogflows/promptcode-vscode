@@ -1,0 +1,24 @@
+# ci-test-failure-investigation preset
+# Investigating CLI test failures in CI vs local environments
+
+# CLI source code - focus on entry point and command parsing
+packages/cli/src/index.ts
+packages/cli/src/utils/exit-codes.ts
+packages/cli/src/utils/environment.ts
+
+# Test files - especially the failing test
+packages/cli/test/cli-parsing.test.ts
+packages/cli/test/test-utils.ts
+packages/cli/test/basic.test.ts
+
+# Build and CI configuration
+.github/workflows/release.yml
+.github/workflows/test.yml
+packages/cli/package.json
+bun.lock
+
+# Exclude patterns (use ! prefix):
+!**/node_modules/**
+!**/dist/**
+!**/build/**
+!**/.vscode-test/**

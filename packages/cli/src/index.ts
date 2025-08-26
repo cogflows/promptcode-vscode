@@ -519,7 +519,15 @@ program
   });
 
 // Parse command line arguments
-let args = process.argv.slice(2);
+// Normalize argv across runtimes/OS (some environments may pass empty args)
+const rawArgs = process.argv.slice(2);
+const args = rawArgs.filter(arg => arg != null && arg.trim() !== '');
+
+// If no meaningful args, show help and exit successfully
+if (args.length === 0) {
+  program.outputHelp();
+  process.exit(0);
+}
 
 // Handle --command syntax by converting to command syntax BEFORE any parsing
 // This allows commands to work with -- prefix (e.g., --cc becomes cc)
@@ -602,6 +610,6 @@ if (!hasSubcommand && args.length > 0) {
   // Start async update check - will show message at exit if update available
   startUpdateCheck();
   
-  // Parse normally for traditional commands
-  program.parse();
+  // Parse the normalized args as user-supplied (no implicit node/script entries)
+  program.parse(args, { from: 'user' });
 }

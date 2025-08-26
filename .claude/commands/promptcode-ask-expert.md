@@ -20,11 +20,15 @@ Consult an expert about: $ARGUMENTS
    promptcode preset list
    ```
    - Check if an existing preset matches the request (e.g., "security" → look for security-related presets)
-   - If no suitable preset exists, create one directly:
+   - If no suitable preset exists, create one:
      ```bash
-     promptcode preset create {descriptive-name} --from-context "{description}"
+     promptcode preset create {descriptive-name}
      ```
-     This will intelligently create a preset with the right patterns.
+     Then edit `.promptcode/presets/{descriptive-name}.patterns` to add relevant file patterns.
+     Or use `--from-files` with specific patterns:
+     ```bash
+     promptcode preset create {descriptive-name} --from-files "src/**/*.ts" "tests/**/*.test.ts"
+     ```
    - Verify the preset:
      ```bash
      promptcode preset info {preset-name}
