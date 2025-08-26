@@ -75,7 +75,7 @@ function showHelpOrError(args: string[]): void {
   // If no args provided, show help
   if (args.length === 0) {
     program.outputHelp();
-    return;
+    process.exit(0);  // Exit cleanly after showing help
   }
   
   // Otherwise show error for invalid usage
@@ -606,8 +606,8 @@ if (args.includes('--update')) {
 // After converting --command to command, check if we have a known subcommand
 const hasSubcommand = args.length > 0 && knownCommands.includes(args[0]);
 
-if (!hasSubcommand && args.length > 0) {
-  // No valid command found, show error
+if (!hasSubcommand) {
+  // No valid command found or no args provided, show help or error
   showHelpOrError(args);
 } else {
   // Start async update check - will show message at exit if update available

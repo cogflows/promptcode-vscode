@@ -216,7 +216,9 @@
       "Bash(wc:*)",
       "Bash(PROMPTCODE_TEST=1 ./dist/promptcode cc --path /tmp/test-cc-templates --yes)",
       "Bash(git init:*)",
-      "Bash(PROMPTCODE_TEST=1 promptcode cc --yes)"
+      "Bash(PROMPTCODE_TEST=1 promptcode cc --yes)",
+      "Bash(PROMPTCODE_TEST=1 PROMPTCODE_MOCK_LLM=1 OPENAI_API_KEY=test-key ./dist/promptcode expert \"Test question\" --model gpt-5 --no-web-search --yes)",
+      "Bash(OPENAI_API_KEY=\"\" ./dist/promptcode expert \"Test question\" --model gpt-5 --estimate-cost)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits",
