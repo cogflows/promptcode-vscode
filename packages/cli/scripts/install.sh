@@ -380,8 +380,21 @@ main() {
       print_warning "You're running a development version"
     fi
     
-    # Check if update command exists (newer versions have it)
-    if "$CLI_NAME" update --help >/dev/null 2>&1; then
+    # Check if update command exists AND version is 0.6.9 or newer
+    # (older versions have broken update that doesn't finalize properly)
+    local version_ok_for_update=false
+    if [[ "$current_version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
+      local major="${BASH_REMATCH[1]}"
+      local minor="${BASH_REMATCH[2]}"
+      local patch="${BASH_REMATCH[3]}"
+      # Version must be >= 0.6.9 for working update command
+      if (( major > 0 )) || (( major == 0 && minor > 6 )) || (( major == 0 && minor == 6 && patch >= 9 )); then
+        version_ok_for_update=true
+      fi
+    fi
+    
+    # Check if update command exists (newer versions have it) AND version supports it properly
+    if "$CLI_NAME" update --help >/dev/null 2>&1 && [[ "$version_ok_for_update" == "true" ]]; then
       # For dev versions, inform about --force option
       if [[ "$current_version" == *"-dev."* ]]; then
         print_info "Development version detected. To force update to $version:"
@@ -409,8 +422,17 @@ main() {
         exit 0  # Successful update
       fi
     else
-      # Older version without update
-      if [[ "$current_version" == *"-dev."* ]]; then
+      # Older version without update or version with broken update command
+      if [[ "$version_ok_for_update" == "false" ]] && [[ "$current_version" =~ ^0\.6\.[0-8]$ ]]; then
+        print_warning "Version $current_version has a known update issue. Direct reinstall required."
+        print_info "Will perform clean installation of version $version"
+        safe_read_char "Proceed with direct reinstall? [Y/n] " "Y"
+        if [[ ! $REPLY =~ ^[Yy]$ ]] && [ -n "$REPLY" ]; then
+          print_info "Installation cancelled"
+          exit 0
+        fi
+        # Continue with installation - will overwrite the broken version
+      elif [[ "$current_version" == *"-dev."* ]]; then
         print_warning "This development version doesn't support update."
         print_info "Will force reinstall with latest release version ($version)"
         safe_read_char "Proceed with force reinstall? [Y/n] " "Y"
