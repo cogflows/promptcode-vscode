@@ -1,0 +1,21 @@
+# CLI Comprehensive Review Preset
+# Focus on CLI implementation, commands, and templates
+
+# CLI source code
+packages/cli/src/**/*.ts
+!packages/cli/src/**/*.test.ts
+!packages/cli/src/test-setup.ts
+
+# CLI tests
+packages/cli/test/**/*.test.ts
+
+# Command templates
+.claude/commands/*.md
+packages/cli/src/claude-templates/*.md
+packages/cli/src/cursor-templates/*.mdc
+
+# Exclude common directories
+!**/node_modules/**
+!**/dist/**
+!**/build/**
+!**/*.d.ts

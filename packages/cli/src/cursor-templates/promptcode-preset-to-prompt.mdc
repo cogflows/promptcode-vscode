@@ -7,7 +7,7 @@ Export a promptcode preset to a file.
 
 When asked to export or save a preset:
 ```bash
-promptcode generate -l <preset-name> -o <output-file>
+promptcode generate --preset <preset-name> --output <output-file>
 ```
 
 This generates a complete prompt with:
@@ -16,5 +16,5 @@ This generates a complete prompt with:
 - Token count information
 
 Examples:
-- Export to file: `promptcode generate -l backend -o backend-context.md`
-- Export with instructions: `promptcode generate -l api --instructions "Review for security issues" -o security-review.md`
+- Export to file: `promptcode generate --preset backend --output backend-context.md`
+- Export with instructions: `promptcode generate --preset api --instructions "Review for security issues" --output security-review.md`

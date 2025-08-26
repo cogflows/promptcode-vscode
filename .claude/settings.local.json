@@ -212,7 +212,11 @@
       "Bash(PROMPTCODE_TEST=1 CI=true bun test --bail=1 --timeout 5000)",
       "Bash(PROMPTCODE_TEST=1 CI=true bun test test/cli-parsing.test.ts --bail=1)",
       "Bash(PROMPTCODE_TEST=1 CI=true bun test --bail=1 --timeout 10000)",
-      "Bash(PROMPTCODE_TEST=1 CI=true bun test test/cli-parsing.test.ts -t \"should show help when no arguments provided\")"
+      "Bash(PROMPTCODE_TEST=1 CI=true bun test test/cli-parsing.test.ts -t \"should show help when no arguments provided\")",
+      "Bash(wc:*)",
+      "Bash(PROMPTCODE_TEST=1 ./dist/promptcode cc --path /tmp/test-cc-templates --yes)",
+      "Bash(git init:*)",
+      "Bash(PROMPTCODE_TEST=1 promptcode cc --yes)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits",

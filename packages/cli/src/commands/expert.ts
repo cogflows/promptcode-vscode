@@ -183,7 +183,8 @@ function warnIfFilesOutsideProject(projectPath: string, files: any[]): number {
   const externalFiles = files.filter((f) => {
     try {
       // Standardize on absolutePath field (consistent with generate.ts)
-      const filePath = f.absolutePath || f.path;
+      // If only relative path is available, resolve it relative to the project path
+      const filePath = f.absolutePath || (path.isAbsolute(f.path) ? f.path : path.resolve(projectPath, f.path));
       const abs = fs.realpathSync(filePath);
       return !abs.startsWith(projectRoot);
     } catch (err) {

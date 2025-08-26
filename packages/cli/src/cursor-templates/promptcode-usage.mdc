@@ -15,9 +15,9 @@ PromptCode is a CLI tool that helps generate AI-ready prompts from codebases. Wh
 - `promptcode preset create <name>` - Create a new preset
 
 ### Generating Prompts
-- `promptcode generate -l <preset>` - Generate prompt using a preset
+- `promptcode generate --preset <preset>` - Generate prompt using a preset
 - `promptcode generate -f "pattern"` - Generate with file patterns
-- `promptcode generate -o output.md` - Save to file
+- `promptcode generate --output output.md` - Save to file
 
 ### Expert Consultation
 - `promptcode expert "question"` - Ask AI experts with code context
@@ -30,7 +30,7 @@ You can use these shortcuts that I'll interpret (matching Claude Code commands):
 - `/promptcode-preset-info <name>` → `promptcode preset info <name>`
 - `/promptcode-preset-create <name>` → `promptcode preset create <name>`
 - `/promptcode-ask-expert "question"` → `promptcode expert "question"`
-- `/promptcode-preset-to-prompt <preset>` → `promptcode generate -l <preset>`
+- `/promptcode-preset-to-prompt <preset>` → `promptcode generate --preset <preset>`
 
 ## Important Guidelines
 
@@ -45,7 +45,7 @@ You can use these shortcuts that I'll interpret (matching Claude Code commands):
 ### Analyzing a Feature
 1. Create or identify relevant preset: `promptcode preset create feature-name`
 2. Check what it includes: `promptcode preset info feature-name`
-3. Generate context: `promptcode generate -l feature-name`
+3. Generate context: `promptcode generate --preset feature-name`
 
 ### Getting AI Analysis
 1. Ensure API key is set (check environment)

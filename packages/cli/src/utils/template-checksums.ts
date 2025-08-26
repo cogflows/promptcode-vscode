@@ -18,7 +18,7 @@ export const TEMPLATE_CHECKSUMS: Record<string, string[]> = {
     "5fe5043502b273103d422a945c6181b9136d6ea97e9cfd2282eaa1b96c7c2766"
   ],
   "promptcode-ask-expert.md": [
-    "89883853dc5115cbf0e28c9ff473445e2a6cded245a3b3619752b17aed5617bd",
+    "52783ae0ebb285bbec916904583c3cb90ad06c4338947900476698057f956c3e",
     "71ca5ff74847b54ed6a33f6f6a6432730962fb6ef38bf02059a2fd72bbc7fff5"
   ],
   "CLAUDE.md.template": [
@@ -28,9 +28,11 @@ export const TEMPLATE_CHECKSUMS: Record<string, string[]> = {
     "7de6301c41aff4b341902ba2e1a3769201705ec9cd4be4ef1adeb8a79ffa065d"
   ],
   "promptcode-usage.mdc": [
+    "8d9e93d903e07848deefd32c10970d214c34f82d05bb938cd4c835a3816d1265",
     "cc9ffcd7bbd5920a9f5d79908c40bc13e3946621cbee24623bc0abf3b334d7e1"
   ],
   "promptcode-preset-to-prompt.mdc": [
+    "b7dda66d787c9a056ca3d4743148a56fb2b0652ba2e29a846259245e14c4f3f0",
     "6bafc504afe719f083019025326a95e416d27bf6a32f5edcbc7a5e01e30116e1"
   ],
   "promptcode-preset-list.mdc": [

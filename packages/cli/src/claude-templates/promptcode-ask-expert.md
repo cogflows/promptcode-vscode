@@ -1,5 +1,5 @@
 ---
-allowed-tools: Bash(promptcode expert:*), Bash(promptcode expert --estimate-cost:* --json), Bash(promptcode expert --models --json), Bash(promptcode preset:*), Bash(promptcode generate:*), Bash(promptcode generate --preset:* --output:*), Bash(mktemp:*), Read(/tmp/*), Write(/tmp/*), Task, Bash(command -v:*), Bash(cursor:*), Bash(code:*), Bash(echo:*), Bash(cat:*), Bash(xdg-open:*), Bash(open:*)
+allowed-tools: Bash(promptcode expert:*), Bash(promptcode expert --estimate-cost:* --json), Bash(promptcode expert --models --json), Bash(promptcode preset:*), Bash(promptcode generate:*), Bash(promptcode generate --preset:* --output:*), Bash(mktemp:*), Read(/tmp/*), Write(/tmp/*), Task, Bash(command -v:*), Bash(cursor:*), Bash(code:*), Bash(echo:*), Bash(cat:*), Bash(xdg-open:*), Bash(open:*), Bash(wc:*), Bash(date:*), Bash(mkdir:*), Bash(touch:*), Bash(ls:*), Bash(pwd:*), Bash(export:*), Bash(grep:*), Bash(sed:*), Bash(awk:*), Bash(tr:*), Bash(cut:*), Bash(sort:*), Bash(uniq:*), Bash(head:*), Bash(tail:*), Bash(rm:*), Bash(cp:*), Bash(mv:*), Bash(find:*), Bash(which:*), Bash(test:*), Bash([[:*)
 description: Consult AI expert for complex problems with code context - supports ensemble mode for multiple models
 ---
 
@@ -36,7 +36,7 @@ Consult an expert about: $ARGUMENTS
 
 3. Prepare consultation file for review:
    - Set temp directory: `TMP="${TMPDIR:-/tmp}"`
-   - Create unique files: `PROMPT_FILE="$(mktemp "${TMP%/}/expert-consultation-XXXXXX")"`
+   - Create unique files: `PROMPT_FILE="${TMP%/}/expert-consultation-$(date +%Y%m%d-%H%M%S)-$$.txt"`
    - Structure the file with:
      ```markdown
      # Expert Consultation
@@ -51,7 +51,7 @@ Consult an expert about: $ARGUMENTS
      ```
    - Append the code context using the preset:
      ```bash
-     CODE_FILE="$(mktemp "${TMP%/}/code-context-XXXXXX")"
+     CODE_FILE="${TMP%/}/code-context-$(date +%Y%m%d-%H%M%S)-$$.txt"
      promptcode generate --preset "{preset_name}" --output "$CODE_FILE"
      cat "$CODE_FILE" >> "$PROMPT_FILE"
      ```
@@ -130,7 +130,7 @@ Consult an expert about: $ARGUMENTS
    **Ensemble Mode (Synthesis):**
    - Read all response text files
    - Extract key insights from each model's response
-   - Create synthesis report: `SYNTHESIS_FILE="$(mktemp "${TMP%/}/expert-synthesis-XXXXXX")"`
+   - Create synthesis report: `SYNTHESIS_FILE="${TMP%/}/expert-synthesis-$(date +%Y%m%d-%H%M%S)-$$.txt"`
    
    ```markdown
    # Ensemble Expert Consultation Results

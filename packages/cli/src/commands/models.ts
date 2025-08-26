@@ -81,17 +81,13 @@ export async function modelsCommand(options: ModelsOptions): Promise<void> {
         console.log(chalk.gray(`    Pricing: ${inputCost}/1K input, ${outputCost}/1K output`));
         
         // Show capabilities
-        const capabilities = [];
-        if (config.supportsWebSearch) capabilities.push('web search');
-        if (config.reasoning) capabilities.push('reasoning');
-        if (config.vision) capabilities.push('vision');
-        if (capabilities.length > 0) {
-          console.log(chalk.gray(`    Features: ${capabilities.join(', ')}`));
+        if (config.supportsWebSearch) {
+          console.log(chalk.gray(`    Features: web search`));
         }
         
         // Show context window
-        if (config.maxTokens) {
-          console.log(chalk.gray(`    Context: ${config.maxTokens.toLocaleString()} tokens`));
+        if (config.contextWindow) {
+          console.log(chalk.gray(`    Context window: ${config.contextWindow.toLocaleString()} tokens`));
         }
         
         console.log();
