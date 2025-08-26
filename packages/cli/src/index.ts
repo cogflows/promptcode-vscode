@@ -69,16 +69,10 @@ import { exitWithCode, EXIT_CODES } from './utils/exit-codes';
 
 
 /**
- * Show help when no valid command is provided
+ * Show error for invalid command usage
  */
 function showHelpOrError(args: string[]): void {
-  // If no args provided, show help
-  if (args.length === 0) {
-    program.outputHelp();
-    process.exit(0);  // Exit cleanly after showing help
-  }
-  
-  // Otherwise show error for invalid usage
+  // Show error for invalid usage
   console.error(chalk.red(`Error: Invalid usage. Please specify a command.\n`));
   console.error(chalk.yellow('Available commands:'));
   console.error(chalk.gray('  generate   - Generate a prompt from selected files'));
@@ -606,10 +600,10 @@ if (args.includes('--update')) {
 // After converting --command to command, check if we have a known subcommand
 const hasSubcommand = args.length > 0 && knownCommands.includes(args[0]);
 
-if (!hasSubcommand) {
-  // No valid command found or no args provided, show help or error
+if (!hasSubcommand && args.length > 0) {
+  // Invalid command found, show error
   showHelpOrError(args);
-} else {
+} else if (hasSubcommand) {
   // Start async update check - will show message at exit if update available
   startUpdateCheck();
   
