@@ -19,11 +19,9 @@ import { BUILD_VERSION } from './version';
 import { startUpdateCheck } from './utils/update-checker';
 import { exitWithCode, EXIT_CODES } from './utils/exit-codes';
 
-// Windows update auto-finalization
+// Update auto-finalization
 // Completes pending update by swapping .new binary on startup
-(async function completePendingWindowsUpdate() {
-  if (process.platform !== 'win32') return;
-  
+(async function completePendingUpdate() {
   try {
     const currentBinary = process.execPath;
     const stagedBinary = `${currentBinary}.new`;
