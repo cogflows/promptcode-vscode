@@ -166,8 +166,10 @@ describe('cc command', () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain('Removed Claude commands');
     
-    // Should remove both commands and CLAUDE.md section
-    assertFileNotExists(path.join(fixture.dir, 'CLAUDE.md')); // Was empty except for PromptCode
+    // Should remove commands and PromptCode section from CLAUDE.md (but keep the file)
+    assertFileExists(path.join(fixture.dir, 'CLAUDE.md')); // File is preserved even if empty
+    const content = fs.readFileSync(path.join(fixture.dir, 'CLAUDE.md'), 'utf8');
+    expect(content).not.toContain('PROMPTCODE-CLI-START');
     assertFileNotExists(path.join(fixture.dir, '.claude/commands/promptcode-ask-expert.md'));
   });
   

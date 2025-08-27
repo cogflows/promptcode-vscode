@@ -90,8 +90,10 @@ describe('CLI integration tests', () => {
     result = await runCLI(['cc', 'uninstall', '--all'], { cwd: fixture.dir });
     expect(result.exitCode).toBe(0);
     
-    // CLAUDE.md should be gone (was empty)
-    assertFileNotExists(path.join(fixture.dir, 'CLAUDE.md'));
+    // CLAUDE.md should still exist but without PromptCode section
+    assertFileExists(path.join(fixture.dir, 'CLAUDE.md'));
+    const content = fs.readFileSync(path.join(fixture.dir, 'CLAUDE.md'), 'utf8');
+    expect(content).not.toContain('PROMPTCODE-CLI-START');
   });
   
   it('should handle monorepo scenarios', async () => {
