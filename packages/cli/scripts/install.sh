@@ -69,7 +69,9 @@ safe_read() {
     read -p "$prompt" -r response
   elif [[ -t 1 ]] && [[ -r /dev/tty ]] 2>/dev/null; then
     # stdout is a terminal and /dev/tty is readable (for piped scripts)
-    read -p "$prompt" -r response < /dev/tty 2>/dev/null || response="$default"
+    # When reading from /dev/tty, we need to manually show the prompt
+    echo -n "$prompt" >&2
+    read -r response < /dev/tty 2>/dev/null || response="$default"
   else
     # Non-interactive environment, use default
     [[ -n "$prompt" ]] && print_info "Non-interactive mode detected, using default: $default"
@@ -91,7 +93,9 @@ safe_read_char() {
     echo ""  # Add newline after single char read
   elif [[ -t 1 ]] && [[ -r /dev/tty ]] 2>/dev/null; then
     # stdout is a terminal and /dev/tty is readable (for piped scripts)
-    read -p "$prompt" -n 1 -r < /dev/tty 2>/dev/null || REPLY="$default"
+    # When reading from /dev/tty, we need to manually show the prompt
+    echo -n "$prompt" >&2
+    read -n 1 -r < /dev/tty 2>/dev/null || REPLY="$default"
     [[ -n "$REPLY" ]] && echo ""  # Add newline after single char read
   else
     # Non-interactive environment, use default
