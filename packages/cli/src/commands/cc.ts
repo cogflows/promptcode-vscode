@@ -472,8 +472,8 @@ export async function ccCommand(options: CcOptions & { detect?: boolean }): Prom
   
   // Handle setup
   
-  // First show what will be installed BEFORE creating directories
-  const claudeDirExists = fs.existsSync(path.join(projectPath, '.claude'));
+  // Check if .claude directory already exists (including in parent directories)
+  const existingClaudeDir = findClaudeFolder(projectPath);
   
   console.log(chalk.bold('📦 Commands to be installed:'));
   for (const cmd of PROMPTCODE_CLAUDE_COMMANDS) {
@@ -481,9 +481,17 @@ export async function ccCommand(options: CcOptions & { detect?: boolean }): Prom
     console.log(chalk.green(`  + ${slashCommand}`));
   }
   
-  if (!claudeDirExists) {
+  if (!existingClaudeDir) {
     console.log(chalk.bold('\n📁 Directory to be created:'));
     console.log(chalk.green('  + .claude/'));
+  } else {
+    // Show where we found the existing .claude directory
+    const relativePath = path.relative(projectPath, existingClaudeDir);
+    if (relativePath) {
+      console.log(chalk.gray(`\n📁 Using existing: ${relativePath}`));
+    } else {
+      console.log(chalk.gray('\n📁 Using existing: .claude/'));
+    }
   }
   console.log();
   
