@@ -477,7 +477,17 @@ main() {
   # Automatically check for integrations
   echo "" >&2
   print_info "Checking for AI environment integrations..."
-  "${CLI_NAME}" integrate --auto-detect 2>/dev/null || true
+  # Run integration check with proper TTY handling
+  if [[ -t 0 && -t 1 ]]; then
+    # If we have TTY, run normally with interactive prompts
+    "${CLI_NAME}" integrate --auto-detect || true
+  elif [[ -r /dev/tty ]]; then
+    # If we can access /dev/tty (piped install), redirect to allow prompts
+    "${CLI_NAME}" integrate --auto-detect < /dev/tty || true
+  else
+    # Non-interactive, just do silent check
+    "${CLI_NAME}" integrate --auto-detect 2>/dev/null || true
+  fi
   
   echo "" >&2
   echo "Get started with:" >&2
