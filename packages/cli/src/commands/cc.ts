@@ -488,9 +488,9 @@ export async function ccCommand(options: CcOptions & { detect?: boolean }): Prom
     // Show where we found the existing .claude directory
     const relativePath = path.relative(projectPath, existingClaudeDir);
     if (relativePath) {
-      console.log(chalk.gray(`\n📁 Using existing: ${relativePath}`));
+      console.log(chalk.bold(`\n📁 Using existing: ${chalk.cyan(relativePath)}`));
     } else {
-      console.log(chalk.gray('\n📁 Using existing: .claude/'));
+      console.log(chalk.bold('\n📁 Using existing: ' + chalk.cyan('.claude/')));
     }
   }
   console.log();

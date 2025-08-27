@@ -398,13 +398,14 @@ uninstall() {
       if grep -q "${INSTALL_DIR}" "$config" 2>/dev/null; then
         # Create backup
         cp "$config" "${config}.promptcode-backup"
-        # Remove PATH entries containing INSTALL_DIR
+        # Remove PATH entries containing INSTALL_DIR (handle various formats)
         if [[ "$config" == *"config.fish" ]]; then
           # Fish shell uses different syntax
           grep -v "fish_add_path.*${INSTALL_DIR}" "$config" > "${config}.tmp" && mv "${config}.tmp" "$config"
         else
-          # Bash/Zsh use export PATH
-          grep -v "export PATH.*${INSTALL_DIR}" "$config" | grep -v "PATH=.*${INSTALL_DIR}" > "${config}.tmp" && mv "${config}.tmp" "$config"
+          # Bash/Zsh use export PATH - handle multiple formats
+          # This handles: export PATH="...", export PATH='...', PATH="...", PATH='...', export PATH=$PATH:...
+          sed -E "/export[[:space:]]+PATH.*${INSTALL_DIR//\//\\/}/d; /^[[:space:]]*PATH.*${INSTALL_DIR//\//\\/}/d" "$config" > "${config}.tmp" && mv "${config}.tmp" "$config"
         fi
         print_success "Removed PATH entry from: $config (backup: ${config}.promptcode-backup)"
       fi
