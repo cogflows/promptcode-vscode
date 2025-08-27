@@ -14,7 +14,7 @@ promptcode expert "Why is this slow?" src/api/handler.ts
 # Use presets for common file patterns
 promptcode preset list                    # See available presets
 promptcode preset info <name>             # Show preset details & token count
-promptcode generate -l <preset-name>      # Generate using preset
+promptcode generate -p <preset-name>      # Generate using preset
 ```
 
 ## Working with Presets
@@ -33,7 +33,7 @@ promptcode preset optimize api-endpoints           # Preview changes
 promptcode preset optimize api-endpoints --write   # Apply changes
 
 # Use the preset
-promptcode generate -l api-endpoints
+promptcode generate -p api-endpoints
 ```
 
 ### Optimization Levels
@@ -60,7 +60,7 @@ When asked to analyze specific features:
 1. Create a descriptive preset: `promptcode preset create feature-name`
 2. Edit `.promptcode/presets/feature-name.patterns` with relevant patterns
 3. Use `promptcode preset info feature-name` to verify file selection
-4. Generate output: `promptcode generate -l feature-name`
+4. Generate output: `promptcode generate -p feature-name`
 
 ### 3. Analyzing Code
 ```bash

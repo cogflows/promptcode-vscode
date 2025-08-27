@@ -292,6 +292,7 @@ Note: If both --preset and -f are specified, -f takes precedence (preset is igno
   .option('--save-preset <name>', 'save file patterns as a preset')
   .option('-y, --yes', 'automatically confirm prompts')
   .option('--force', 'alias for --yes (skip cost confirmation)')
+  .option('--no-confirm', 'skip all confirmations (same as --yes)')
   .option('--web-search', 'enable web search for current information (enabled by default for supported models)')
   .option('--no-web-search', 'disable web search even for supported models')
   .option('--verbosity <level>', 'response verbosity: low (concise), medium, high (detailed)', 'low')
@@ -436,7 +437,7 @@ program
   .command('stats')
   .description('Show token statistics for current project or preset')
   .option('--path <dir>', 'project root directory', process.cwd())
-  .option('-l, --preset <name>', 'analyze a specific preset')
+  .option('-p, --preset <name>', 'analyze a specific preset')
   .option('--json', 'output in JSON format')
   .addHelpText('after', '\nShows file count, total tokens, and breakdown by file type.')
   .action(async (options) => {
@@ -509,6 +510,28 @@ program.addCommand(updateCommand);
 // Uninstall command
 program.addCommand(uninstallCommand);
 
+// Help command - explicitly handle help as a command
+program
+  .command('help [command]')
+  .description('display help for command')
+  .action((cmd) => {
+    if (cmd) {
+      // Show help for specific command
+      const command = program.commands.find(c => c.name() === cmd || c.aliases().includes(cmd));
+      if (command) {
+        command.outputHelp();
+      } else {
+        console.error(chalk.red(`Error: Unknown command '${cmd}'`));
+        console.error(chalk.gray('\nFor available commands: promptcode --help'));
+        process.exit(1);
+      }
+    } else {
+      // Show general help
+      program.outputHelp();
+    }
+    process.exit(0);
+  });
+
 // Custom version display with --detailed option
 program
   .option('--detailed', 'Show detailed version and build information')
@@ -554,7 +577,7 @@ if (args[0] && args[0].startsWith('--')) {
   const possibleCommand = args[0].substring(2);
   const knownCommandNames = [
     'generate', 'cache', 'templates', 'list-templates', 'preset',
-    'expert', 'config', 'models', 'cc', 'stats', 'history', 'update', 'uninstall'
+    'expert', 'config', 'models', 'cc', 'stats', 'history', 'update', 'uninstall', 'help'
   ];
   
   if (knownCommandNames.includes(possibleCommand)) {
@@ -567,7 +590,7 @@ if (args[0] && args[0].startsWith('--')) {
 
 const knownCommands = [
   'generate', 'cache', 'templates', 'list-templates', 'preset', 
-  'expert', 'config', 'models', 'cc', 'cursor', 'integrate', 'stats', 'history', 'update', 'uninstall',
+  'expert', 'config', 'models', 'cc', 'cursor', 'integrate', 'stats', 'history', 'update', 'uninstall', 'help',
   '--help', '-h', '--version', '-V', '--detailed'
 ];
 

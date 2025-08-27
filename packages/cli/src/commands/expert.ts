@@ -30,6 +30,7 @@ interface ExpertOptions {
   savePreset?: string;
   yes?: boolean;
   force?: boolean;
+  noConfirm?: boolean;
   webSearch?: boolean;
   verbosity?: 'low' | 'medium' | 'high';
   reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
