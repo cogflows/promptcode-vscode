@@ -384,9 +384,36 @@ uninstall() {
     fi
   fi
 
+  # Remove PATH entries from shell configs
+  echo ""
+  if ask_yes_no "Remove PATH entries from shell configurations? [Y/n] " "Y"; then
+    local configs=()
+    [ -f "$HOME/.bashrc" ] && configs+=("$HOME/.bashrc")
+    [ -f "$HOME/.bash_profile" ] && configs+=("$HOME/.bash_profile")
+    [ -f "$HOME/.zshrc" ] && configs+=("$HOME/.zshrc")
+    [ -f "$HOME/.config/fish/config.fish" ] && configs+=("$HOME/.config/fish/config.fish")
+    [ -f "$HOME/.profile" ] && configs+=("$HOME/.profile")
+    
+    for config in "${configs[@]}"; do
+      if grep -q "${INSTALL_DIR}" "$config" 2>/dev/null; then
+        # Create backup
+        cp "$config" "${config}.promptcode-backup"
+        # Remove PATH entries containing INSTALL_DIR
+        if [[ "$config" == *"config.fish" ]]; then
+          # Fish shell uses different syntax
+          grep -v "fish_add_path.*${INSTALL_DIR}" "$config" > "${config}.tmp" && mv "${config}.tmp" "$config"
+        else
+          # Bash/Zsh use export PATH
+          grep -v "export PATH.*${INSTALL_DIR}" "$config" | grep -v "PATH=.*${INSTALL_DIR}" > "${config}.tmp" && mv "${config}.tmp" "$config"
+        fi
+        print_success "Removed PATH entry from: $config (backup: ${config}.promptcode-backup)"
+      fi
+    done
+  else
+    echo "To remove PATH entries manually, edit your shell config and remove lines containing: ${INSTALL_DIR}" >&2
+  fi
+  
   print_success "Uninstall complete"
-  echo "" >&2
-  echo "Don't forget to remove ${INSTALL_DIR} from your PATH if you added it." >&2
 }
 
 # Main installation flow

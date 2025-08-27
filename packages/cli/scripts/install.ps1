@@ -63,6 +63,21 @@ function Get-LatestVersion {
         return $version
     }
     catch {
+        # Try fallback to releases/latest redirect
+        Write-Warning "GitHub API request failed, trying fallback method..."
+        try {
+            $response = Invoke-WebRequest -Uri "https://github.com/$REPO/releases/latest" -MaximumRedirection 0 -ErrorAction SilentlyContinue
+        }
+        catch {
+            if ($_.Exception.Response.StatusCode -eq 302) {
+                $redirectUrl = $_.Exception.Response.Headers.Location.ToString()
+                if ($redirectUrl -match '/tag/([^/]+)$') {
+                    $version = $matches[1]
+                    Write-Info "Latest version (via redirect): $version"
+                    return $version
+                }
+            }
+        }
         Write-Error "Could not fetch latest version. Check your internet connection."
     }
 }
@@ -98,7 +113,15 @@ function Download-Binary($version, $arch) {
                 Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
                 Write-Error "Checksum verification unavailable. Re-run with -Insecure to override (NOT RECOMMENDED)."
             } else {
-                Write-Warning "Proceeding without checksum verification due to -Insecure flag."
+                Write-Warning "SECURITY WARNING: Checksum verification failed or unavailable."
+                Write-Warning "Installing without verification is risky and could compromise your system."
+                Write-Host ""
+                $response = Read-Host "Are you SURE you want to proceed without checksum verification? [y/N]"
+                if ($response -notmatch '^[Yy]') {
+                    Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
+                    Write-Error "Installation cancelled for security reasons."
+                }
+                Write-Warning "Proceeding without checksum verification at your own risk."
             }
         }
         

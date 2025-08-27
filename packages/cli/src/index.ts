@@ -38,11 +38,33 @@ import { exitWithCode, EXIT_CODES } from './utils/exit-codes';
         // Move staged binary to current location
         fs.renameSync(stagedBinary, currentBinary);
         
-        // Clean up backup after successful swap
-        try { 
-          fs.unlinkSync(backupPath); 
+        // Keep backup for rollback capability - clean up only old backups (>1 day)
+        try {
+          // Find and remove old backup files (older than 1 day)
+          const dir = path.dirname(currentBinary);
+          const files = fs.readdirSync(dir);
+          const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
+          
+          files.forEach(file => {
+            if (file.startsWith(path.basename(currentBinary) + '.bak.') && 
+                file !== path.basename(backupPath)) {
+              const fullPath = path.join(dir, file);
+              try {
+                const stats = fs.statSync(fullPath);
+                if (stats.mtimeMs < oneDayAgo) {
+                  fs.unlinkSync(fullPath);
+                }
+              } catch {
+                // Ignore errors for individual file cleanup
+              }
+            }
+          });
+          
+          // Rename current backup with timestamp for tracking
+          const timestampedBackup = `${currentBinary}.bak.${Date.now()}`;
+          fs.renameSync(backupPath, timestampedBackup);
         } catch {
-          // Ignore cleanup errors
+          // Keep the backup if renaming fails
         }
         
         // Notify user (to stderr to avoid polluting stdout)
@@ -374,11 +396,13 @@ This command creates a .cursor/rules folder with:
 The .cursor folder is automatically detected in current or parent directories.
 
 Examples:
-  $ promptcode cursor              # Set up Cursor integration
-  $ promptcode cursor --uninstall  # Remove Cursor integration
-  $ promptcode cursor --yes        # Skip confirmation prompts`)
+  $ promptcode cursor                     # Set up Cursor integration
+  $ promptcode cursor --uninstall         # Remove rules only
+  $ promptcode cursor --uninstall --all   # Remove rules and .cursorrules
+  $ promptcode cursor --yes               # Skip confirmation prompts`)
   .option('--path <dir>', 'project directory', process.cwd())
   .option('--uninstall', 'remove Cursor integration', false)
+  .option('--all', 'with --uninstall, also remove from .cursorrules', false)
   .option('--yes', 'skip confirmation prompts', false)
   .option('--force', 'force overwrite existing files', false)
   .option('--detect', 'detect Cursor environment (exit 0 if found)', false)

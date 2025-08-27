@@ -208,12 +208,19 @@ del "%~f0"
     
     await fs.writeFile(batchPath, batchContent);
     
-    console.log(chalk.yellow('\n⚠ Windows update requires restart'));
-    console.log(chalk.cyan(`Run this to complete update: ${batchPath}`));
-    console.log(chalk.gray('Or restart PromptCode to apply the update automatically'));
+    console.log(chalk.green('\n✓ Update staged successfully'));
+    console.log(chalk.cyan('Update will complete automatically in a moment...'));
     
-    // The next run of promptcode will detect .new file and complete update
-    return;
+    // Auto-launch the batch file and exit
+    const { spawn } = await import('child_process');
+    spawn(batchPath, [], {
+      detached: true,
+      stdio: 'ignore',
+      shell: true
+    }).unref();
+    
+    // Exit immediately so the batch script can replace the binary
+    process.exit(0);
   }
   
   // On Unix/macOS, also finalize on next run via the startup finalizer
