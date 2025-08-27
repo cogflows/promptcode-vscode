@@ -220,7 +220,8 @@
       "Bash(PROMPTCODE_TEST=1 PROMPTCODE_MOCK_LLM=1 OPENAI_API_KEY=test-key ./dist/promptcode expert \"Test question\" --model gpt-5 --no-web-search --yes)",
       "Bash(OPENAI_API_KEY=\"\" ./dist/promptcode expert \"Test question\" --model gpt-5 --estimate-cost)",
       "Bash(git describe:*)",
-      "Bash(gh pr create:*)"
+      "Bash(gh pr create:*)",
+      "Bash(NONINTERACTIVE=1 bash /Users/aviv.s/workspace/reference-projects/promptcode-vscode/packages/cli/scripts/install.sh)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits",

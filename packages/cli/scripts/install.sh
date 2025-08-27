@@ -50,8 +50,9 @@ open_tty() {
     TTY_FD=0
     return 0
   fi
-  if [[ -r /dev/tty ]]; then 
-    exec 3<>/dev/tty
+  # Try to open /dev/tty if it exists (handle failure gracefully)
+  # Use || true to prevent set -e from exiting
+  if { exec 3<>/dev/tty; } 2>/dev/null; then
     TTY_FD=3
     return 0
   fi
@@ -390,8 +391,8 @@ uninstall() {
 
 # Main installation flow
 main() {
-  # Open TTY file descriptor for interactive I/O
-  open_tty
+  # Open TTY file descriptor for interactive I/O (ignore failure)
+  open_tty || true
   
   # Simple, compact banner that works in narrow terminals (35 chars wide)
   echo "" >&2
