@@ -1,0 +1,15 @@
+# cli-install-update-flows preset
+# Generated: 2025-08-27T14:00:48.002Z
+# Source: from-files (packages/cli/scripts/install.sh, packages/cli/scripts/uninstall.sh, packages/cli/src/commands/cc.ts, packages/cli/src/utils/cc.ts, packages/cli/test/commands/cc.test.ts, packages/cli/README.md, .github/workflows/build-cli.yml, .github/workflows/promote-cli.yml, packages/cli/package.json)
+# Optimization: balanced
+# Stats: files=6, patterns=6, saved=0
+
+.github/workflows/promote-cli.yml
+packages/cli/README.md
+packages/cli/package.json
+packages/cli/scripts/install.sh
+packages/cli/src/commands/cc.ts
+packages/cli/test/commands/cc.test.ts
+!**/node_modules/**
+!**/dist/**
+!**/build/**

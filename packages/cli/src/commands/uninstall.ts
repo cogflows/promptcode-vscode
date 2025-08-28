@@ -3,15 +3,34 @@ import chalk from 'chalk';
 import * as fsp from 'fs/promises';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getCacheDir, getConfigDir } from '../utils/paths';
+import { getCacheDir, getConfigDir, isSafeToRemove } from '../utils/paths';
 import { removeFromClaudeMd, removePromptCodeCommands, findClaudeFolder, findClaudeMd, hasPromptCodeSection, PROMPTCODE_CLAUDE_COMMANDS, LEGACY_CLAUDE_COMMANDS } from '../utils/claude-integration';
 import inquirer from 'inquirer';
 
-async function removeDirectory(dir: string, description: string): Promise<boolean> {
+async function removeDirectory(dir: string, description: string, dryRun: boolean = false): Promise<boolean> {
   try {
     await fsp.access(dir);
-    await fsp.rm(dir, { recursive: true, force: true });
-    console.log(chalk.green(`✓ Removed ${description}: ${dir}`));
+    
+    // Check if path is safe to delete (not a symlink, within expected locations)
+    const stats = await fsp.lstat(dir);
+    if (stats.isSymbolicLink()) {
+      console.log(chalk.red(`✗ Refusing to delete symlink: ${dir}`));
+      return false;
+    }
+    
+    // Safety check to prevent accidental deletion of critical directories
+    if (!isSafeToRemove(dir)) {
+      console.log(chalk.red(`✗ Safety check failed: refusing to delete ${dir}`));
+      console.log(chalk.yellow('  This directory appears to be a critical system directory or does not contain "promptcode"'));
+      return false;
+    }
+    
+    if (dryRun) {
+      console.log(chalk.yellow(`[DRY-RUN] Would remove ${description}: ${dir}`));
+    } else {
+      await fsp.rm(dir, { recursive: true, force: true });
+      console.log(chalk.green(`✓ Removed ${description}: ${dir}`));
+    }
     return true;
   } catch {
     return false;
@@ -21,7 +40,7 @@ async function removeDirectory(dir: string, description: string): Promise<boolea
 /**
  * Remove Claude Code integration with user confirmation
  */
-async function removeClaudeIntegration(projectPath: string, skipPrompts: boolean = false): Promise<boolean> {
+async function removeClaudeIntegration(projectPath: string, skipPrompts: boolean = false, dryRun: boolean = false): Promise<boolean> {
   let removed = false;
   
   // Check if Claude integration exists
@@ -40,21 +59,26 @@ async function removeClaudeIntegration(projectPath: string, skipPrompts: boolean
   // Remove CLAUDE.md section
   if (hasClaudeMdSection) {
     let shouldRemove = skipPrompts;
-    if (!skipPrompts) {
+    if (!skipPrompts && !dryRun) {
       const { removeClaudeMdSection } = await inquirer.prompt([
         {
           type: 'confirm',
           name: 'removeClaudeMdSection',
           message: `Remove PromptCode section from ${path.basename(claudeMdPath)}?`,
-          default: true
+          default: false  // Safe default
         }
       ]);
       shouldRemove = removeClaudeMdSection;
     }
     
     if (shouldRemove) {
-      const result = await removeFromClaudeMd(projectPath);
-      removed = removed || result;
+      if (dryRun) {
+        console.log(chalk.yellow(`[DRY-RUN] Would remove PromptCode section from ${claudeMdPath}`));
+        removed = true;
+      } else {
+        const result = await removeFromClaudeMd(projectPath);
+        removed = removed || result;
+      }
     }
   }
   
@@ -69,46 +93,41 @@ async function removeClaudeIntegration(projectPath: string, skipPrompts: boolean
     );
     
     if (existingCommands.length > 0) {
+      // Show what commands would be removed
+      console.log(chalk.gray(`  Found ${existingCommands.length} PromptCode command(s):`));
+      existingCommands.forEach(cmd => {
+        console.log(chalk.gray(`    - ${cmd}`));
+      });
+      
       let shouldRemove = skipPrompts;
-      if (!skipPrompts) {
+      if (!skipPrompts && !dryRun) {
         const { removeCommands } = await inquirer.prompt([
           {
             type: 'confirm',
             name: 'removeCommands',
-            message: `Remove ${existingCommands.length} PromptCode command(s) from .claude/commands/?`,
-            default: true
+            message: `Remove these ${existingCommands.length} PromptCode command(s)?`,
+            default: false  // Safe default
           }
         ]);
         shouldRemove = removeCommands;
       }
       
       if (shouldRemove) {
-        const result = await removePromptCodeCommands(projectPath);
-        if (result) {
-          console.log(chalk.green(`✓ Removed PromptCode commands`));
+        if (dryRun) {
+          console.log(chalk.yellow(`[DRY-RUN] Would remove ${existingCommands.length} PromptCode commands`));
+          removed = true;
+        } else {
+          const result = await removePromptCodeCommands(projectPath);
+          if (result) {
+            console.log(chalk.green(`✓ Removed PromptCode commands`));
+          }
+          removed = removed || result;
         }
-        removed = removed || result;
       }
     }
     
-    // Finally, ask about removing the entire .claude folder
-    let shouldRemoveFolder = skipPrompts;
-    if (!skipPrompts) {
-      const { removeClaudeFolder } = await inquirer.prompt([
-        {
-          type: 'confirm',
-          name: 'removeClaudeFolder',
-          message: `Remove entire Claude Code folder at ${claudeDir}?`,
-          default: false  // Default to false to be safe
-        }
-      ]);
-      shouldRemoveFolder = removeClaudeFolder;
-    }
-    
-    if (shouldRemoveFolder) {
-      await removeDirectory(claudeDir, 'Claude Code folder');
-      removed = true;
-    }
+    // NEVER delete the entire .claude folder - it contains user's Claude Code settings
+    // Only PromptCode-specific files were removed above
   }
   
   return removed;
@@ -184,11 +203,25 @@ export const uninstallCommand = program
   .description('Uninstall PromptCode CLI and optionally remove all data')
   .option('--yes', 'Skip confirmation prompts')
   .option('--keep-data', 'Keep configuration and cache files')
+  .option('--dry-run', 'Show what would be removed without removing')
+  .option('--apply', 'Actually perform the uninstall (required without --yes)')
   .action(async (options) => {
     console.log(chalk.bold('\nPromptCode CLI Uninstaller\n'));
     
+    // In dry-run mode, show what would be done
+    if (options.dryRun) {
+      console.log(chalk.yellow('🔍 DRY-RUN MODE - No changes will be made\n'));
+    }
+    
+    // Require --apply or --yes to actually perform uninstall
+    if (!options.dryRun && !options.apply && !options.yes) {
+      console.log(chalk.yellow('⚠️  Safety mode: This is a preview of what will be removed.'));
+      console.log(chalk.yellow('   To actually uninstall, use --apply or --yes flag.\n'));
+      options.dryRun = true; // Force dry-run mode for safety
+    }
+    
     // Confirm uninstall
-    if (!options.yes) {
+    if (!options.yes && !options.dryRun) {
       const { confirmUninstall } = await inquirer.prompt([
         {
           type: 'confirm',
@@ -207,28 +240,28 @@ export const uninstallCommand = program
     let removedSomething = false;
     
     // Remove Claude Code integration (always ask, regardless of --keep-data)
-    const ccRemoved = await removeClaudeIntegration(process.cwd(), options.yes);
+    const ccRemoved = await removeClaudeIntegration(process.cwd(), options.yes, options.dryRun);
     removedSomething = removedSomething || ccRemoved;
     
     // Remove data directories unless --keep-data is specified
     if (!options.keepData) {
-      if (!options.yes) {
+      if (!options.yes && !options.dryRun) {
         const { removeData } = await inquirer.prompt([
           {
             type: 'confirm',
             name: 'removeData',
             message: 'Remove all configuration and cache files?',
-            default: true
+            default: false  // Safe default
           }
         ]);
         
         if (removeData) {
-          removedSomething = await removeDirectory(getCacheDir(), 'cache') || removedSomething;
-          removedSomething = await removeDirectory(getConfigDir(), 'config') || removedSomething;
+          removedSomething = await removeDirectory(getCacheDir(), 'cache', options.dryRun) || removedSomething;
+          removedSomething = await removeDirectory(getConfigDir(), 'config', options.dryRun) || removedSomething;
           
           // Also check for .promptcode directories in home and current directory
           const homePromptcode = path.join(require('os').homedir(), '.promptcode');
-          removedSomething = await removeDirectory(homePromptcode, 'user data') || removedSomething;
+          removedSomething = await removeDirectory(homePromptcode, 'user data', options.dryRun) || removedSomething;
           
           const currentPromptcode = path.join(process.cwd(), '.promptcode');
           if (await fsp.access(currentPromptcode).then(() => true).catch(() => false)) {
@@ -242,39 +275,51 @@ export const uninstallCommand = program
             ]);
             
             if (removeProject) {
-              removedSomething = await removeDirectory(currentPromptcode, 'project data') || removedSomething;
+              removedSomething = await removeDirectory(currentPromptcode, 'project data', options.dryRun) || removedSomething;
             }
           }
         }
-      } else {
-        // With --yes flag, remove all data without prompting
-        removedSomething = await removeDirectory(getCacheDir(), 'cache') || removedSomething;
-        removedSomething = await removeDirectory(getConfigDir(), 'config') || removedSomething;
+      } else if (options.yes && !options.dryRun) {
+        // With --yes flag, remove all data without prompting (but respect dry-run)
+        removedSomething = await removeDirectory(getCacheDir(), 'cache', options.dryRun) || removedSomething;
+        removedSomething = await removeDirectory(getConfigDir(), 'config', options.dryRun) || removedSomething;
         
         const homePromptcode = path.join(require('os').homedir(), '.promptcode');
-        removedSomething = await removeDirectory(homePromptcode, 'user data') || removedSomething;
+        removedSomething = await removeDirectory(homePromptcode, 'user data', options.dryRun) || removedSomething;
         
         // Also remove project directory if it exists (with --yes, remove everything)
         const currentPromptcode = path.join(process.cwd(), '.promptcode');
         if (await fsp.access(currentPromptcode).then(() => true).catch(() => false)) {
-          removedSomething = await removeDirectory(currentPromptcode, 'project data') || removedSomething;
+          removedSomething = await removeDirectory(currentPromptcode, 'project data', options.dryRun) || removedSomething;
         }
       }
     }
     
-    // Remove the binary
-    await removeBinary();
-    
-    console.log('');
-    if (removedSomething) {
-      console.log(chalk.green('✨ PromptCode CLI has been uninstalled'));
+    // Remove the binary (skip in dry-run mode)
+    if (!options.dryRun) {
+      await removeBinary();
+    } else {
+      console.log(chalk.yellow(`[DRY-RUN] Would remove binary at ${process.execPath}`));
     }
     
-    // PATH cleanup reminder
-    console.log(chalk.yellow('\nRemember to remove PromptCode from your PATH if you added it:'));
-    console.log(chalk.gray('  Check your shell configuration file (~/.bashrc, ~/.zshrc, etc.)'));
-    console.log(chalk.gray('  Remove any lines that add promptcode to your PATH'));
-    
     console.log('');
-    console.log(chalk.gray('Thank you for using PromptCode! 👋'));
+    if (options.dryRun) {
+      console.log(chalk.yellow('🔍 DRY-RUN COMPLETE - No changes were made'));
+      console.log(chalk.yellow('\nTo actually perform the uninstall, run:'));
+      console.log(chalk.cyan('  promptcode uninstall --apply'));
+      console.log(chalk.gray('  or'));
+      console.log(chalk.cyan('  promptcode uninstall --yes'));
+    } else if (removedSomething) {
+      console.log(chalk.green('✨ PromptCode CLI has been uninstalled'));
+      
+      // PATH cleanup reminder
+      console.log(chalk.yellow('\nRemember to remove PromptCode from your PATH if you added it:'));
+      console.log(chalk.gray('  Check your shell configuration file (~/.bashrc, ~/.zshrc, etc.)'));
+      console.log(chalk.gray('  Remove any lines that add promptcode to your PATH'));
+      
+      console.log('');
+      console.log(chalk.gray('Thank you for using PromptCode! 👋'));
+    } else {
+      console.log(chalk.yellow('No changes were made'));
+    }
   });

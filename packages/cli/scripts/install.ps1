@@ -9,7 +9,8 @@
 param(
     [switch]$Uninstall,
     [switch]$Insecure,
-    [switch]$NoPathChanges
+    [switch]$NoPathChanges,
+    [switch]$NonInteractive
 )
 
 # Configuration
@@ -19,6 +20,30 @@ $DEFAULT_INSTALL_DIR = "$env:LOCALAPPDATA\PromptCode\bin"
 $INSTALL_DIR = if ($env:PROMPTCODE_INSTALL_DIR) { $env:PROMPTCODE_INSTALL_DIR } else { $DEFAULT_INSTALL_DIR }
 
 # Helper functions
+function Test-NonInteractive {
+    # Check for explicit non-interactive flag
+    if ($NonInteractive) {
+        return $true
+    }
+    
+    # Check for CI/CD environment
+    if ($env:CI -eq 'true' -or $env:TF_BUILD -eq 'True' -or $env:GITHUB_ACTIONS -eq 'true') {
+        return $true
+    }
+    
+    # Check if input is redirected (running via pipe or script)
+    if ([Console]::IsInputRedirected) {
+        return $true
+    }
+    
+    # Check if running in a non-interactive session
+    if (-not [Environment]::UserInteractive) {
+        return $true
+    }
+    
+    return $false
+}
+
 function Write-Info($message) {
     Write-Host "[INFO] " -ForegroundColor Blue -NoNewline
     Write-Host $message
@@ -63,6 +88,21 @@ function Get-LatestVersion {
         return $version
     }
     catch {
+        # Try fallback to releases/latest redirect
+        Write-Warning "GitHub API request failed, trying fallback method..."
+        try {
+            $response = Invoke-WebRequest -Uri "https://github.com/$REPO/releases/latest" -MaximumRedirection 0 -ErrorAction SilentlyContinue
+        }
+        catch {
+            if ($_.Exception.Response.StatusCode -eq 302) {
+                $redirectUrl = $_.Exception.Response.Headers.Location.ToString()
+                if ($redirectUrl -match '/tag/([^/]+)$') {
+                    $version = $matches[1]
+                    Write-Info "Latest version (via redirect): $version"
+                    return $version
+                }
+            }
+        }
         Write-Error "Could not fetch latest version. Check your internet connection."
     }
 }
@@ -98,7 +138,21 @@ function Download-Binary($version, $arch) {
                 Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
                 Write-Error "Checksum verification unavailable. Re-run with -Insecure to override (NOT RECOMMENDED)."
             } else {
-                Write-Warning "Proceeding without checksum verification due to -Insecure flag."
+                Write-Warning "SECURITY WARNING: Checksum verification failed or unavailable."
+                Write-Warning "Installing without verification is risky and could compromise your system."
+                
+                if (Test-NonInteractive) {
+                    Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
+                    Write-Error "Cannot proceed with -Insecure in non-interactive mode. Please verify checksums are available or run interactively."
+                }
+                
+                Write-Host ""
+                $response = Read-Host "Are you SURE you want to proceed without checksum verification? [y/N]"
+                if ($response -notmatch '^[Yy]') {
+                    Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
+                    Write-Error "Installation cancelled for security reasons."
+                }
+                Write-Warning "Proceeding without checksum verification at your own risk."
             }
         }
         
@@ -130,6 +184,14 @@ function Install-Binary($sourcePath) {
 function Update-Path {
     if ($NoPathChanges) {
         Write-Info "Skipping PATH modification due to -NoPathChanges flag"
+        Write-Info "To add to PATH manually, run:"
+        Write-Host "  [Environment]::SetEnvironmentVariable('Path', `$env:Path + ';$INSTALL_DIR', 'User')" -ForegroundColor Yellow
+        return
+    }
+    
+    # In non-interactive mode, skip PATH changes by default
+    if (Test-NonInteractive) {
+        Write-Info "Non-interactive mode detected - skipping PATH modification"
         Write-Info "To add to PATH manually, run:"
         Write-Host "  [Environment]::SetEnvironmentVariable('Path', `$env:Path + ';$INSTALL_DIR', 'User')" -ForegroundColor Yellow
         return
@@ -205,9 +267,16 @@ function Uninstall-PromptCode {
         Write-Warning "Binary not found at $binaryPath"
     }
     
-    # Ask about cache and config
-    $response = Read-Host "Remove configuration and cache files? [y/N]"
-    if ($response -eq 'y' -or $response -eq 'Y') {
+    # Ask about cache and config (skip in non-interactive mode)
+    $removeData = $false
+    if (Test-NonInteractive) {
+        Write-Info "Non-interactive mode - keeping configuration and cache files"
+    } else {
+        $response = Read-Host "Remove configuration and cache files? [y/N]"
+        $removeData = ($response -eq 'y' -or $response -eq 'Y')
+    }
+    
+    if ($removeData) {
         $configDir = "$env:APPDATA\promptcode"
         $cacheDir = "$env:LOCALAPPDATA\promptcode\cache"
         
@@ -222,10 +291,15 @@ function Uninstall-PromptCode {
         }
     }
     
-    # Remove from PATH
+    # Remove from PATH (normalize paths for comparison)
     $currentPath = [Environment]::GetEnvironmentVariable("Path", "User")
     if ($currentPath -like "*$INSTALL_DIR*") {
-        $newPath = ($currentPath -split ';' | Where-Object { $_ -ne $INSTALL_DIR }) -join ';'
+        # Normalize paths by trimming trailing slashes and comparing case-insensitively
+        $installDirNorm = $INSTALL_DIR.TrimEnd('\').ToLower()
+        $pathParts = $currentPath -split ';' | Where-Object {
+            $_.TrimEnd('\').ToLower() -ne $installDirNorm
+        }
+        $newPath = $pathParts -join ';'
         [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
         Write-Success "Removed from PATH"
     }
@@ -274,6 +348,13 @@ function Install-PromptCode {
                 Write-Host ""
                 Write-Host "  $CLI_NAME update --force" -ForegroundColor Cyan
                 Write-Host ""
+                
+                if (Test-NonInteractive) {
+                    Write-Info "Running in non-interactive mode - skipping auto-update"
+                    Write-Info "You can run the command manually later"
+                    exit 0
+                }
+                
                 $response = Read-Host "Run this command now? [Y/n]"
                 if ($response -ne 'n' -and $response -ne 'N') {
                     & $CLI_NAME update --force
@@ -293,18 +374,28 @@ function Install-PromptCode {
             if ($currentVersion -like "*-dev.*") {
                 Write-Warning "This development version doesn't support update."
                 Write-Info "Will force reinstall with latest release version ($version)"
-                $response = Read-Host "Proceed with force reinstall? [Y/n]"
-                if ($response -eq 'n' -or $response -eq 'N') {
-                    Write-Info "Installation cancelled"
-                    exit 0
+                
+                if (Test-NonInteractive) {
+                    Write-Info "Running in non-interactive mode - proceeding with force reinstall"
+                } else {
+                    $response = Read-Host "Proceed with force reinstall? [Y/n]"
+                    if ($response -eq 'n' -or $response -eq 'N') {
+                        Write-Info "Installation cancelled"
+                        exit 0
+                    }
                 }
                 # Continue with installation - will overwrite the dev version
             } else {
                 Write-Warning "This version doesn't support update. Manual reinstall required."
-                $response = Read-Host "Proceed with manual reinstall? [Y/n]"
-                if ($response -eq 'n' -or $response -eq 'N') {
-                    Write-Info "Installation cancelled"
-                    exit 0
+                
+                if (Test-NonInteractive) {
+                    Write-Info "Running in non-interactive mode - proceeding with reinstall"
+                } else {
+                    $response = Read-Host "Proceed with manual reinstall? [Y/n]"
+                    if ($response -eq 'n' -or $response -eq 'N') {
+                        Write-Info "Installation cancelled"
+                        exit 0
+                    }
                 }
             }
         }

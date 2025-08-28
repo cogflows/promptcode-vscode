@@ -73,14 +73,10 @@ export async function removeFromClaudeMd(projectPath: string): Promise<boolean> 
     '\n'
   );
   
-  // If file would be empty or just whitespace, delete it
-  if (!updatedContent.trim()) {
-    await fs.promises.unlink(claudeMdPath);
-    console.log(chalk.green(`✓ Removed empty ${claudeMdPath}`));
-  } else {
-    await fs.promises.writeFile(claudeMdPath, updatedContent.trimEnd() + '\n');
-    console.log(chalk.green(`✓ Removed PromptCode section from ${claudeMdPath}`));
-  }
+  // IMPORTANT: Never delete CLAUDE.md entirely - it may contain other important content
+  // Even if empty after our section removal, preserve the file
+  await fs.promises.writeFile(claudeMdPath, updatedContent.trimEnd() + '\n');
+  console.log(chalk.green(`✓ Removed PromptCode section from ${claudeMdPath}`));
   
   return true;
 }

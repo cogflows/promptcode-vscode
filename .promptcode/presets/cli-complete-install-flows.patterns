@@ -1,0 +1,22 @@
+# cli-complete-install-flows preset
+# Generated: 2025-08-27T14:24:24.753Z
+# Source: from-files (packages/cli/scripts/install.sh, packages/cli/scripts/install.ps1, packages/cli/src/commands/cc.ts, packages/cli/src/commands/update.ts, packages/cli/src/utils/cc.ts, packages/cli/src/utils/update.ts, packages/cli/src/utils/environment.ts, packages/cli/src/utils/integration-helper.ts, packages/cli/test/commands/cc.test.ts, packages/cli/test/commands/update.test.ts, packages/cli/README.md, .github/workflows/build-cli.yml, .github/workflows/promote-cli.yml, packages/cli/package.json, packages/cli/src/index.ts)
+# Optimization: balanced
+# Stats: files=11, patterns=11, saved=0
+# Applied:
+# - dir-extension: packages/cli/scripts *.ps1 (from 1 → 1)
+
+packages/cli/scripts/*.ps1
+.github/workflows/promote-cli.yml
+packages/cli/README.md
+packages/cli/package.json
+packages/cli/scripts/install.sh
+packages/cli/src/commands/cc.ts
+packages/cli/src/commands/update.ts
+packages/cli/src/index.ts
+packages/cli/src/utils/environment.ts
+packages/cli/src/utils/integration-helper.ts
+packages/cli/test/commands/cc.test.ts
+!**/node_modules/**
+!**/dist/**
+!**/build/**

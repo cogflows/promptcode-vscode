@@ -192,28 +192,59 @@ async function replaceBinary(newBinaryPath: string): Promise<void> {
     const batchPath = path.join(dir, 'update.bat');
     
     // Create batch script to replace binary after process exits
+    // Include retry logic to handle file locks from antivirus or indexers
     const batchContent = `@echo off
 setlocal
 echo Waiting for PromptCode to exit...
 timeout /t 2 /nobreak >nul
-move /Y "${stagedPath}" "${currentBinary}"
-if %ERRORLEVEL% EQU 0 (
-  echo Update completed successfully.
-  "${currentBinary}" --version
-) else (
-  echo Update failed. Please manually rename ${stagedPath} to ${currentBinary}
-)
+
+rem Retry loop for up to 15 seconds with 1-second delays
+set RETRY_COUNT=0
+:retry_loop
+set /a RETRY_COUNT+=1
+if %RETRY_COUNT% GTR 15 goto :failed
+
+move /Y "${stagedPath}" "${currentBinary}" >nul 2>&1
+if %ERRORLEVEL% EQU 0 goto :success
+
+rem File might be locked, wait and retry
+timeout /t 1 /nobreak >nul
+goto :retry_loop
+
+:success
+echo Update completed successfully.
+"${currentBinary}" --version
+goto :cleanup
+
+:failed
+echo Update failed after 15 attempts. File may be locked by antivirus or another process.
+echo Please manually rename:
+echo   From: ${stagedPath}
+echo   To: ${currentBinary}
+echo.
+echo Or try closing all PromptCode instances and running:
+echo   move /Y "${stagedPath}" "${currentBinary}"
+goto :cleanup
+
+:cleanup
 del "%~f0"
 `;
     
     await fs.writeFile(batchPath, batchContent);
     
-    console.log(chalk.yellow('\n⚠ Windows update requires restart'));
-    console.log(chalk.cyan(`Run this to complete update: ${batchPath}`));
-    console.log(chalk.gray('Or restart PromptCode to apply the update automatically'));
+    console.log(chalk.green('\n✓ Update staged successfully'));
+    console.log(chalk.cyan('Update will complete automatically in a moment...'));
     
-    // The next run of promptcode will detect .new file and complete update
-    return;
+    // Auto-launch the batch file and exit
+    const { spawn } = await import('child_process');
+    spawn(batchPath, [], {
+      detached: true,
+      stdio: 'ignore',
+      shell: true
+    }).unref();
+    
+    // Exit immediately so the batch script can replace the binary
+    process.exit(0);
   }
   
   // On Unix/macOS, also finalize on next run via the startup finalizer

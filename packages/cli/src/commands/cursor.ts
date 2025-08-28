@@ -24,6 +24,21 @@ interface CursorOptions {
   yes?: boolean;
   uninstall?: boolean;
   skipModified?: boolean;
+  all?: boolean;
+}
+
+/**
+ * Create backup of a file if it exists
+ */
+function createBackup(filePath: string): string | null {
+  if (!fs.existsSync(filePath)) {
+    return null;
+  }
+  
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+  const backupPath = `${filePath}.bak-${timestamp}`;
+  fs.copyFileSync(filePath, backupPath);
+  return backupPath;
 }
 
 /**
@@ -132,6 +147,9 @@ ${templateContent}
   if (fs.existsSync(cursorRulesPath)) {
     const existingContent = await fs.promises.readFile(cursorRulesPath, 'utf8');
     
+    // Create backup before modifying
+    const backupPath = createBackup(cursorRulesPath);
+    
     // Check if PromptCode section already exists
     if (existingContent.includes('<!-- PROMPTCODE-CURSOR-START -->')) {
       // Replace existing section
@@ -147,6 +165,10 @@ ${templateContent}
       await fs.promises.writeFile(cursorRulesPath, updatedContent);
       console.log(chalk.green(`✓ Added PromptCode section to ${path.basename(cursorRulesPath)}`));
     }
+    
+    if (backupPath) {
+      console.log(chalk.gray(`  Backup saved to: ${path.basename(backupPath)}`));
+    }
   } else {
     // Create new .cursorrules
     await fs.promises.writeFile(cursorRulesPath, promptcodeSection);
@@ -155,9 +177,30 @@ ${templateContent}
 }
 
 /**
+ * Show preview of rules to be installed
+ */
+function showRulesPreview(cursorDir: string, rules: string[]): void {
+  const rulesDir = path.join(cursorDir, 'rules');
+  console.log(chalk.bold('\n📦 Rules to be installed:'));
+  
+  for (const rule of rules) {
+    const rulePath = path.join(rulesDir, rule);
+    const exists = fs.existsSync(rulePath);
+    const ruleName = rule.replace('.mdc', '');
+    
+    if (exists) {
+      console.log(chalk.gray(`  ✓ ${ruleName} (will update)`));
+    } else {
+      console.log(chalk.green(`  + ${ruleName} (new)`));
+    }
+  }
+  console.log();
+}
+
+/**
  * Set up Cursor rules (.cursor/rules/*.mdc)
  */
-async function setupCursorRules(projectPath: string, options?: CursorOptions): Promise<{ cursorDir: string | null; isNew: boolean; stats: { created: number; updated: number; kept: number; unchanged: number } }> {
+async function setupCursorRules(projectPath: string, options?: CursorOptions & { skipPreview?: boolean }): Promise<{ cursorDir: string | null; isNew: boolean; stats: { created: number; updated: number; kept: number; unchanged: number } }> {
   // Find or create .cursor directory
   const { dir: cursorDir, isNew } = await findOrCreateIntegrationDir(
     projectPath,
@@ -168,6 +211,11 @@ async function setupCursorRules(projectPath: string, options?: CursorOptions): P
   if (!cursorDir) {
     console.log(chalk.red('Cannot setup Cursor integration without .cursor directory'));
     return { cursorDir: null, isNew: false, stats: { created: 0, updated: 0, kept: 0, unchanged: 0 } };
+  }
+  
+  // Show preview of what will be installed
+  if (!options?.skipPreview) {
+    showRulesPreview(cursorDir, PROMPTCODE_CURSOR_RULES);
   }
   
   const rulesDir = path.join(cursorDir, 'rules');
@@ -256,14 +304,18 @@ export async function cursorCommand(options: CursorOptions & { detect?: boolean 
     
     let removed = false;
     
-    // Remove from .cursorrules (legacy)
-    if (await removeFromCursorRules(projectPath)) {
-      removed = true;
-    }
-    
-    // Remove PromptCode rules from .cursor/rules/
+    // Always remove PromptCode rules from .cursor/rules/
     if (await removePromptCodeRules(projectPath)) {
       removed = true;
+      console.log(chalk.green('✓ Removed Cursor rules'));
+    }
+    
+    // Remove from .cursorrules (legacy) if --all flag is provided
+    if (options.all) {
+      if (await removeFromCursorRules(projectPath)) {
+        removed = true;
+        console.log(chalk.green('✓ Removed PromptCode section from .cursorrules'));
+      }
     }
     
     // Remove from MCP config (future implementation)
@@ -281,22 +333,68 @@ export async function cursorCommand(options: CursorOptions & { detect?: boolean 
   }
   
   // Handle setup
+  
+  // First show what will be installed BEFORE creating directories
+  const cursorDirExists = fs.existsSync(path.join(projectPath, '.cursor'));
+  
+  console.log(chalk.bold('📦 Rules to be installed:'));
+  for (const rule of PROMPTCODE_CURSOR_RULES) {
+    const ruleName = rule.replace('.mdc', '');
+    console.log(chalk.green(`  + ${ruleName}`));
+  }
+  
+  if (!cursorDirExists) {
+    console.log(chalk.bold('\n📁 Directory to be created:'));
+    console.log(chalk.green('  + .cursor/'));
+  }
+  console.log();
+  
   const spin = spinner();
   spin.start('Setting up PromptCode Cursor integration...');
   
   try {
     // Set up modern Cursor rules
     spin.text = 'Installing Cursor rules...';
-    const { cursorDir, isNew, stats } = await setupCursorRules(projectPath, options);
+    const { cursorDir, isNew, stats } = await setupCursorRules(projectPath, {
+      ...options,
+      skipPreview: true // Don't show preview again, we already did
+    });
     
     if (!cursorDir) {
       // Fall back to legacy .cursorrules if user didn't approve new .cursor
       const existingCursorRulesFile = findCursorRulesFile(projectPath);
       if (existingCursorRulesFile) {
-        spin.text = 'Updating .cursorrules...';
-        await updateCursorRulesLegacy(existingCursorRulesFile);
-        console.log(chalk.yellow('\n⚠️  Using legacy .cursorrules file. Consider migrating to .cursor/rules/'));
-        spin.succeed(chalk.green('PromptCode Cursor integration set up successfully!'));
+        spin.stop();
+        
+        // Ask about updating .cursorrules
+        console.log(chalk.yellow('\n📝 .cursorrules exists (legacy mode)'));
+        console.log(chalk.bold('\nWould you like to add PromptCode instructions to .cursorrules?'));
+        console.log(chalk.gray('  • PromptCode CLI usage instructions'));
+        console.log(chalk.gray('  • Command reference'));
+        console.log(chalk.gray('  • Workflow examples'));
+        
+        let updateLegacy = false;
+        if (!options.yes && !options.force && isInteractive()) {
+          const { proceed } = await inquirer.prompt([{
+            type: 'confirm',
+            name: 'proceed',
+            message: 'Update .cursorrules with PromptCode instructions?',
+            default: false // Default to No like CC does
+          }]);
+          updateLegacy = proceed;
+        } else if (options.yes || options.force) {
+          updateLegacy = true;
+        }
+        
+        if (updateLegacy) {
+          spin.start('Updating .cursorrules...');
+          await updateCursorRulesLegacy(existingCursorRulesFile);
+          spin.succeed(chalk.green('PromptCode Cursor integration set up successfully!'));
+          console.log(chalk.yellow('\n⚠️  Using legacy .cursorrules file. Consider migrating to .cursor/rules/'));
+        } else {
+          console.log(chalk.yellow('Setup cancelled - no changes made'));
+          return;
+        }
       } else {
         spin.fail(chalk.red('Setup cancelled'));
         return;

@@ -41,44 +41,68 @@ print_error() {
   exit 1
 }
 
+# TTY file descriptor for consistent terminal I/O
+TTY_FD=-1
+
+# Open a terminal FD if available (call this once at script start)
+open_tty() {
+  if [[ -t 0 ]]; then 
+    TTY_FD=0
+    return 0
+  fi
+  # Try to open /dev/tty if it exists (handle failure gracefully)
+  # Use || true to prevent set -e from exiting
+  if { exec 3<>/dev/tty; } 2>/dev/null; then
+    TTY_FD=3
+    return 0
+  fi
+  TTY_FD=-1
+  return 1
+}
+
 # Check if running in interactive mode
 is_interactive() {
   # Force non-interactive if NONINTERACTIVE is set
   [[ -n "${NONINTERACTIVE:-}" ]] && return 1
   
-  # Force interactive if INTERACTIVE is set (with warning if no TTY)
+  # Force interactive if INTERACTIVE is set and we have a TTY
   if [[ -n "${INTERACTIVE:-}" ]]; then
-    if [[ ! -t 0 && ! -t 1 ]]; then
+    if (( TTY_FD >= 0 )); then
+      return 0
+    else
       print_warning "INTERACTIVE mode requested but no TTY available"
+      return 1
     fi
-    return 0
   fi
   
-  # Check if stdin and stdout are connected to a terminal
-  [[ -t 0 && -t 1 ]]
+  # Check if CI environment (treat as non-interactive unless INTERACTIVE is set)
+  if [[ "${CI:-}" == "true" || -n "${GITHUB_ACTIONS:-}" || -n "${GITLAB_CI:-}" ]]; then
+    return 1
+  fi
+  
+  # Interactive if we have a TTY
+  (( TTY_FD >= 0 ))
 }
 
 # Safe read function that handles non-interactive environments
 safe_read() {
   local prompt="$1"
   local default="${2:-}"
+  local line
   
-  # Check if we're in an interactive environment
-  if is_interactive; then
-    # Standard input is a terminal
-    read -p "$prompt" -r response
-  elif [[ -t 1 ]] && [[ -r /dev/tty ]] 2>/dev/null; then
-    # stdout is a terminal and /dev/tty is readable (for piped scripts)
-    # When reading from /dev/tty, we need to manually show the prompt
-    echo -n "$prompt" >&2
-    read -r response < /dev/tty 2>/dev/null || response="$default"
+  if (( TTY_FD >= 0 )); then
+    # Write prompt to terminal and read response
+    printf "%s" "$prompt" >&$TTY_FD
+    if IFS= read -r -u $TTY_FD line; then
+      echo "$line"
+    else
+      echo "$default"
+    fi
   else
     # Non-interactive environment, use default
     [[ -n "$prompt" ]] && print_info "Non-interactive mode detected, using default: $default"
-    response="$default"
+    echo "$default"
   fi
-  
-  echo "$response"
 }
 
 # Safe read for single character with default
@@ -86,22 +110,34 @@ safe_read_char() {
   local prompt="$1"
   local default="${2:-}"
   
-  # Check if we're in an interactive environment
-  if is_interactive; then
-    # Standard input is a terminal
-    read -p "$prompt" -n 1 -r
-    echo ""  # Add newline after single char read
-  elif [[ -t 1 ]] && [[ -r /dev/tty ]] 2>/dev/null; then
-    # stdout is a terminal and /dev/tty is readable (for piped scripts)
-    # When reading from /dev/tty, we need to manually show the prompt
-    echo -n "$prompt" >&2
-    read -n 1 -r < /dev/tty 2>/dev/null || REPLY="$default"
-    [[ -n "$REPLY" ]] && echo ""  # Add newline after single char read
+  if (( TTY_FD >= 0 )); then
+    # Write prompt to terminal and read single char
+    printf "%s" "$prompt" >&$TTY_FD
+    if IFS= read -r -n 1 -u $TTY_FD REPLY; then
+      printf "\n" >&$TTY_FD  # Add newline after single char read
+    else
+      REPLY="$default"
+    fi
   else
     # Non-interactive environment, use default
     [[ -n "$prompt" ]] && print_info "Non-interactive mode detected, using default: $default"
     REPLY="$default"
   fi
+}
+
+# Ask yes/no question with default
+ask_yes_no() {
+  local prompt="$1"
+  local default="${2:-Y}"
+  safe_read_char "$prompt" ""
+  local ans="${REPLY:-$default}"
+  [[ -z "$ans" ]] && ans="$default"
+  [[ "$ans" =~ ^[Yy]$ ]]
+}
+
+# Normalize version string (remove v prefix and suffixes)
+normalize_version() {
+  printf "%s" "$1" | sed -E 's/^v//; s/[^0-9.].*$//'
 }
 
 # Detect OS and Architecture
@@ -172,7 +208,8 @@ download_binary() {
   fi
 
   local download_url="https://github.com/${REPO}/releases/download/${version}/${binary_name}"
-  local temp_file=$(mktemp)
+  # Portable mktemp - try GNU style first, then BSD style
+  local temp_file=$(mktemp 2>/dev/null || mktemp -t promptcode)
 
   print_info "Downloading ${CLI_NAME} ${version} for ${platform}..."
   
@@ -184,10 +221,12 @@ download_binary() {
     print_error "Failed to download from: $download_url"
   fi
   
-  # Verify file is binary (not HTML error page)
-  if file "$temp_file" 2>/dev/null | grep -q "HTML\|ASCII text"; then
-    rm -f "$temp_file"
-    print_error "Downloaded file appears to be HTML/text, not a binary"
+  # Verify file is binary (not HTML error page) - only if 'file' command exists
+  if command -v file >/dev/null 2>&1; then
+    if file "$temp_file" 2>/dev/null | grep -q "HTML\|ASCII text"; then
+      rm -f "$temp_file"
+      print_error "Downloaded file appears to be HTML/text, not a binary"
+    fi
   fi
   
   
@@ -244,17 +283,26 @@ download_binary() {
 install_binary() {
   local binary_path="$1"
   local target_path="${INSTALL_DIR}/${CLI_NAME}"
+  local temp_target="${target_path}.tmp.$$"
 
   # Create installation directory
   mkdir -p "$INSTALL_DIR"
 
-  # Install with proper permissions (fallback to cp if install unavailable)
+  # Install atomically: copy to temp file, set permissions, then move
+  # This prevents partial writes if process is interrupted
   if command -v install >/dev/null 2>&1; then
-    install -m 755 "$binary_path" "$target_path"
+    # install command can atomically set permissions
+    install -m 755 "$binary_path" "$temp_target"
   else
-    cp "$binary_path" "$target_path"
-    chmod 755 "$target_path"
+    # Manual atomic install
+    cp "$binary_path" "$temp_target"
+    chmod 755 "$temp_target"
   fi
+  
+  # Atomic rename (on same filesystem, this is atomic)
+  mv -f "$temp_target" "$target_path"
+  
+  # Clean up source
   rm -f "$binary_path"
 
   print_success "${CLI_NAME} installed to ${target_path}"
@@ -284,26 +332,27 @@ check_path() {
     if [[ -n "$shell_config" ]]; then
       # Check if PATH export already exists (idempotent)
       if ! grep -q "# PromptCode CLI PATH" "$shell_config" 2>/dev/null; then
-        echo "Would you like to add ${INSTALL_DIR} to your PATH automatically? [Y/n]" >&2
         # Default to "N" in non-interactive mode for security
-        local default_ans="Y"
-        if ! is_interactive; then 
-          default_ans="N"
-          print_info "Non-interactive mode: defaulting to no PATH modification for security."
-        fi
-        response=$(safe_read "" "$default_ans")
-        if [[ ! "$response" =~ ^[Nn]$ ]]; then
-          if [[ "$SHELL" == */fish ]]; then
-            echo "# PromptCode CLI PATH" >> "$shell_config"
-            echo "set -gx PATH \$PATH ${INSTALL_DIR}" >> "$shell_config"
+        if is_interactive; then
+          if ask_yes_no "Would you like to add ${INSTALL_DIR} to your PATH automatically? [Y/n] " "Y"; then
+            if [[ "$SHELL" == */fish ]]; then
+              # Ensure fish config directory exists
+              mkdir -p "$HOME/.config/fish"
+              echo "# PromptCode CLI PATH" >> "$shell_config"
+              echo "set -gx PATH \$PATH ${INSTALL_DIR}" >> "$shell_config"
+            else
+              echo "" >> "$shell_config"
+              echo "# PromptCode CLI PATH" >> "$shell_config"
+              echo "export PATH=\"\$PATH:${INSTALL_DIR}\"" >> "$shell_config"
+            fi
+            print_success "PATH updated in $shell_config"
+            echo "Please restart your shell or run: source $shell_config" >&2
           else
-            echo "" >> "$shell_config"
-            echo "# PromptCode CLI PATH" >> "$shell_config"
-            echo "export PATH=\"\$PATH:${INSTALL_DIR}\"" >> "$shell_config"
+            echo "Add this to your shell configuration file ($shell_config):" >&2
+            echo "  export PATH=\"\$PATH:${INSTALL_DIR}\"" >&2
           fi
-          print_success "PATH updated in $shell_config"
-          echo "Please restart your shell or run: source $shell_config" >&2
         else
+          print_info "Non-interactive mode: skipping PATH modification for security."
           echo "Add this to your shell configuration file ($shell_config):" >&2
           echo "  export PATH=\"\$PATH:${INSTALL_DIR}\"" >&2
         fi
@@ -333,8 +382,7 @@ uninstall() {
 
   # Ask about cache and config
   echo ""
-  safe_read_char "Remove configuration and cache files? [y/N] " "N"
-  if [[ $REPLY =~ ^[Yy]$ ]]; then
+  if ask_yes_no "Remove configuration and cache files? [y/N] " "N"; then
     if [ -d "$CONFIG_DIR" ]; then
       rm -rf "$CONFIG_DIR"
       print_success "Removed config: $CONFIG_DIR"
@@ -345,13 +393,52 @@ uninstall() {
     fi
   fi
 
+  # Remove PATH entries from shell configs
+  echo ""
+  if ask_yes_no "Remove PATH entries from shell configurations? [Y/n] " "Y"; then
+    local configs=()
+    [ -f "$HOME/.bashrc" ] && configs+=("$HOME/.bashrc")
+    [ -f "$HOME/.bash_profile" ] && configs+=("$HOME/.bash_profile")
+    [ -f "$HOME/.zshrc" ] && configs+=("$HOME/.zshrc")
+    [ -f "$HOME/.config/fish/config.fish" ] && configs+=("$HOME/.config/fish/config.fish")
+    [ -f "$HOME/.profile" ] && configs+=("$HOME/.profile")
+    
+    for config in "${configs[@]}"; do
+      if grep -q "${INSTALL_DIR}" "$config" 2>/dev/null; then
+        # Create backup
+        cp "$config" "${config}.promptcode-backup"
+        
+        # Escape all regex metacharacters in INSTALL_DIR for safe sed usage
+        local escaped_dir=$(printf '%s' "$INSTALL_DIR" | sed -e 's/[\\.*+?{}()\[\]|^$]/\\\\&/g' -e 's/\//\\\//g')
+        
+        # Remove PATH entries containing INSTALL_DIR (handle various formats)
+        if [[ "$config" == *"config.fish" ]]; then
+          # Fish shell uses different syntax - remove both fish_add_path and set -gx PATH lines
+          awk -v dir="${INSTALL_DIR}" '
+            !(/fish_add_path/ && index($0, dir)) && 
+            !((/^[[:space:]]*set[[:space:]]+-gx[[:space:]]+PATH/ || /^set[[:space:]]+-gx[[:space:]]+PATH/) && index($0, dir))
+          ' "$config" > "${config}.tmp" && mv "${config}.tmp" "$config"
+        else
+          # Bash/Zsh use export PATH - handle multiple formats
+          # This handles: export PATH="...", export PATH='...', PATH="...", PATH='...', export PATH=$PATH:...
+          # Also remove the "# PromptCode CLI PATH" comment if it exists
+          sed -E "/# PromptCode CLI PATH/d; /export[[:space:]]+PATH.*${escaped_dir}/d; /^[[:space:]]*PATH.*${escaped_dir}/d" "$config" > "${config}.tmp" && mv "${config}.tmp" "$config"
+        fi
+        print_success "Removed PATH entry from: $config (backup: ${config}.promptcode-backup)"
+      fi
+    done
+  else
+    echo "To remove PATH entries manually, edit your shell config and remove lines containing: ${INSTALL_DIR}" >&2
+  fi
+  
   print_success "Uninstall complete"
-  echo "" >&2
-  echo "Don't forget to remove ${INSTALL_DIR} from your PATH if you added it." >&2
 }
 
 # Main installation flow
 main() {
+  # Open TTY file descriptor for interactive I/O (ignore failure)
+  open_tty || true
+  
   # Simple, compact banner that works in narrow terminals (35 chars wide)
   echo "" >&2
   echo "  ╭───────────────────────────────╮" >&2
@@ -375,12 +462,13 @@ main() {
 
   # Check if already installed
   if command -v "$CLI_NAME" >/dev/null 2>&1; then
-    local current_version=$("$CLI_NAME" --version 2>/dev/null || echo "unknown")
-    print_info "${CLI_NAME} is already installed (version: $current_version)"
+    local current_version_raw=$("$CLI_NAME" --version 2>/dev/null || echo "unknown")
+    local current_version=$(normalize_version "$current_version_raw")
+    print_info "${CLI_NAME} is already installed (version: $current_version_raw)"
     print_info "Latest version available: $version"
     
     # Check if it's a development version or if update is available
-    if [[ "$current_version" == *"-dev."* ]]; then
+    if [[ "$current_version_raw" == *"-dev."* ]]; then
       print_warning "You're running a development version"
     fi
     
@@ -477,13 +565,16 @@ main() {
   # Automatically check for integrations
   echo "" >&2
   print_info "Checking for AI environment integrations..."
-  # Run integration check with proper TTY handling
-  if [[ -t 0 && -t 1 ]]; then
-    # If we have TTY, run normally with interactive prompts
-    "${CLI_NAME}" integrate --auto-detect || true
-  elif [[ -r /dev/tty ]]; then
-    # If we can access /dev/tty (piped install), redirect to allow prompts
-    "${CLI_NAME}" integrate --auto-detect < /dev/tty || true
+  # Run integration check with proper TTY handling using our FD
+  if (( TTY_FD >= 0 )); then
+    # Ensure integrate both reads from and writes to the terminal
+    if (( TTY_FD == 0 )); then
+      # stdin is already TTY, run normally
+      "${CLI_NAME}" integrate --auto-detect || true
+    else
+      # Redirect stdin/stdout/stderr to TTY for full interaction
+      "${CLI_NAME}" integrate --auto-detect <&$TTY_FD >&$TTY_FD 2>&$TTY_FD || true
+    fi
   else
     # Non-interactive, just do silent check
     "${CLI_NAME}" integrate --auto-detect 2>/dev/null || true

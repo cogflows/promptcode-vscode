@@ -1,0 +1,11 @@
+# install-script-review preset
+# Generated: 2025-08-27T13:04:39.570Z
+# Source: from-files (packages/cli/scripts/install.sh, packages/cli/scripts/install.ps1)
+# Optimization: balanced
+# Stats: files=2, patterns=2, saved=0
+
+packages/cli/scripts/install.ps1
+packages/cli/scripts/install.sh
+!**/node_modules/**
+!**/dist/**
+!**/build/**
