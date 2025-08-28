@@ -177,7 +177,9 @@ detect_platform() {
 fetch_latest_version() {
   # Allow override via environment variable for testing
   if [ -n "$PROMPTCODE_TEST_VERSION" ]; then
-    echo "$PROMPTCODE_TEST_VERSION"
+    local v="$PROMPTCODE_TEST_VERSION"
+    [[ "$v" != v* ]] && v="v$v"
+    echo "$v"
     return
   fi
   

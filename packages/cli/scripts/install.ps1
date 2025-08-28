@@ -81,8 +81,10 @@ function Get-Architecture {
 function Get-LatestVersion {
     # Allow override via environment variable for testing
     if ($env:PROMPTCODE_TEST_VERSION) {
-        Write-Info "Using test version: $($env:PROMPTCODE_TEST_VERSION)"
-        return $env:PROMPTCODE_TEST_VERSION
+        $v = $env:PROMPTCODE_TEST_VERSION
+        if ($v -notmatch '^v') { $v = "v$v" }
+        Write-Info "Using test version: $v"
+        return $v
     }
     
     Write-Info "Fetching latest version..."

@@ -65,9 +65,22 @@ jobs:
           # Test the installed binary - CRITICAL: Must not hang
           echo "Testing binary with --version (should not hang)..."
           # Use perl for cross-platform timeout (works on both Linux and macOS)
-          if ! perl -e 'alarm shift; exec @ARGV' 10 "$PROMPTCODE_INSTALL_DIR/promptcode" --version; then
+          VERSION_OUTPUT=$(perl -e 'alarm shift; exec @ARGV' 10 "$PROMPTCODE_INSTALL_DIR/promptcode" --version)
+          if [ $? -ne 0 ]; then
             echo "ERROR: promptcode --version either failed or hung (timeout after 10s)"
             exit 1
+          fi
+          echo "Version output: $VERSION_OUTPUT"
+          
+          # Verify correct version when PROMPTCODE_TEST_VERSION is set
+          if [ -n "${PROMPTCODE_TEST_VERSION:-}" ]; then
+            EXPECTED="${PROMPTCODE_TEST_VERSION#v}"
+            ACTUAL="${VERSION_OUTPUT#v}"
+            if [ "$ACTUAL" != "$EXPECTED" ]; then
+              echo "ERROR: Version mismatch - expected $EXPECTED, got $ACTUAL"
+              exit 1
+            fi
+            echo "✓ Version verification passed: $ACTUAL"
           fi
           
           # Test help command as well (just make sure it doesn't hang)
@@ -135,6 +148,17 @@ jobs:
           $output = Receive-Job $job
           Remove-Job $job
           Write-Host "Version output: $output"
+          
+          # Verify correct version when PROMPTCODE_TEST_VERSION is set
+          if ($env:PROMPTCODE_TEST_VERSION) {
+            $expected = $env:PROMPTCODE_TEST_VERSION.TrimStart('v')
+            $actual = $output.Trim().TrimStart('v')
+            if ($actual -ne $expected) {
+              Write-Error "Version mismatch - expected $expected, got $actual"
+              exit 1
+            }
+            Write-Host "✓ Version verification passed: $actual"
+          }
           
           # Test help command as well
           Write-Host "Testing binary with --help..."
