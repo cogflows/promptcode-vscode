@@ -79,6 +79,12 @@ function Get-Architecture {
 
 # Fetch latest version from GitHub
 function Get-LatestVersion {
+    # Allow override via environment variable for testing
+    if ($env:PROMPTCODE_TEST_VERSION) {
+        Write-Info "Using test version: $($env:PROMPTCODE_TEST_VERSION)"
+        return $env:PROMPTCODE_TEST_VERSION
+    }
+    
     Write-Info "Fetching latest version..."
     
     try {

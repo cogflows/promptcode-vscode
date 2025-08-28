@@ -39,6 +39,12 @@ jobs:
           export PROMPTCODE_INSTALL_DIR=$(mktemp -d)
           echo "Installing to: $PROMPTCODE_INSTALL_DIR"
           
+          # Set test version if triggered by release
+          if [ "${{ github.event_name }}" = "release" ]; then
+            export PROMPTCODE_TEST_VERSION="${{ github.event.release.tag_name }}"
+            echo "Testing specific version: $PROMPTCODE_TEST_VERSION"
+          fi
+          
           # Run installer and capture output
           bash packages/cli/scripts/install.sh 2>&1 | tee install.log
           INSTALL_EXIT_CODE=${PIPESTATUS[0]}
@@ -95,6 +101,12 @@ jobs:
           # Test the installer script
           $env:PROMPTCODE_INSTALL_DIR = New-TemporaryFile | % { Remove-Item $_; New-Item -ItemType Directory -Path $_ }
           Write-Host "Installing to: $env:PROMPTCODE_INSTALL_DIR"
+          
+          # Set test version if triggered by release
+          if ("${{ github.event_name }}" -eq "release") {
+            $env:PROMPTCODE_TEST_VERSION = "${{ github.event.release.tag_name }}"
+            Write-Host "Testing specific version: $env:PROMPTCODE_TEST_VERSION"
+          }
           
           # Run installer (with -Insecure for CI testing, since checksum might fail)
           try {

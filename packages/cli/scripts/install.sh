@@ -175,6 +175,12 @@ detect_platform() {
 
 # Fetch latest release version from GitHub
 fetch_latest_version() {
+  # Allow override via environment variable for testing
+  if [ -n "$PROMPTCODE_TEST_VERSION" ]; then
+    echo "$PROMPTCODE_TEST_VERSION"
+    return
+  fi
+  
   local url="https://api.github.com/repos/${REPO}/releases/latest"
   local version
   
