@@ -64,7 +64,7 @@ describe('symlink safety (external files detection)', () => {
       expect(fs.lstatSync(path.join(dirB, 'link-to-a')).isSymbolicLink()).toBe(true);
     } catch (e) {
       // Some systems may prevent circular symlinks
-      console.log('Circular symlink test skipped:', e.message);
+      console.log('Circular symlink test skipped:', (e as Error).message);
     }
   });
 });

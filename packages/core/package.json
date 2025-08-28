@@ -16,8 +16,6 @@
     "test:watch": "jest --watch"
   },
   "dependencies": {
-    "@types/debug": "^4.1.12",
-    "debug": "^4.4.1",
     "fast-glob": "^3.3.2",
     "gpt-tokenizer": "^2.1.2",
     "ignore": "^5.3.0",

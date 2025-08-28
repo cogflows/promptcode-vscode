@@ -4,10 +4,17 @@ import { countTokens } from 'gpt-tokenizer/encoding/o200k_base';
 import { LRUCache } from 'lru-cache';
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import createDebug from 'debug';
 
-// Create debug namespace for token counter
-const debug = createDebug('promptcode:tokenCounter');
+// Simple debug logging that works in all environments including Bun compiled binaries
+const DEBUG = process.env.DEBUG?.includes('promptcode:tokenCounter') || 
+              process.env.DEBUG?.includes('promptcode:*') ||
+              process.env.DEBUG === '*';
+
+function debug(...args: any[]): void {
+  if (DEBUG) {
+    console.error('[promptcode:tokenCounter]', ...args);
+  }
+}
 
 // Interface for cache entries
 interface TokenCacheEntry {

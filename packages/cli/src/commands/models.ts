@@ -71,10 +71,6 @@ export async function modelsCommand(options: ModelsOptions): Promise<void> {
         
         console.log(`  ${chalk.bold(modelKey)}${defaultMarker}`);
         
-        if (config.aliases && config.aliases.length > 0) {
-          console.log(chalk.gray(`    Aliases: ${config.aliases.join(', ')}`));
-        }
-        
         // Show pricing
         const inputCost = formatCost(config.pricing.input / 1000); // per 1K tokens
         const outputCost = formatCost(config.pricing.output / 1000); // per 1K tokens
