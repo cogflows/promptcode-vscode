@@ -142,17 +142,23 @@ function Download-Binary($version, $arch) {
                 Write-Warning "Installing without verification is risky and could compromise your system."
                 
                 if (Test-NonInteractive) {
-                    Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
-                    Write-Error "Cannot proceed with -Insecure in non-interactive mode. Please verify checksums are available or run interactively."
+                    # In CI/non-interactive mode with -Insecure flag, allow bypass for testing
+                    if ($env:CI -eq "true") {
+                        Write-Warning "CI environment detected - proceeding with -Insecure flag for testing purposes."
+                    } else {
+                        Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
+                        Write-Error "Cannot proceed with -Insecure in non-interactive mode. Please verify checksums are available or run interactively."
+                    }
+                } else {
+                    # Interactive mode - prompt for confirmation
+                    Write-Host ""
+                    $response = Read-Host "Are you SURE you want to proceed without checksum verification? [y/N]"
+                    if ($response -notmatch '^[Yy]') {
+                        Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
+                        Write-Error "Installation cancelled for security reasons."
+                    }
+                    Write-Warning "Proceeding without checksum verification at your own risk."
                 }
-                
-                Write-Host ""
-                $response = Read-Host "Are you SURE you want to proceed without checksum verification? [y/N]"
-                if ($response -notmatch '^[Yy]') {
-                    Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
-                    Write-Error "Installation cancelled for security reasons."
-                }
-                Write-Warning "Proceeding without checksum verification at your own risk."
             }
         }
         

@@ -40,8 +40,11 @@ jobs:
           echo "Installing to: $PROMPTCODE_INSTALL_DIR"
           
           # Run installer and capture output
-          if ! bash packages/cli/scripts/install.sh 2>&1 | tee install.log; then
-            echo "ERROR: Installation failed"
+          bash packages/cli/scripts/install.sh 2>&1 | tee install.log
+          INSTALL_EXIT_CODE=${PIPESTATUS[0]}
+          
+          if [ $INSTALL_EXIT_CODE -ne 0 ]; then
+            echo "ERROR: Installation failed with exit code $INSTALL_EXIT_CODE"
             cat install.log
             exit 1
           fi
