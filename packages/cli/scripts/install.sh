@@ -176,7 +176,7 @@ detect_platform() {
 # Fetch latest release version from GitHub
 fetch_latest_version() {
   # Allow override via environment variable for testing
-  if [ -n "$PROMPTCODE_TEST_VERSION" ]; then
+  if [ -n "${PROMPTCODE_TEST_VERSION:-}" ]; then
     local v="$PROMPTCODE_TEST_VERSION"
     [[ "$v" != v* ]] && v="v$v"
     echo "$v"
