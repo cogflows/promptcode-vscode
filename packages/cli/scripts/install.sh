@@ -283,17 +283,26 @@ download_binary() {
 install_binary() {
   local binary_path="$1"
   local target_path="${INSTALL_DIR}/${CLI_NAME}"
+  local temp_target="${target_path}.tmp.$$"
 
   # Create installation directory
   mkdir -p "$INSTALL_DIR"
 
-  # Install with proper permissions (fallback to cp if install unavailable)
+  # Install atomically: copy to temp file, set permissions, then move
+  # This prevents partial writes if process is interrupted
   if command -v install >/dev/null 2>&1; then
-    install -m 755 "$binary_path" "$target_path"
+    # install command can atomically set permissions
+    install -m 755 "$binary_path" "$temp_target"
   else
-    cp "$binary_path" "$target_path"
-    chmod 755 "$target_path"
+    # Manual atomic install
+    cp "$binary_path" "$temp_target"
+    chmod 755 "$temp_target"
   fi
+  
+  # Atomic rename (on same filesystem, this is atomic)
+  mv -f "$temp_target" "$target_path"
+  
+  # Clean up source
   rm -f "$binary_path"
 
   print_success "${CLI_NAME} installed to ${target_path}"
@@ -398,14 +407,22 @@ uninstall() {
       if grep -q "${INSTALL_DIR}" "$config" 2>/dev/null; then
         # Create backup
         cp "$config" "${config}.promptcode-backup"
+        
+        # Escape all regex metacharacters in INSTALL_DIR for safe sed usage
+        local escaped_dir=$(printf '%s' "$INSTALL_DIR" | sed -e 's/[\\.*+?{}()\[\]|^$]/\\\\&/g' -e 's/\//\\\//g')
+        
         # Remove PATH entries containing INSTALL_DIR (handle various formats)
         if [[ "$config" == *"config.fish" ]]; then
-          # Fish shell uses different syntax
-          grep -v "fish_add_path.*${INSTALL_DIR}" "$config" > "${config}.tmp" && mv "${config}.tmp" "$config"
+          # Fish shell uses different syntax - remove both fish_add_path and set -gx PATH lines
+          awk -v dir="${INSTALL_DIR}" '
+            !(/fish_add_path/ && index($0, dir)) && 
+            !((/^[[:space:]]*set[[:space:]]+-gx[[:space:]]+PATH/ || /^set[[:space:]]+-gx[[:space:]]+PATH/) && index($0, dir))
+          ' "$config" > "${config}.tmp" && mv "${config}.tmp" "$config"
         else
           # Bash/Zsh use export PATH - handle multiple formats
           # This handles: export PATH="...", export PATH='...', PATH="...", PATH='...', export PATH=$PATH:...
-          sed -E "/export[[:space:]]+PATH.*${INSTALL_DIR//\//\\/}/d; /^[[:space:]]*PATH.*${INSTALL_DIR//\//\\/}/d" "$config" > "${config}.tmp" && mv "${config}.tmp" "$config"
+          # Also remove the "# PromptCode CLI PATH" comment if it exists
+          sed -E "/# PromptCode CLI PATH/d; /export[[:space:]]+PATH.*${escaped_dir}/d; /^[[:space:]]*PATH.*${escaped_dir}/d" "$config" > "${config}.tmp" && mv "${config}.tmp" "$config"
         fi
         print_success "Removed PATH entry from: $config (backup: ${config}.promptcode-backup)"
       fi

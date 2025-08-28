@@ -3,7 +3,7 @@ import chalk from 'chalk';
 import * as fsp from 'fs/promises';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getCacheDir, getConfigDir } from '../utils/paths';
+import { getCacheDir, getConfigDir, isSafeToRemove } from '../utils/paths';
 import { removeFromClaudeMd, removePromptCodeCommands, findClaudeFolder, findClaudeMd, hasPromptCodeSection, PROMPTCODE_CLAUDE_COMMANDS, LEGACY_CLAUDE_COMMANDS } from '../utils/claude-integration';
 import inquirer from 'inquirer';
 
@@ -15,6 +15,13 @@ async function removeDirectory(dir: string, description: string, dryRun: boolean
     const stats = await fsp.lstat(dir);
     if (stats.isSymbolicLink()) {
       console.log(chalk.red(`✗ Refusing to delete symlink: ${dir}`));
+      return false;
+    }
+    
+    // Safety check to prevent accidental deletion of critical directories
+    if (!isSafeToRemove(dir)) {
+      console.log(chalk.red(`✗ Safety check failed: refusing to delete ${dir}`));
+      console.log(chalk.yellow('  This directory appears to be a critical system directory or does not contain "promptcode"'));
       return false;
     }
     

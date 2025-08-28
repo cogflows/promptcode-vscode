@@ -15,8 +15,8 @@ import * as readline from 'readline';
  * Respects XDG_CACHE_HOME environment variable
  */
 export function getCacheDir(): string {
-  return process.env.XDG_CACHE_HOME 
-    || path.join(os.homedir(), '.cache', 'promptcode');
+  const base = process.env.XDG_CACHE_HOME || path.join(os.homedir(), '.cache');
+  return path.join(base, 'promptcode');
 }
 
 /**
@@ -24,8 +24,8 @@ export function getCacheDir(): string {
  * Respects XDG_CONFIG_HOME environment variable
  */
 export function getConfigDir(): string {
-  return process.env.XDG_CONFIG_HOME 
-    || path.join(os.homedir(), '.config', 'promptcode');
+  const base = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
+  return path.join(base, 'promptcode');
 }
 
 /**
@@ -266,6 +266,71 @@ export function assertInsideRoot(root: string, candidatePath: string): void {
   if (!absCandidate.startsWith(absRoot)) {
     throw new Error(`Path traversal attempt blocked: ${candidatePath}`);
   }
+}
+
+/**
+ * Check if a directory path is safe to remove
+ * Prevents accidental deletion of critical system directories
+ */
+export function isSafeToRemove(dirPath: string): boolean {
+  const normalized = path.resolve(dirPath);
+  const home = os.homedir();
+  
+  // Never remove critical directories
+  const criticalPaths = [
+    '/',
+    home,
+    path.join(home, '.config'),  // XDG config base
+    path.join(home, '.cache'),   // XDG cache base
+    path.join(home, '.local'),   // XDG data base
+    '/etc',
+    '/usr',
+    '/var',
+    '/bin',
+    '/sbin',
+    '/lib',
+    '/opt',
+    '/home',
+    '/Users',
+    'C:\\',
+    'C:\\Windows',
+    'C:\\Program Files',
+    'C:\\Program Files (x86)',
+    'C:\\Users',
+  ];
+  
+  // Also check if XDG env vars are set and protect those base directories
+  if (process.env.XDG_CONFIG_HOME) {
+    criticalPaths.push(path.resolve(process.env.XDG_CONFIG_HOME));
+  }
+  if (process.env.XDG_CACHE_HOME) {
+    criticalPaths.push(path.resolve(process.env.XDG_CACHE_HOME));
+  }
+  if (process.env.XDG_DATA_HOME) {
+    criticalPaths.push(path.resolve(process.env.XDG_DATA_HOME));
+  }
+  
+  // Check if the path is one of the critical directories
+  if (criticalPaths.includes(normalized)) {
+    return false;
+  }
+  
+  // Check if the path is outside user home (with exceptions for temp dirs)
+  const isInHome = normalized.startsWith(home);
+  const isInTemp = normalized.startsWith(os.tmpdir()) || normalized.startsWith('/tmp') || normalized.startsWith('/var/tmp');
+  
+  // If outside both home and temp directories, reject
+  if (!isInHome && !isInTemp) {
+    return false;
+  }
+  
+  // Path must contain 'promptcode' in its name for safety
+  // This prevents accidental deletion of unrelated directories
+  if (!normalized.toLowerCase().includes('promptcode')) {
+    return false;
+  }
+  
+  return true;
 }
 
 /**

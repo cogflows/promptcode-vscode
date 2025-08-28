@@ -55,14 +55,10 @@ export async function removeFromCursorRules(projectPath: string): Promise<boolea
   // Clean up extra newlines
   const cleanedContent = updatedContent.replace(/\n{3,}/g, '\n\n').trim();
   
-  if (cleanedContent) {
-    await fs.promises.writeFile(cursorRulesPath, cleanedContent + '\n');
-    console.log(`✓ Removed PromptCode section from ${path.relative(projectPath, cursorRulesPath)}`);
-  } else {
-    // File is empty after removal, delete it
-    await fs.promises.unlink(cursorRulesPath);
-    console.log(`✓ Removed empty ${path.relative(projectPath, cursorRulesPath)}`);
-  }
+  // IMPORTANT: Never delete .cursorrules entirely - it may contain other important content
+  // Even if empty after our section removal, preserve the file (like we do for CLAUDE.md)
+  await fs.promises.writeFile(cursorRulesPath, cleanedContent ? cleanedContent + '\n' : '');
+  console.log(`✓ Removed PromptCode section from ${path.relative(projectPath, cursorRulesPath)}`);
   
   return true;
 }

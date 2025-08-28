@@ -192,17 +192,41 @@ async function replaceBinary(newBinaryPath: string): Promise<void> {
     const batchPath = path.join(dir, 'update.bat');
     
     // Create batch script to replace binary after process exits
+    // Include retry logic to handle file locks from antivirus or indexers
     const batchContent = `@echo off
 setlocal
 echo Waiting for PromptCode to exit...
 timeout /t 2 /nobreak >nul
-move /Y "${stagedPath}" "${currentBinary}"
-if %ERRORLEVEL% EQU 0 (
-  echo Update completed successfully.
-  "${currentBinary}" --version
-) else (
-  echo Update failed. Please manually rename ${stagedPath} to ${currentBinary}
-)
+
+rem Retry loop for up to 15 seconds with 1-second delays
+set RETRY_COUNT=0
+:retry_loop
+set /a RETRY_COUNT+=1
+if %RETRY_COUNT% GTR 15 goto :failed
+
+move /Y "${stagedPath}" "${currentBinary}" >nul 2>&1
+if %ERRORLEVEL% EQU 0 goto :success
+
+rem File might be locked, wait and retry
+timeout /t 1 /nobreak >nul
+goto :retry_loop
+
+:success
+echo Update completed successfully.
+"${currentBinary}" --version
+goto :cleanup
+
+:failed
+echo Update failed after 15 attempts. File may be locked by antivirus or another process.
+echo Please manually rename:
+echo   From: ${stagedPath}
+echo   To: ${currentBinary}
+echo.
+echo Or try closing all PromptCode instances and running:
+echo   move /Y "${stagedPath}" "${currentBinary}"
+goto :cleanup
+
+:cleanup
 del "%~f0"
 `;
     
