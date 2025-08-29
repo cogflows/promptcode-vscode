@@ -1,0 +1,14 @@
+# claude-commands-dx preset
+# Generated: 2025-08-28T14:40:29.136Z
+# Source: from-files (.claude/commands/*.md, packages/cli/src/commands/expert.ts, packages/cli/src/commands/generate.ts)
+# Optimization: balanced
+# Stats: files=7, patterns=3, saved=4
+# Applied:
+# - full-directory: .claude/commands (from 5 → 1)
+
+.claude/commands/**
+packages/cli/src/commands/expert.ts
+packages/cli/src/commands/generate.ts
+!**/node_modules/**
+!**/dist/**
+!**/build/**
