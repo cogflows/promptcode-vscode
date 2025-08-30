@@ -1,5 +1,5 @@
 ---
-allowed-tools: Task, Read(/tmp/*), Read(/var/*), Write(/tmp/*), Write(/var/*), Edit(/tmp/*), Edit(/var/*), Edit(.promptcode/presets/*), Bash(*promptcode*), Bash(command -v*), Bash(cursor*), Bash(code*), Bash(xdg-open*), Bash(open*), Bash(echo*), Bash(cat*), Bash(date*), Bash(wc*), Bash(jq*), Bash([[*), Bash([*), Bash(if*), Bash(elif*), Bash(else*), Bash(fi*), Bash(for*), Bash(do*), Bash(done*), Bash(*&&*), Bash(*||*), Bash(*|*), Bash(*>*), Bash(*>>*), Bash(*2>/dev/null*), Bash($(*), Bash(${*), Bash(TMP*), Bash(PROMPT_FILE*), Bash(CODE_FILE*), Bash(SYNTHESIS_FILE*)
+allowed-tools: Task, Read(/tmp/*), Read(/var/*), Write(/tmp/*), Write(/var/*), Edit(/tmp/*), Edit(/var/*), Edit(.promptcode/presets/*), Bash(promptcode:*), Bash(command -v:*), Bash(cursor:*), Bash(code:*), Bash(xdg-open:*), Bash(open:*), Bash(echo:*), Bash(cat:*), Bash(date:*), Bash(wc:*), Bash(jq:*), Bash([[:*), Bash([:*), Bash(if:*), Bash(elif:*), Bash(else:*), Bash(fi:*), Bash(for:*), Bash(do:*), Bash(done:*), Bash(:*&&:*), Bash(:*||:*), Bash(:*|:*), Bash(:*>:*), Bash(:*>>:*), Bash(:*2>/dev/null:*), Bash($(:*), Bash(${:*), Bash(TMP:*), Bash(PROMPT_FILE:*), Bash(CODE_FILE:*), Bash(SYNTHESIS_FILE:*)
 description: Consult AI expert for complex problems with code context - supports ensemble mode for multiple models
 ---
 
