@@ -5,6 +5,7 @@ import { scanFiles, initializeTokenCounter, listFilesByPatternsFile, optimizeSel
 import { findPromptcodeFolder, ensureDirWithApproval, getProjectRoot, getPresetDir, getPresetPath, getCacheDir, resolveProjectPath } from '../utils/paths';
 import { spinner } from '../utils/spinner';
 import { CACHE_VERSION } from '../utils/constants';
+import { separatePatternsFromPaths, validatePatternSafety, directoryToPattern } from '../utils/pattern-utils';
 
 interface PresetOptions {
   path?: string;
@@ -222,24 +223,39 @@ function renderPresetFile(
     applied?: { rule: string; details: string; beforeCount: number; afterCount: number }[];
     stats?: { inputFiles: number; finalPatterns: number; savedPatterns: number };
     source?: string;
+    patternsPreserved?: number;
+    directoriesConverted?: number;
+    optimized?: any;
   }
 ): string {
   const lines: string[] = [];
   lines.push(`# ${name} preset`);
   lines.push(`# Generated: ${new Date().toISOString()}`);
   if (meta?.source) lines.push(`# Source: ${meta.source}`);
-  if (meta?.level) lines.push(`# Optimization: ${meta.level}`);
-  if (meta?.stats) {
-    lines.push(
-      `# Stats: files=${meta.stats.inputFiles}, patterns=${meta.stats.finalPatterns}, saved=${meta.stats.savedPatterns}`
-    );
+  
+  // Add specific metadata about what was done
+  if (meta?.patternsPreserved) {
+    lines.push(`# Patterns preserved as provided: ${meta.patternsPreserved}`);
   }
-  if (meta?.applied?.length) {
-    lines.push('# Applied:');
-    for (const a of meta.applied) {
-      lines.push(`# - ${a.rule}: ${a.details} (from ${a.beforeCount} → ${a.afterCount})`);
+  if (meta?.directoriesConverted) {
+    lines.push(`# Directories converted to patterns: ${meta.directoriesConverted}`);
+  }
+  
+  if (meta?.optimized) {
+    lines.push(`# Optimization: ${meta.optimized.level}`);
+    if (meta.optimized.stats) {
+      lines.push(
+        `# Optimized: ${meta.optimized.stats.inputFiles} files → ${meta.optimized.stats.finalPatterns} patterns (saved ${meta.optimized.stats.savedPatterns})`
+      );
+    }
+    if (meta.optimized.applied?.length) {
+      lines.push('# Applied rules:');
+      for (const a of meta.optimized.applied) {
+        lines.push(`#   - ${a.rule}: ${a.details}`);
+      }
     }
   }
+  
   lines.push('');
   // Patterns (include first, excludes later already sorted by optimizer)
   for (const p of patterns) lines.push(p);
@@ -318,33 +334,103 @@ async function createPreset(presetName: string, projectPath: string, opts?: {
     return;
   }
 
-  // Build selection from provided globs (auto-optimized)
-  // projectPath is already the project root thanks to resolveProjectPath
+  // NEW: Intelligently handle patterns vs paths
   const projectRoot = projectPath;
-  const files = await scanFiles({
-    cwd: projectRoot,
-    patterns: from,
-    respectGitignore: true,
-    workspaceName: path.basename(projectRoot)
-  });
-  const selection = files.map((f) => path.relative(projectRoot, f.path));
+  const { patterns, directories, files, mixed } = separatePatternsFromPaths(from, projectRoot);
+  
+  // Validate all patterns for safety
+  validatePatternSafety([...patterns, ...directories, ...files]);
+  
+  let finalPatterns: string[] = [];
+  const metadata: any = { source: '' };
+  
+  // 1. Preserve glob patterns as-is
+  if (patterns.length > 0) {
+    finalPatterns.push(...patterns);
+    metadata.patternsPreserved = patterns.length;
+  }
+  
+  // 2. Convert directories to patterns
+  if (directories.length > 0) {
+    for (const dir of directories) {
+      finalPatterns.push(directoryToPattern(dir));
+    }
+    metadata.directoriesConverted = directories.length;
+  }
+  
+  // 3. Optimize concrete file paths
+  if (files.length > 0) {
+    // First, make file paths absolute from project root for scanning
+    const absoluteFiles = files.map(f => {
+      if (path.isAbsolute(f)) {
+        return f;
+      }
+      return path.resolve(projectRoot, f);
+    });
+    
+    const scannedFiles = await scanFiles({
+      cwd: projectRoot,
+      patterns: absoluteFiles,
+      respectGitignore: true,
+      workspaceName: path.basename(projectRoot)
+    });
+    
+    if (scannedFiles.length > 0) {
+      const selection = scannedFiles.map((f) => {
+        // Ensure we get relative paths from the project root
+        const absolutePath = path.isAbsolute(f.path) ? f.path : path.resolve(projectRoot, f.path);
+        return path.relative(projectRoot, absolutePath);
+      });
+      const level: OptimizationLevel = opts?.optimizationLevel || opts?.level || 'balanced';
+      const result = await optimizeSelection(selection, projectRoot, level);
+      
+      finalPatterns.push(...result.patterns);
+      metadata.optimized = {
+        level,
+        applied: result.applied,
+        stats: result.stats
+      };
+    }
+  }
+  
+  // Set appropriate source description
+  if (mixed) {
+    const parts = [];
+    if (patterns.length > 0) parts.push(`${patterns.length} patterns preserved`);
+    if (directories.length > 0) parts.push(`${directories.length} directories`);
+    if (files.length > 0 && metadata.optimized) {
+      parts.push(`${files.length} files → ${metadata.optimized.stats.finalPatterns} patterns`);
+    }
+    metadata.source = `mixed (${parts.join(', ')})`;
+  } else if (patterns.length > 0) {
+    metadata.source = `patterns preserved (${patterns.length})`;
+  } else if (directories.length > 0) {
+    metadata.source = `directories converted (${directories.length})`;
+  } else if (metadata.optimized) {
+    metadata.source = `files optimized (${files.length} → ${metadata.optimized.stats.finalPatterns} patterns)`;
+  }
 
-  // AUTO: optimization on when --from-files is present
-  const level: OptimizationLevel = opts?.optimizationLevel || opts?.level || 'balanced';
-  const result = await optimizeSelection(selection, projectRoot, level);
-
-  const content = renderPresetFile(presetName, result.patterns, {
-    level,
-    applied: result.applied,
-    stats: result.stats,
-    source: `from-files (${from.join(', ')})`,
-  });
-
+  // Deduplicate patterns while preserving order (keep first occurrence)
+  const deduplicatedPatterns = Array.from(new Set(finalPatterns));
+  
+  const content = renderPresetFile(presetName, deduplicatedPatterns, metadata);
   await fs.promises.writeFile(presetPath, content);
+  
+  // Clear user feedback
   console.log(chalk.green(`✓ Created preset: ${presetName}`));
   console.log(chalk.gray(`  Path: ${presetPath}`));
-  console.log(chalk.gray(`  Patterns: ${result.patterns.length} (optimized from ${selection.length} files)`));
-  console.log(chalk.gray(`  Optimization: ${level} - saved ${result.stats.savedPatterns} patterns`));
+  
+  if (patterns.length > 0) {
+    console.log(chalk.cyan(`  📁 Patterns preserved: ${patterns.length}`));
+  }
+  if (directories.length > 0) {
+    console.log(chalk.cyan(`  📂 Directories converted: ${directories.length}`));
+  }
+  if (files.length > 0 && metadata.optimized) {
+    console.log(chalk.cyan(`  ⚡ Files optimized: ${files.length} → ${metadata.optimized.stats.finalPatterns} patterns`));
+    console.log(chalk.gray(`  Optimization level: ${metadata.optimized.level}`));
+  }
+  
   console.log(chalk.gray(`  Use: promptcode generate -p ${presetName}`));
 }
 
@@ -634,7 +720,7 @@ export async function presetCommand(options: PresetOptions): Promise<void> {
     }
 
     if (options.list || (!options.create && !options.info && !options.delete && !options.edit && !options.search)) {
-      await listPresets(presetsDir, { json: options.json });
+      await listPresets(projectPath, { json: options.json });
     } else if (options.create) {
       await createPreset(options.create, projectPath, {
         fromFiles: normalizeFromFiles(options.fromFiles),
@@ -655,6 +741,10 @@ export async function presetCommand(options: PresetOptions): Promise<void> {
     } else {
       console.error(chalk.red(`Error: ${(error as Error).message}`));
     }
-    process.exit(1);
+    // Don't exit in test mode - let the error propagate
+    if (process.env.PROMPTCODE_TEST !== '1') {
+      process.exit(1);
+    }
+    throw error; // Re-throw for tests to catch
   }
 }
