@@ -278,4 +278,122 @@ describe('Preset Pattern Preservation', () => {
       }
     });
   });
+
+  describe('New Pattern Detection Features', () => {
+    it('should detect character class patterns like file[0-9].ts', async () => {
+      await presetCommand({
+        create: 'test-char-class',
+        fromFiles: ['src/file[0-9].ts', 'src/log[a-z].txt'],
+        path: testDir
+      });
+
+      const presetPath = path.join(presetsDir, 'test-char-class.patterns');
+      const content = await fs.promises.readFile(presetPath, 'utf8');
+      
+      // Should preserve as patterns since they contain ranges
+      expect(content).toContain('src/file[0-9].ts');
+      expect(content).toContain('src/log[a-z].txt');
+      expect(content).toContain('Patterns preserved');
+    });
+    
+    it('should detect brace range patterns like {1..3}', async () => {
+      await presetCommand({
+        create: 'test-brace-range',
+        fromFiles: ['lib/v{1..3}/*.ts', 'data/file{001..100}.json'],
+        path: testDir
+      });
+
+      const presetPath = path.join(presetsDir, 'test-brace-range.patterns');
+      const content = await fs.promises.readFile(presetPath, 'utf8');
+      
+      // Should preserve as patterns since they contain brace ranges
+      expect(content).toContain('lib/v{1..3}/*.ts');
+      expect(content).toContain('data/file{001..100}.json');
+      expect(content).toContain('Patterns preserved');
+    });
+    
+    it('should deduplicate patterns when duplicates are provided', async () => {
+      await presetCommand({
+        create: 'test-duplicates',
+        fromFiles: [
+          'src/**/*.ts',
+          'src/**/*.ts',  // Duplicate
+          'test/**/*.test.ts',
+          'src/**/*.ts',  // Another duplicate
+        ],
+        path: testDir
+      });
+
+      const presetPath = path.join(presetsDir, 'test-duplicates.patterns');
+      const content = await fs.promises.readFile(presetPath, 'utf8');
+      
+      // Count occurrences of the pattern
+      const matches = content.match(/src\/\*\*\/\*\.ts/g);
+      expect(matches?.length).toBe(1);  // Should appear only once
+      
+      expect(content).toContain('test/**/*.test.ts');
+      expect(content).toContain('Patterns preserved');
+    });
+    
+    it('should detect patterns with multiple bracket pairs correctly', async () => {
+      await presetCommand({
+        create: 'test-multi-brackets',
+        fromFiles: ['src/file[1]-copy[0-9].ts', 'src/a[x]-b[a-z].js'],
+        path: testDir
+      });
+
+      const presetPath = path.join(presetsDir, 'test-multi-brackets.patterns');
+      const content = await fs.promises.readFile(presetPath, 'utf8');
+      
+      // Should preserve as patterns since second bracket contains range
+      expect(content).toContain('src/file[1]-copy[0-9].ts');
+      expect(content).toContain('src/a[x]-b[a-z].js');
+      expect(content).toContain('Patterns preserved');
+    });
+    
+    it('should reject absolute paths with negation', async () => {
+      await expect(presetCommand({
+        create: 'test-absolute-negation',
+        fromFiles: ['!/etc/**', '!/var/log/*.log'],
+        path: testDir
+      })).rejects.toThrow('Unsafe absolute path');
+    });
+    
+    it('should reject absolute Windows paths', async () => {
+      if (process.platform === 'win32') {
+        await expect(presetCommand({
+          create: 'test-windows-absolute',
+          fromFiles: ['C:/Windows/**', 'C:\\Program Files\\**'],
+          path: testDir
+        })).rejects.toThrow('Unsafe absolute path');
+      }
+    });
+    
+    it('should deduplicate normalized Windows and POSIX paths', async () => {
+      // Create test/utils directory so it's recognized as a directory
+      await fs.promises.mkdir(path.join(testDir, 'test', 'utils'), { recursive: true });
+      
+      await presetCommand({
+        create: 'test-path-normalization',
+        fromFiles: [
+          'src\\**\\*.ts',     // Windows style pattern
+          'src/**/*.ts',       // POSIX style pattern (duplicate after normalization)
+          'test\\utils',       // Windows directory
+          'test/utils',        // POSIX directory (duplicate)
+        ],
+        path: testDir
+      });
+
+      const presetPath = path.join(presetsDir, 'test-path-normalization.patterns');
+      const content = await fs.promises.readFile(presetPath, 'utf8');
+      
+      // Should normalize and deduplicate patterns
+      const srcMatches = content.match(/src\/\*\*\/\*\.ts/g);
+      expect(srcMatches?.length).toBe(1);  // Only one after deduplication
+      
+      // Directories should also be deduplicated
+      const testMatches = content.match(/test\/utils\/\*\*/g);
+      expect(testMatches?.length).toBe(1);  // Only one after deduplication
+    });
+  });
 });

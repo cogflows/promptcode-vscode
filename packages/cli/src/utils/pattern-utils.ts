@@ -12,15 +12,42 @@ export function isGlobPattern(input: string): boolean {
   }
   
   // Check for common glob indicators
-  // Note: We're more selective to avoid false positives with filenames like file[1].ts
-  return input.includes('*') ||  // Wildcard
-         input.includes('?') ||  // Single character wildcard
-         /\{.*,.*\}/.test(input) || // Brace expansion like {a,b}
-         input.includes('?(') ||
-         input.includes('*(') ||
-         input.includes('+(') ||
-         input.includes('@(') ||
-         input.includes('!(');
+  if (input.includes('*') || input.includes('?')) {
+    return true;
+  }
+  
+  // Brace expansion: {a,b,c} or brace ranges: {1..3}
+  if (/\{.*,.*\}/.test(input) || /\{.*\.\..*\}/.test(input)) {
+    return true;
+  }
+  
+  // Extended glob patterns
+  if (input.includes('?(') || input.includes('*(') || 
+      input.includes('+(') || input.includes('@(') || 
+      input.includes('!(')) {
+    return true;
+  }
+  
+  // Conservative character class detection
+  // Only treat as pattern if it contains:
+  // - A range (e.g., [0-9], [a-z])
+  // - A POSIX class (e.g., [:alpha:])
+  // - Multiple characters (e.g., [abc], [!abc])
+  // This avoids false positives for literal filenames like file[1].ts
+  // Check ALL bracket pairs, not just the first one
+  const bracketRe = /(?<!\\)\[([^\]]+)\]/g;
+  let match;
+  while ((match = bracketRe.exec(input)) !== null) {
+    const content = match[1];
+    // Check if it's a character class pattern
+    if (content.includes('-') ||           // Range like [0-9]
+        /:\w+:/.test(content) ||           // POSIX class like [:alpha:]
+        content.length >= 2) {             // Multiple chars like [abc]
+      return true;
+    }
+  }
+  
+  return false;
 }
 
 /**
@@ -108,15 +135,20 @@ export function separatePatternsFromPaths(inputs: string[], basePath?: string): 
  * @throws Error if any pattern is unsafe
  */
 export function validatePatternSafety(patterns: string[]): void {
-  for (const pattern of patterns) {
+  for (const original of patterns) {
+    // Strip any leading negation(s) for safety checks
+    const pattern = original.replace(/^!+/, '');
+    
     // Check for directory traversal attempts
-    if (pattern.includes('..')) {
-      throw new Error(`Unsafe pattern with directory traversal: ${pattern}`);
+    // But allow .. in brace ranges like {1..3}
+    if (pattern.includes('../') || pattern.includes('..\\') || 
+        (pattern.includes('..') && !/{[^}]*\.\.[^}]*}/.test(pattern))) {
+      throw new Error(`Unsafe pattern with directory traversal: ${original}`);
     }
     
-    // Check for absolute paths (except on Windows where C:/ etc. might be valid)
-    if (path.isAbsolute(pattern) && !process.platform.startsWith('win')) {
-      throw new Error(`Unsafe absolute path pattern: ${pattern}. Patterns must be relative to the project root.`);
+    // Check for absolute paths (disallow on all platforms for consistency)
+    if (path.isAbsolute(pattern)) {
+      throw new Error(`Unsafe absolute path pattern: ${original}. Patterns must be relative to the project root.`);
     }
   }
 }

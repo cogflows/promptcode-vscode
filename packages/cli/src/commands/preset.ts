@@ -410,7 +410,10 @@ async function createPreset(presetName: string, projectPath: string, opts?: {
     metadata.source = `files optimized (${files.length} → ${metadata.optimized.stats.finalPatterns} patterns)`;
   }
 
-  const content = renderPresetFile(presetName, finalPatterns, metadata);
+  // Deduplicate patterns while preserving order (keep first occurrence)
+  const deduplicatedPatterns = Array.from(new Set(finalPatterns));
+  
+  const content = renderPresetFile(presetName, deduplicatedPatterns, metadata);
   await fs.promises.writeFile(presetPath, content);
   
   // Clear user feedback
@@ -717,7 +720,7 @@ export async function presetCommand(options: PresetOptions): Promise<void> {
     }
 
     if (options.list || (!options.create && !options.info && !options.delete && !options.edit && !options.search)) {
-      await listPresets(presetsDir, { json: options.json });
+      await listPresets(projectPath, { json: options.json });
     } else if (options.create) {
       await createPreset(options.create, projectPath, {
         fromFiles: normalizeFromFiles(options.fromFiles),
