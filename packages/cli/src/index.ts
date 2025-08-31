@@ -5,6 +5,9 @@
 import { finalizeUpdateIfNeeded } from './early-update';
 finalizeUpdateIfNeeded();
 
+// Clean up the re-exec marker to prevent accidental propagation to subprocesses
+delete process.env.PROMPTCODE_REEXEC_DEPTH;
+
 // Now load the rest of the CLI
 import { Command } from 'commander';
 import chalk from 'chalk';

@@ -49,9 +49,12 @@ function isLockStale(lockPath: string, maxAgeMs: number = 10 * 60 * 1000): boole
         process.kill(metadata.pid, 0); // Signal 0 = check if process exists
         // Process exists, lock is not stale
         return false;
-      } catch {
-        // Process doesn't exist, lock is stale
-        return true;
+      } catch (e: any) {
+        // ESRCH = no such process -> stale
+        // EPERM = process exists but we don't have permission -> not stale
+        if (e && e.code === 'ESRCH') return true;   // no such process -> stale
+        if (e && e.code === 'EPERM') return false;  // alive but not ours -> not stale
+        return false; // be conservative for unknown errors
       }
     } catch {
       // Can't read metadata, use age-based decision
@@ -123,7 +126,13 @@ function preflightBinary(binaryPath: string): boolean {
     const result = spawnSync(binaryPath, ['--version'], {
       timeout: 3000, // 3 second timeout
       encoding: 'utf8',
-      stdio: 'pipe'
+      stdio: 'pipe',
+      // Isolate environment to prevent recursive finalization
+      env: { 
+        ...process.env, 
+        PROMPTCODE_REEXEC_DEPTH: '0',
+        PROMPTCODE_SKIP_FINALIZE: '1' 
+      }
     });
     
     // Check if it executed successfully
@@ -241,21 +250,16 @@ export function finalizeUpdateIfNeeded(): void {
     }
 
     try {
-      // Preflight the staged binary BEFORE swap
-      if (!preflightBinary(staged)) {
-        console.error(chalk.red('[promptcode] Staged binary failed preflight check, aborting update'));
-        return;
-      }
-
       const curStat = fs.statSync(realBin);
 
-      // Ensure staged binary has correct permissions
+      // Ensure staged binary has correct permissions and attributes BEFORE preflight
       try {
         const stagedFileStat = fs.statSync(staged);
         // Preserve all permission bits (including suid/sgid if present)
         const targetMode = curStat.mode & 0o7777;
+        const stagedMode = stagedFileStat.mode & 0o7777;
         
-        if (stagedFileStat.mode !== targetMode) {
+        if (stagedMode !== targetMode) {
           fs.chmodSync(staged, targetMode);
         }
         
@@ -278,6 +282,12 @@ export function finalizeUpdateIfNeeded(): void {
         }
       } catch (err) {
         console.error(chalk.red('[promptcode] Failed to prepare staged update:'), err);
+        return;
+      }
+
+      // Preflight the staged binary AFTER preparation (permissions, quarantine removal)
+      if (!preflightBinary(staged)) {
+        console.error(chalk.red('[promptcode] Staged binary failed preflight check, aborting update'));
         return;
       }
 
@@ -314,7 +324,9 @@ export function finalizeUpdateIfNeeded(): void {
           stdio: 'pipe'
         });
         if (versionResult.stdout) {
-          newVersion = versionResult.stdout.trim();
+          const raw = versionResult.stdout.trim();
+          // Add 'v' prefix only if not already present
+          newVersion = /^v/i.test(raw) ? raw : `v${raw}`;
         }
       } catch {
         // Ignore version extraction errors
@@ -342,7 +354,7 @@ export function finalizeUpdateIfNeeded(): void {
         signals.forEach(sig => process.on(sig, noop));
 
         // Print update message before re-exec
-        console.error(chalk.green(`[promptcode] Applied pending update to v${newVersion}; restarting...`));
+        console.error(chalk.green(`[promptcode] Applied pending update to ${newVersion}; restarting...`));
 
         const res = spawnSync(realBin, process.argv.slice(2), {
           stdio: 'inherit',
