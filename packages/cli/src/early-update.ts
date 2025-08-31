@@ -135,21 +135,42 @@ export function finalizeUpdateIfNeeded(): void {
           const baseName = path.basename(realBin);
           const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
           
+          if (process.env.DEBUG?.includes('promptcode')) {
+            console.error(`[promptcode] Checking for old backups in ${dir}...`);
+          }
+          
+          let cleanedCount = 0;
+          let failedCount = 0;
+          
           fs.readdirSync(dir).forEach(file => {
             if (file.startsWith(`${baseName}.bak.`) && file !== path.basename(backup)) {
               const fullPath = path.join(dir, file);
               try {
                 const stat = fs.statSync(fullPath);
                 if (stat.mtimeMs < oneDayAgo) {
+                  const ageInDays = Math.floor((Date.now() - stat.mtimeMs) / (24 * 60 * 60 * 1000));
+                  if (process.env.DEBUG?.includes('promptcode')) {
+                    console.error(`[promptcode] Deleting old backup: ${file} (${ageInDays} days old)`);
+                  }
                   fs.unlinkSync(fullPath);
+                  cleanedCount++;
                 }
-              } catch {
-                // Ignore cleanup errors
+              } catch (err) {
+                failedCount++;
+                if (process.env.DEBUG?.includes('promptcode')) {
+                  console.error(`[promptcode] Failed to delete ${file}:`, err);
+                }
               }
             }
           });
-        } catch {
-          // Ignore backup cleanup errors
+          
+          if (process.env.DEBUG?.includes('promptcode') && (cleanedCount > 0 || failedCount > 0)) {
+            console.error(`[promptcode] Backup cleanup: ${cleanedCount} deleted, ${failedCount} failed`);
+          }
+        } catch (err) {
+          if (process.env.DEBUG?.includes('promptcode')) {
+            console.error('[promptcode] Backup cleanup error:', err);
+          }
         }
 
         // Child exited: propagate exact status/signal
