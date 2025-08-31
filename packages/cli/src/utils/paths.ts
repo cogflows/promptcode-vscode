@@ -104,7 +104,10 @@ export function getClaudeTemplatesDir(): string {
         }
         
         if (needsWrite) {
-          fsSync.writeFileSync(filePath, content, 'utf8');
+          // Use atomic write to prevent partial files
+          const tempPath = `${filePath}.tmp.${process.pid}`;
+          fsSync.writeFileSync(tempPath, content, 'utf8');
+          fsSync.renameSync(tempPath, filePath);
         }
       }
       
@@ -118,7 +121,10 @@ export function getClaudeTemplatesDir(): string {
           
           const templates = getEmbeddedTemplates();
           for (const [filename, content] of Object.entries(templates)) {
-            fsSync.writeFileSync(path.join(tempDir, filename), content, 'utf8');
+            const filePath = path.join(tempDir, filename);
+            const tempPath = `${filePath}.tmp.${process.pid}`;
+            fsSync.writeFileSync(tempPath, content, 'utf8');
+            fsSync.renameSync(tempPath, filePath);
           }
         }
         return tempDir;
@@ -395,7 +401,10 @@ export function getCursorTemplatesDir(): string {
         }
         
         if (needsWrite) {
-          fsSync.writeFileSync(filePath, content, 'utf8');
+          // Use atomic write to prevent partial files
+          const tempPath = `${filePath}.tmp.${process.pid}`;
+          fsSync.writeFileSync(tempPath, content, 'utf8');
+          fsSync.renameSync(tempPath, filePath);
         }
       }
       
@@ -409,7 +418,10 @@ export function getCursorTemplatesDir(): string {
           
           const templates = getEmbeddedTemplates();
           for (const [filename, content] of Object.entries(templates)) {
-            fsSync.writeFileSync(path.join(tempDir, filename), content, 'utf8');
+            const filePath = path.join(tempDir, filename);
+            const tempPath = `${filePath}.tmp.${process.pid}`;
+            fsSync.writeFileSync(tempPath, content, 'utf8');
+            fsSync.renameSync(tempPath, filePath);
           }
         }
         return tempDir;

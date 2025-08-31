@@ -144,13 +144,6 @@ normalize_version() {
 detect_platform() {
   local os arch
 
-  # Block Git Bash/MSYS/Cygwin on Windows
-  case "$(uname -s)" in
-    MINGW*|CYGWIN*|MSYS*)
-      print_error "Windows shell detected. Please use PowerShell to install:\n  irm https://raw.githubusercontent.com/cogflows/promptcode-vscode/main/packages/cli/scripts/install.ps1 | iex"
-      ;;
-  esac
-
   # Detect OS
   case "$(uname -s)" in
     Linux*)  os="linux" ;;
@@ -459,6 +452,14 @@ main() {
     uninstall
     exit 0
   fi
+
+  # Block Git Bash/MSYS/Cygwin on Windows early
+  case "$(uname -s)" in
+    MINGW*|CYGWIN*|MSYS*)
+      print_error "Windows shell detected. Please use PowerShell to install:\n  irm https://raw.githubusercontent.com/cogflows/promptcode-vscode/main/packages/cli/scripts/install.ps1 | iex"
+      exit 1
+      ;;
+  esac
 
   # Detect platform
   local platform=$(detect_platform)

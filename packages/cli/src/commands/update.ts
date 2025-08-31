@@ -7,9 +7,12 @@ import { promisify } from 'util';
 import { spinner } from '../utils/spinner';
 import { BUILD_VERSION } from '../version';
 import { integrateCommand } from './integrate';
+import { getAssetName } from '../utils/assets';
+import { isInteractive } from '../utils/environment';
 
 const execAsync = promisify(exec);
 const REPO = 'cogflows/promptcode-vscode';
+const BASE_URL = process.env.PROMPTCODE_BASE_URL || 'https://api.github.com';
 
 interface GitHubRelease {
   tag_name: string;
@@ -24,7 +27,7 @@ async function fetchLatestRelease(): Promise<GitHubRelease | null> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000); // 10 second timeout
     
-    const response = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
+    const response = await fetch(`${BASE_URL}/repos/${REPO}/releases/latest`, {
       signal: controller.signal,
       headers: {
         'User-Agent': `promptcode-cli/${BUILD_VERSION}`,
@@ -44,26 +47,8 @@ async function fetchLatestRelease(): Promise<GitHubRelease | null> {
 }
 
 function getPlatformBinaryName(): string {
-  const platform = process.platform;
-  const arch = process.arch;
-  
-  let os: string;
-  switch (platform) {
-    case 'linux': os = 'linux'; break;
-    case 'darwin': os = 'darwin'; break;
-    case 'win32': os = 'windows'; break;
-    default: throw new Error(`Unsupported platform: ${platform}`);
-  }
-  
-  let archName: string;
-  switch (arch) {
-    case 'x64': archName = 'x64'; break;
-    case 'arm64': archName = 'arm64'; break;
-    default: throw new Error(`Unsupported architecture: ${arch}`);
-  }
-  
-  const binaryName = `promptcode-${os}-${archName}`;
-  return platform === 'win32' ? `${binaryName}.exe` : binaryName;
+  // Use centralized asset naming
+  return getAssetName(process.platform as any, process.arch);
 }
 
 async function downloadFile(url: string, dest: string): Promise<void> {
@@ -182,6 +167,13 @@ async function replaceBinary(newBinaryPath: string): Promise<void> {
   const currentBinary = process.execPath;
   const dir = path.dirname(currentBinary);
   const stagedPath = path.join(dir, path.basename(currentBinary) + '.new');
+  
+  // Check if directory is writable before attempting update
+  try {
+    await fs.access(dir, fs.constants.W_OK);
+  } catch (error) {
+    throw new Error(`Update directory is not writable: ${dir}\nPlease check permissions or run with appropriate privileges.`);
+  }
   
   // Always stage in the same directory to avoid cross-device moves
   await fs.copyFile(newBinaryPath, stagedPath);
@@ -338,13 +330,15 @@ export const updateCommand = program
       spin.succeed(`Successfully updated to version ${latestVersion}`);
       console.log(chalk.green('\n✨ Update complete! The new version will be used on the next run.'));
       
-      // Check for integration updates
-      console.log(chalk.cyan('\nChecking for integration updates...'));
-      await integrateCommand({ 
-        autoDetect: true, 
-        path: process.cwd(),
-        skipModified: true
-      });
+      // Check for integration updates only in interactive mode
+      if (isInteractive()) {
+        console.log(chalk.cyan('\nChecking for integration updates...'));
+        await integrateCommand({ 
+          autoDetect: true, 
+          path: process.cwd(),
+          skipModified: true
+        });
+      }
       
     } catch (error) {
       spin.fail(`Update failed: ${error instanceof Error ? error.message : String(error)}`);

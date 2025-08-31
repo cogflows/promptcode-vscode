@@ -208,12 +208,34 @@ function cleanupOldBackups(dir: string, baseName: string, currentBackup: string 
  */
 export function finalizeUpdateIfNeeded(): void {
   try {
+    // Early exit if finalization is explicitly disabled or in test mode
+    if (process.env.PROMPTCODE_SKIP_FINALIZE === '1' || process.env.PROMPTCODE_TEST === '1') {
+      return;
+    }
+
+    // Skip on Windows - needs different approach
+    if (process.platform === 'win32') {
+      if (process.env.DEBUG?.includes('promptcode')) {
+        console.error('[promptcode] Update finalization not supported on Windows yet');
+      }
+      return;
+    }
+
     // Resolve the real target (handles symlinks)
     const realBin = fs.realpathSync(process.execPath);
     const staged = `${realBin}.new`;
     
     // Check if there's a pending update
     if (!fs.existsSync(staged)) return;
+
+    // Skip if not actually our binary
+    const baseName = path.basename(realBin);
+    if (!/^promptcode([-.]|$)/.test(baseName)) {
+      if (process.env.DEBUG?.includes('promptcode')) {
+        console.error(`[promptcode] Skipping update for non-promptcode binary: ${baseName}`);
+      }
+      return;
+    }
     
     // Check if this is a managed installation we shouldn't touch
     const managedPrefixes = [
@@ -231,10 +253,47 @@ export function finalizeUpdateIfNeeded(): void {
       return;
     }
 
+    // Get current binary stats early
+    const curStat = fs.statSync(realBin);
+
+    // NEVER update suid/sgid binaries
+    if ((curStat.mode & 0o6000) !== 0) {
+      if (process.env.DEBUG?.includes('promptcode')) {
+        console.error('[promptcode] Refusing to update setuid/setgid binary');
+      }
+      return;
+    }
+
+    // Check directory safety
+    const dir = path.dirname(realBin);
+    const dirStat = fs.statSync(dir);
+    if ((dirStat.mode & 0o022) !== 0) {
+      if (process.env.DEBUG?.includes('promptcode')) {
+        console.error('[promptcode] Refusing to update in group/world-writable directory');
+      }
+      return;
+    }
+
     // Ensure staged is a regular file (not a symlink)
     const stagedStat = fs.lstatSync(staged);
     if (!stagedStat.isFile()) {
       console.error(chalk.red('[promptcode] Staged update is not a regular file, skipping'));
+      return;
+    }
+
+    // Security: Ensure ownership matches
+    if (stagedStat.uid !== curStat.uid || stagedStat.gid !== curStat.gid) {
+      if (process.env.DEBUG?.includes('promptcode')) {
+        console.error('[promptcode] Staged file ownership mismatch, skipping update');
+      }
+      return;
+    }
+
+    // Security: Ensure no hard links
+    if (stagedStat.nlink > 1) {
+      if (process.env.DEBUG?.includes('promptcode')) {
+        console.error('[promptcode] Staged file has hard links, skipping update');
+      }
       return;
     }
 
@@ -250,7 +309,6 @@ export function finalizeUpdateIfNeeded(): void {
     }
 
     try {
-      const curStat = fs.statSync(realBin);
 
       // Ensure staged binary has correct permissions and attributes BEFORE preflight
       try {
@@ -371,6 +429,9 @@ export function finalizeUpdateIfNeeded(): void {
             console.error(chalk.yellow('[promptcode] Re-exec failed; rolled back to previous version.'));
           } catch {
             console.error(chalk.red('[promptcode] Update applied, but re-exec failed; continuing with running process.'));
+            if (!process.env.DEBUG?.includes('promptcode')) {
+              console.error(chalk.yellow('Rerun with DEBUG=promptcode for details.'));
+            }
           }
           return;
         }
