@@ -122,6 +122,8 @@ jobs:
           }
           
           # Run installer (with -Insecure for CI testing, since checksum might fail)
+          # Need to set PROMPTCODE_ALLOW_INSECURE=1 for CI as per recent security changes
+          $env:PROMPTCODE_ALLOW_INSECURE = "1"
           try {
             & packages/cli/scripts/install.ps1 -Insecure
           } catch {
