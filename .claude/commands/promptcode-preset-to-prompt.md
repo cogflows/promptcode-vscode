@@ -31,17 +31,18 @@ Generate prompt file from promptcode preset: $ARGUMENTS
 
 4. Generate the prompt file:
    - If instructions are present, pass them using --instructions (alias -i)
-   - IMPORTANT: Shell-escape the instructions:
-     - Always wrap the final string in single quotes
-     - Replace any single quote ' inside the instructions with '\'' (close-quote, escaped quote, reopen-quote)
+   - IMPORTANT: Shell-escape ALL parameters:
+     - Always wrap ALL strings (preset_name, output_path, instructions) in single quotes
+     - Replace any single quote ' inside ANY parameter with '\'' (close-quote, escaped quote, reopen-quote)
+     - This prevents command injection and ensures security
    - Command forms:
 
      ```bash
      # Without instructions:
-     promptcode generate --preset "{preset_name}" --output "{output_path}"
+     promptcode generate --preset '{preset_name}' --output '{output_path}'
      
-     # With instructions (INSTR_ESC = instructions with ' replaced by '\''):
-     promptcode generate --preset "{preset_name}" --output "{output_path}" --instructions '{INSTR_ESC}'
+     # With instructions (all values properly escaped with ' replaced by '\''):
+     promptcode generate --preset '{preset_name}' --output '{output_path}' --instructions '{INSTR_ESC}'
      ```
 
 5. Report results:

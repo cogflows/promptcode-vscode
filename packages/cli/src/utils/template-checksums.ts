@@ -5,7 +5,7 @@
 
 export const TEMPLATE_CHECKSUMS: Record<string, string[]> = {
   "promptcode-preset-to-prompt.md": [
-    "021936d691335b4dc5f92d11b7da8432421b9e7b397fc4dae3bc9c943a1702f8",
+    "ae7771b40df3a7c344d92583933ca5a787e62144f95717411fbed39b5bb25fe2",
     "dc46c41019c808d95fddfa5c6149ce01b117be03ac0b277fc50f61c92c5dedda"
   ],
   "promptcode-preset-list.md": [
