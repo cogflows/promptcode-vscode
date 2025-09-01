@@ -179,13 +179,13 @@ fetch_latest_version() {
   local url="https://api.github.com/repos/${REPO}/releases/latest"
   local version
   
-  # Try GitHub API first
-  version=$(curl -fsSL "$url" 2>/dev/null | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/') || true
+  # Try GitHub API first (with timeout to prevent hanging in CI)
+  version=$(curl -fsSL --connect-timeout 5 --max-time 10 "$url" 2>/dev/null | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/') || true
   
   # Fallback to parsing releases page if API fails (rate limit)
   if [ -z "$version" ]; then
     print_info "GitHub API unavailable, trying alternative method..."
-    version=$(curl -fsSLI -o /dev/null -w '%{url_effective}' \
+    version=$(curl -fsSLI --connect-timeout 5 --max-time 10 -o /dev/null -w '%{url_effective}' \
               "https://github.com/${REPO}/releases/latest" 2>/dev/null | \
               sed 's#.*/tag/##' || true)
   fi
