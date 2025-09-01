@@ -414,7 +414,22 @@ export function finalizeUpdateIfNeeded(): void {
         // Print update message before re-exec
         console.error(chalk.green(`[promptcode] Applied pending update to ${newVersion}; restarting...`));
 
-        const res = spawnSync(realBin, process.argv.slice(1), {
+        // Intelligently determine where user args start
+        // Different runtimes have different argv shapes:
+        // - Node script: [node, script, ...userArgs]
+        // - Bun script: [bun, script, ...userArgs]
+        // - Compiled binary: [binary, ...userArgs] or [binary, internalScript, ...userArgs]
+        const argv = process.argv;
+        const maybeScript = argv[1] || '';
+        const looksLikePath = maybeScript === realBin
+          || path.resolve(maybeScript) === realBin
+          || maybeScript.includes('/')
+          || /\.m?js$/.test(maybeScript)
+          || path.basename(maybeScript).startsWith('promptcode');
+
+        const userArgs = looksLikePath ? argv.slice(2) : argv.slice(1);
+
+        const res = spawnSync(realBin, userArgs, {
           stdio: 'inherit',
           env,
         });
