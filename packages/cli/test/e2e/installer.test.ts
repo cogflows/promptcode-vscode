@@ -131,7 +131,8 @@ process.exit(0);
           PATH: `${testHome}/.local/bin:${process.env.PATH}`
         },
         encoding: 'utf8',
-        input: '' // No stdin input
+        input: '', // No stdin input
+        timeout: 3000 // 3 second timeout to prevent hanging
       });
       
       // Should complete without hanging
