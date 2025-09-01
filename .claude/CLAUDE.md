@@ -67,6 +67,9 @@ When asked to analyze specific features:
 # Generate prompt with specific concern
 promptcode generate src/**/*.ts --instructions "Find performance bottlenecks"
 
+# Generate preset with instructions
+promptcode generate -p api-endpoints --instructions "Review for security issues"
+
 # Or use expert mode for direct AI analysis
 promptcode expert "Review this code for security issues" src/api/**/*.ts
 ```

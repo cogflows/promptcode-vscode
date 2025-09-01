@@ -164,7 +164,7 @@ AI-ready code analysis via presets and expert consultations.
 - `/promptcode-preset-list` - List available presets
 - `/promptcode-preset-info <name>` - Show preset details & tokens
 - `/promptcode-preset-create <description>` - Create preset from description
-- `/promptcode-preset-to-prompt <preset>` - Export preset to file
+- `/promptcode-preset-to-prompt <preset> [-- instructions]` - Export preset to file with optional instructions
 - `/promptcode-ask-expert <question>` - AI consultation with code context
 
 ## Workflow Examples
@@ -173,21 +173,25 @@ AI-ready code analysis via presets and expert consultations.
 ```bash
 /promptcode-preset-list                    # Find existing presets
 /promptcode-preset-create auth system      # Or create focused preset
+/promptcode-preset-to-prompt auth -- Review for security issues  # Export with instructions
 /promptcode-ask-expert Why is login slow?  # Consult with context
 ```
 
 ### Direct CLI Usage
+
 ```bash
 promptcode expert "Review this" --preset api --yes   # After cost approval
 promptcode generate -f "src/**/*.ts" -o prompt.txt   # Export for external use
 ```
 
 ## Cost Approval Protocol
+
 1. CLI estimates cost (threshold: $0.50)
 2. CC asks user ONCE for approval
 3. CC re-runs with `--yes` flag
 
 ## API Keys Required
+
 ```bash
 export OPENAI_API_KEY=sk-...     # GPT/O3 models
 export ANTHROPIC_API_KEY=sk-...  # Claude models
