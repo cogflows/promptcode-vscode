@@ -1,0 +1,22 @@
+# cli-testing-review preset
+# Generated: 2025-08-31T14:24:22.759Z
+# Source: mixed (2 patterns preserved, 9 files → 8 patterns)
+# Patterns preserved as provided: 2
+# Optimization: balanced
+# Optimized: 8 files → 8 patterns (saved 0)
+# Applied rules:
+#   - dir-extension: packages/cli/scripts *.ps1
+
+packages/cli/test/**/*.test.ts
+packages/cli/test/**/*.ts
+packages/cli/scripts/*.ps1
+packages/cli/package.json
+packages/cli/scripts/install.sh
+packages/cli/src/commands/uninstall.ts
+packages/cli/src/commands/update.ts
+packages/cli/src/early-update.ts
+packages/cli/src/utils/paths.ts
+packages/cli/src/utils/update-checker.ts
+!**/node_modules/**
+!**/dist/**
+!**/build/**

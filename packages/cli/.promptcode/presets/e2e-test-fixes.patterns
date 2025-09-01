@@ -1,0 +1,26 @@
+# e2e-test-fixes preset
+# E2E test files and related code for fixing test failures
+
+# E2E test files
+test/e2e/early-finalizer.test.ts
+test/e2e/installer.test.ts
+test/e2e/self-update.test.ts
+
+# Test helpers
+test/helpers/cli-runner.ts
+
+# Core implementation files
+src/early-update.ts
+src/commands/update.ts
+src/utils/update-checker.ts
+src/utils/environment.ts
+src/utils/paths.ts
+
+# Installer scripts
+scripts/install.sh
+scripts/install.ps1
+
+# Exclude common patterns
+!**/node_modules/**
+!**/dist/**
+!**/build/**

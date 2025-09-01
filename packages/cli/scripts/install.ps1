@@ -67,13 +67,23 @@ function Write-Error($message) {
 
 # Detect architecture
 function Get-Architecture {
-    $arch = $env:PROCESSOR_ARCHITECTURE
-    if ($arch -eq "ARM64") {
-        return "arm64"
-    } elseif ($arch -eq "AMD64") {
-        return "x64"
+    # Check PROCESSOR_ARCHITEW6432 first (for WOW64 scenarios)
+    $arch = if ($env:PROCESSOR_ARCHITEW6432) {
+        $env:PROCESSOR_ARCHITEW6432
     } else {
-        Write-Error "Unsupported Windows architecture: $arch"
+        $env:PROCESSOR_ARCHITECTURE
+    }
+    
+    # Map to our binary naming convention
+    switch ($arch) {
+        "ARM64" { return "arm64" }
+        "AMD64" { return "x64" }
+        "x86_64" { return "x64" }
+        "x86" { 
+            Write-Error "32-bit Windows (x86) is not supported. Please use a 64-bit system."
+            exit 1
+        }
+        default { Write-Error "Unsupported Windows architecture: $arch"; exit 1 }
     }
 }
 
@@ -150,12 +160,16 @@ function Download-Binary($version, $arch) {
                 Write-Warning "Installing without verification is risky and could compromise your system."
                 
                 if (Test-NonInteractive) {
-                    # In CI/non-interactive mode with -Insecure flag, allow bypass for testing
-                    if ($env:CI -eq "true") {
-                        Write-Warning "CI environment detected - proceeding with -Insecure flag for testing purposes."
+                    # In CI/non-interactive mode with -Insecure flag, require explicit environment variable
+                    if ($env:CI -eq "true" -and $env:PROMPTCODE_ALLOW_INSECURE -eq "1") {
+                        Write-Warning "CI environment with PROMPTCODE_ALLOW_INSECURE=1 - proceeding for testing purposes only."
                     } else {
                         Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
-                        Write-Error "Cannot proceed with -Insecure in non-interactive mode. Please verify checksums are available or run interactively."
+                        if ($env:CI -eq "true") {
+                            Write-Error "Checksum bypass in CI requires both -Insecure flag AND PROMPTCODE_ALLOW_INSECURE=1 environment variable."
+                        } else {
+                            Write-Error "Cannot proceed with -Insecure in non-interactive mode. Please verify checksums are available or run interactively."
+                        }
                     }
                 } else {
                     # Interactive mode - prompt for confirmation

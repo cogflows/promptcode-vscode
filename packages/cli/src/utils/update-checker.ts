@@ -7,6 +7,7 @@ import { BUILD_VERSION } from '../version';
 const REPO = 'cogflows/promptcode-vscode';
 const UPDATE_CHECK_INTERVAL = 1000 * 60 * 60 * 24; // 24 hours
 const UPDATE_CHECK_FILE = 'update-check.json';
+const BASE_URL = process.env.PROMPTCODE_BASE_URL || 'https://api.github.com';
 
 interface UpdateCache {
   lastCheck: number;
@@ -22,7 +23,7 @@ async function fetchLatestVersion(etag?: string): Promise<{ version: string | nu
     }
     
     const response = await fetch(
-      `https://api.github.com/repos/${REPO}/releases/latest`,
+      `${BASE_URL}/repos/${REPO}/releases/latest`,
       { headers }
     );
     
@@ -168,14 +169,18 @@ async function performAsyncUpdateCheck(): Promise<void> {
 
 // Store the update message to show on exit
 let pendingUpdateMessage: string | null = null;
+// Track if we've registered the exit handlers
+let exitHandlersRegistered = false;
 
 function registerExitMessage(latestVersion: string): void {
   pendingUpdateMessage = latestVersion;
   
   // Register exit handler if not already registered
-  if (!process.listenerCount('beforeExit')) {
+  // Use internal boolean instead of listenerCount to avoid conflicts with other modules
+  if (!exitHandlersRegistered) {
     process.on('beforeExit', showPendingUpdateMessage);
     process.on('exit', showPendingUpdateMessage);
+    exitHandlersRegistered = true;
   }
 }
 
