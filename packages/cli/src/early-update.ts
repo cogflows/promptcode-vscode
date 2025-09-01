@@ -414,7 +414,7 @@ export function finalizeUpdateIfNeeded(): void {
         // Print update message before re-exec
         console.error(chalk.green(`[promptcode] Applied pending update to ${newVersion}; restarting...`));
 
-        const res = spawnSync(realBin, process.argv.slice(2), {
+        const res = spawnSync(realBin, process.argv.slice(1), {
           stdio: 'inherit',
           env,
         });

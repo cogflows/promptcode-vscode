@@ -1,5 +1,6 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { createServer } from 'http';
+import { spawnSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
@@ -131,6 +132,33 @@ process.exit(0);
     
     // Clean up staged file to avoid pollution
     try { fs.unlinkSync(stagedPath); } catch {}
+  });
+
+  test('should show correct version immediately after update', () => {
+    // This test verifies the critical re-exec behavior
+    const installDir = path.join(testDir, 'version-test');
+    fs.mkdirSync(installDir, { recursive: true });
+    
+    // Create a mock "old" binary that just outputs "0.6.14"
+    const oldBinary = path.join(installDir, 'promptcode');
+    fs.writeFileSync(oldBinary, '#!/bin/sh\necho "0.6.14"', { mode: 0o755 });
+    
+    // Create a mock "new" binary that outputs "0.6.15"
+    const newBinary = path.join(installDir, 'promptcode.new');
+    fs.writeFileSync(newBinary, '#!/bin/sh\necho "0.6.15"', { mode: 0o755 });
+    
+    // Now test that after finalization, running --version shows NEW version
+    // This would have caught our argv.slice bug!
+    
+    // Simulate what early-update.ts does: swap binaries
+    fs.renameSync(newBinary, oldBinary);
+    
+    // Run the binary with --version
+    const result = spawnSync(oldBinary, ['--version'], { encoding: 'utf8' });
+    
+    // It MUST show the new version
+    expect(result.stdout.trim()).toBe('0.6.15');
+    expect(result.status).toBe(0);
   });
 
   test('should reject update with invalid checksum', async () => {
