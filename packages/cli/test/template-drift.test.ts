@@ -25,7 +25,7 @@ describe('template drift detection', () => {
     ]),
     'generate': new Set([
       '-p', '--preset', '-f', '--files', '-l', '--list', '-t', '--template',
-      '-i', '--instructions', '-o', '--out', '--output', '--json',
+      '-i', '--instructions', '--instructions-file', '-o', '--out', '--output', '--json',
       '--ignore-gitignore', '--path', '--save-preset', '--dry-run',
       '--token-warning', '--estimate-cost', '--cost-threshold', '--model',
       '-y', '--yes', '-h', '--help'
