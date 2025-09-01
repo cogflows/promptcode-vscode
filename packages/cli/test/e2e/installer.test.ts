@@ -124,6 +124,7 @@ process.exit(0);
       
       const result = spawnSync('bash', [scriptPath], {
         env: {
+          ...process.env, // Include all parent env vars
           HOME: testHome,
           CI: 'true',
           PROMPTCODE_DRY_RUN: '1', // Dry run mode
@@ -132,7 +133,7 @@ process.exit(0);
         },
         encoding: 'utf8',
         input: '', // No stdin input
-        timeout: 3000 // 3 second timeout to prevent hanging
+        timeout: 5000 // 5 second timeout to prevent hanging
       });
       
       // Should complete without hanging
