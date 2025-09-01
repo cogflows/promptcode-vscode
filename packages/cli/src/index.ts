@@ -94,12 +94,14 @@ Examples:
   $ promptcode generate -p backend           # Use preset
   $ promptcode generate -t code-review       # Apply template
   $ promptcode generate -p api -o prompt.md  # Save to file
-  $ promptcode generate -p api -i "Review for security issues"  # Inline instructions`)
+  $ promptcode generate -p api -i "Review for security issues"  # Inline instructions
+  $ promptcode generate -p api --instructions-file review.md    # From file`)
   .option('-p, --preset <name>', 'use a preset (shorthand for -l)')
   .option('-f, --files <patterns...>', 'file glob patterns')
   .option('-l, --list <file>', 'file list or preset name (deprecated, use -p)')
   .option('-t, --template <name>', 'apply a template')
   .option('-i, --instructions <text|file>', 'instructions text or path to instructions file')
+  .option('--instructions-file <file>', 'load instructions from file')
   .option('-o, --out <file>', 'output file (default: stdout)')
   .option('--output <file>', 'output file (alias for --out)')
   .option('--json', 'output JSON with metadata')

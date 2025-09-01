@@ -339,7 +339,10 @@
       "Bash(\"packages/cli/test/e2e/early-finalizer.test.ts\" )",
       "Bash(\"packages/cli/src/commands/update.ts\" )",
       "Bash(\"packages/cli/src/utils/environment.ts\" )",
-      "Bash(\"packages/cli/package.json\")"
+      "Bash(\"packages/cli/package.json\")",
+      "Bash(curl:*)",
+      "Bash(./promptcode --version)",
+      "Bash(./promptcode-old --version)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits",
