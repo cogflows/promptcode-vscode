@@ -30,7 +30,9 @@ Generate prompt file from promptcode preset: $ARGUMENTS
    - Default output path: `/tmp/promptcode-{preset-name}-{timestamp}.txt` where timestamp is YYYYMMDD-HHMMSS
 
 4. Generate the prompt file:
-   - If instructions are present, pass them using --instructions (alias -i)
+   - If instructions are present, determine how to pass them:
+     - For very long instructions (>500 chars): Save to temp file and use --instructions-file
+     - For shorter instructions: Pass directly using --instructions (alias -i)
    - IMPORTANT: Shell-escape ALL parameters:
      - Always wrap ALL strings (preset_name, output_path, instructions) in single quotes
      - Replace any single quote ' inside ANY parameter with '\'' (close-quote, escaped quote, reopen-quote)
@@ -41,8 +43,13 @@ Generate prompt file from promptcode preset: $ARGUMENTS
      # Without instructions:
      promptcode generate --preset '{preset_name}' --output '{output_path}'
      
-     # With instructions (all values properly escaped with ' replaced by '\''):
+     # With short instructions (all values properly escaped with ' replaced by '\''):
      promptcode generate --preset '{preset_name}' --output '{output_path}' --instructions '{INSTR_ESC}'
+     
+     # With long instructions (saved to temp file):
+     INSTR_FILE="${TMP%/}/instructions-$(date +%Y%m%d-%H%M%S)-$$.txt"
+     echo '{instructions_content}' > "$INSTR_FILE"
+     promptcode generate --preset '{preset_name}' --output '{output_path}' --instructions-file "$INSTR_FILE"
      ```
 
 5. Report results:

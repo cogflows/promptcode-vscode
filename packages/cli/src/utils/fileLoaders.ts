@@ -82,14 +82,24 @@ export async function loadTemplate(templateName: string, templateDir?: string): 
 
 /**
  * Load instructions from options (inline text, file, or template)
- * Supports three modes:
- * 1. Inline text: Direct instructions as a string
- * 2. File path: Path to a file containing instructions (if file exists)
- * 3. Template: Named template from templates directory
+ * Supports four modes:
+ * 1. Explicit file: --instructions-file path/to/file
+ * 2. Inline text: Direct instructions as a string
+ * 3. Legacy file path: Path to a file containing instructions (if file exists)
+ * 4. Template: Named template from templates directory
  */
-export async function loadInstructionsFromOptions(options: { instructions?: string; template?: string }): Promise<string> {
+export async function loadInstructionsFromOptions(options: { instructions?: string; instructionsFile?: string; template?: string }): Promise<string> {
+  // Priority 1: --instructions-file (explicit file path)
+  if (options.instructionsFile) {
+    if (!fs.existsSync(options.instructionsFile)) {
+      throw new Error(`Instructions file not found: ${options.instructionsFile}`);
+    }
+    return loadInstructions(options.instructionsFile);
+  }
+  
+  // Priority 2: --instructions (inline or legacy file path)
   if (options.instructions) {
-    // Check if it's a file path that exists
+    // Check if it's a file path that exists (legacy behavior)
     try {
       if (fs.existsSync(options.instructions)) {
         // It's a file, load it
@@ -103,6 +113,7 @@ export async function loadInstructionsFromOptions(options: { instructions?: stri
     return options.instructions;
   }
   
+  // Priority 3: --template
   if (options.template) {
     const templateDir = path.join(getConfigDir(), 'prompts');
     return loadTemplate(options.template, templateDir);

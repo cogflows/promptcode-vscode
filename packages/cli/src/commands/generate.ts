@@ -32,6 +32,7 @@ export interface GenerateOptions {
   files?: string[];
   ignoreGitignore?: boolean;
   instructions?: string;
+  instructionsFile?: string;  // Load instructions from file
   template?: string;
   out?: string;
   output?: string;  // Alias for --out

@@ -70,6 +70,9 @@ promptcode generate src/**/*.ts --instructions "Find performance bottlenecks"
 # Generate preset with instructions
 promptcode generate -p api-endpoints --instructions "Review for security issues"
 
+# Generate with instructions from file (useful for long instructions)
+promptcode generate -p api-endpoints --instructions-file review-checklist.md
+
 # Or use expert mode for direct AI analysis
 promptcode expert "Review this code for security issues" src/api/**/*.ts
 ```
