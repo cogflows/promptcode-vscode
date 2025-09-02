@@ -61,9 +61,19 @@ function validatePatternsWithinProject(patterns: string[]): void {
 async function loadPreset(projectPath: string, presetName: string): Promise<string[]> {
   // Get preset path using helper
   const presetPath = getPresetPath(projectPath, presetName);
+  const presetDir = path.dirname(presetPath);
     
   if (!fs.existsSync(presetPath)) {
-    throw new Error(`Preset not found: ${presetName}\nCreate it with: promptcode preset --create ${presetName}`);
+    // Check if the directory exists to provide better error message
+    if (!fs.existsSync(presetDir)) {
+      throw new Error(
+        `Preset directory not found: ${presetDir}\n` +
+        `Try one of these:\n` +
+        `  • Run: promptcode integrate --auto-detect (if you use Claude/Cursor)\n` +
+        `  • Create it with: promptcode preset create ${presetName}`
+      );
+    }
+    throw new Error(`Preset not found: ${presetName}\nCreate it with: promptcode preset create ${presetName}`);
   }
   const content = await fs.promises.readFile(presetPath, 'utf8');
   const patterns = content
@@ -527,8 +537,8 @@ export async function expertCommand(question: string | undefined, options: Exper
     // Parse cost threshold once and reuse
     const envThreshold = process.env.PROMPTCODE_COST_THRESHOLD;
     const resolvedCostThreshold = (() => {
-      if (options.costThreshold !== undefined) return options.costThreshold;
-      if (!envThreshold) return 0.50;
+      if (options.costThreshold !== undefined) {return options.costThreshold;}
+      if (!envThreshold) {return 0.50;}
       const parsed = parseFloat(envThreshold);
       if (!Number.isFinite(parsed) || parsed < 0) {
         console.error(chalk.yellow(`Warning: Invalid PROMPTCODE_COST_THRESHOLD value "${envThreshold}". Using default $0.50.`));
@@ -631,7 +641,7 @@ export async function expertCommand(question: string | undefined, options: Exper
         exitWithCode(EXIT_CODES.APPROVAL_REQUIRED);
       }
       
-      console.log(chalk.yellow(`\n⚠️  This consultation will cost approximately $${estimatedTotalCost.toFixed(2)}`))
+      console.log(chalk.yellow(`\n⚠️  This consultation will cost approximately $${estimatedTotalCost.toFixed(2)}`));
       
       const readline = await import('readline');
       const rl = readline.createInterface({

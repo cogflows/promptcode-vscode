@@ -342,7 +342,10 @@
       "Bash(\"packages/cli/package.json\")",
       "Bash(curl:*)",
       "Bash(./promptcode --version)",
-      "Bash(./promptcode-old --version)"
+      "Bash(./promptcode-old --version)",
+      "Read(/var/folders/03/g5gpxknx1jnfjjqtfd9kz0q00dwnyv/T/**)",
+      "Read(/var/folders/03/g5gpxknx1jnfjjqtfd9kz0q00dwnyv/T/**)",
+      "Read(/var/folders/03/g5gpxknx1jnfjjqtfd9kz0q00dwnyv/T/**)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits",

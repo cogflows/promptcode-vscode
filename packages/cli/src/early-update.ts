@@ -52,8 +52,8 @@ function isLockStale(lockPath: string, maxAgeMs: number = 10 * 60 * 1000): boole
       } catch (e: any) {
         // ESRCH = no such process -> stale
         // EPERM = process exists but we don't have permission -> not stale
-        if (e && e.code === 'ESRCH') return true;   // no such process -> stale
-        if (e && e.code === 'EPERM') return false;  // alive but not ours -> not stale
+        if (e && e.code === 'ESRCH') {return true;}   // no such process -> stale
+        if (e && e.code === 'EPERM') {return false;}  // alive but not ours -> not stale
         return false; // be conservative for unknown errors
       }
     } catch {
@@ -226,7 +226,7 @@ export function finalizeUpdateIfNeeded(): void {
     const staged = `${realBin}.new`;
     
     // Check if there's a pending update
-    if (!fs.existsSync(staged)) return;
+    if (!fs.existsSync(staged)) {return;}
 
     // Skip if not actually our binary
     const baseName = path.basename(realBin);

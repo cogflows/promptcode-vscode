@@ -231,7 +231,7 @@ function renderPresetFile(
   const lines: string[] = [];
   lines.push(`# ${name} preset`);
   lines.push(`# Generated: ${new Date().toISOString()}`);
-  if (meta?.source) lines.push(`# Source: ${meta.source}`);
+  if (meta?.source) {lines.push(`# Source: ${meta.source}`);}
   
   // Add specific metadata about what was done
   if (meta?.patternsPreserved) {
@@ -258,11 +258,11 @@ function renderPresetFile(
   
   lines.push('');
   // Patterns (include first, excludes later already sorted by optimizer)
-  for (const p of patterns) lines.push(p);
+  for (const p of patterns) {lines.push(p);}
   // Common excludes at the end if not already present
   const mustEnd = ['!**/node_modules/**', '!**/dist/**', '!**/build/**'];
   for (const m of mustEnd) {
-    if (!patterns.includes(m)) lines.push(m);
+    if (!patterns.includes(m)) {lines.push(m);}
   }
   lines.push('');
   return lines.join('\n');
@@ -272,7 +272,7 @@ function renderPresetFile(
  * Convert --from-files args into a normalized array of globs
  */
 function normalizeFromFiles(fromFiles?: string[] | string): string[] {
-  if (!fromFiles) return [];
+  if (!fromFiles) {return [];}
   const raw = Array.isArray(fromFiles) ? fromFiles : [fromFiles];
   return raw
     .flatMap((chunk) =>
@@ -396,8 +396,8 @@ async function createPreset(presetName: string, projectPath: string, opts?: {
   // Set appropriate source description
   if (mixed) {
     const parts = [];
-    if (patterns.length > 0) parts.push(`${patterns.length} patterns preserved`);
-    if (directories.length > 0) parts.push(`${directories.length} directories`);
+    if (patterns.length > 0) {parts.push(`${patterns.length} patterns preserved`);}
+    if (directories.length > 0) {parts.push(`${directories.length} directories`);}
     if (files.length > 0 && metadata.optimized) {
       parts.push(`${files.length} files → ${metadata.optimized.stats.finalPatterns} patterns`);
     }

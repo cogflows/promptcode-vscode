@@ -256,10 +256,10 @@ async function setupCursorRules(projectPath: string, options?: CursorOptions & {
   
   // Report what was done
   const actions = [];
-  if (stats.created > 0) actions.push(`${stats.created} new`);
-  if (stats.updated > 0) actions.push(`${stats.updated} updated`);
-  if (stats.kept > 0) actions.push(`${stats.kept} kept`);
-  if (stats.unchanged > 0) actions.push(`${stats.unchanged} unchanged`);
+  if (stats.created > 0) {actions.push(`${stats.created} new`);}
+  if (stats.updated > 0) {actions.push(`${stats.updated} updated`);}
+  if (stats.kept > 0) {actions.push(`${stats.kept} kept`);}
+  if (stats.unchanged > 0) {actions.push(`${stats.unchanged} unchanged`);}
   
   if (actions.length > 0) {
     console.log(chalk.green(`✓ Cursor rules: ${actions.join(', ')}`));
@@ -409,10 +409,10 @@ export async function cursorCommand(options: CursorOptions & { detect?: boolean 
     console.log(chalk.bold('\n📝 Updated files:'));
     if (cursorDir) {
       const summary = [];
-      if (stats.created > 0) summary.push(`${stats.created} new`);
-      if (stats.updated > 0) summary.push(`${stats.updated} updated`);
-      if (stats.kept > 0) summary.push(`${stats.kept} kept`);
-      if (stats.unchanged > 0) summary.push(`${stats.unchanged} unchanged`);
+      if (stats.created > 0) {summary.push(`${stats.created} new`);}
+      if (stats.updated > 0) {summary.push(`${stats.updated} updated`);}
+      if (stats.kept > 0) {summary.push(`${stats.kept} kept`);}
+      if (stats.unchanged > 0) {summary.push(`${stats.unchanged} unchanged`);}
       console.log(chalk.gray(`  ${path.relative(projectPath, path.join(cursorDir, 'rules/'))} - ${summary.length > 0 ? summary.join(', ') : `${PROMPTCODE_CURSOR_RULES.length} rules`}`));
     } else if (cursorRulesFile) {
       console.log(chalk.gray(`  ${path.relative(projectPath, cursorRulesFile)} - PromptCode usage instructions`));
@@ -435,7 +435,7 @@ export async function cursorCommand(options: CursorOptions & { detect?: boolean 
     console.log(chalk.gray('  export ANTHROPIC_API_KEY=... # For Claude models'));
     
   } catch (error) {
-    spin.fail(chalk.red(`Error: ${(error as Error).message}`))
+    spin.fail(chalk.red(`Error: ${(error as Error).message}`));
     process.exit(1);
   }
 }
