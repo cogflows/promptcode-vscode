@@ -29,7 +29,7 @@ function createLimiter(limit: number) {
   }> = [];
 
   const runNext = () => {
-    if (active >= limit || queue.length === 0) return;
+    if (active >= limit || queue.length === 0) {return;}
     const { fn, resolve, reject } = queue.shift()!;
     active++;
     fn()
@@ -53,7 +53,7 @@ function createLimiter(limit: number) {
 function createEWMA(alpha = 0.2) {
   let value: number | undefined;
   return (x: number) => {
-    value = value == null ? x : alpha * x + (1 - alpha) * value;
+    value = value === null || value === undefined ? x : alpha * x + (1 - alpha) * value;
     return value;
   };
 }
@@ -62,11 +62,11 @@ function createEWMA(alpha = 0.2) {
  * Format seconds to human-readable time
  */
 function formatTime(seconds: number): string {
-  if (!isFinite(seconds) || seconds < 0) return '—';
-  if (seconds < 60) return `${Math.round(seconds)}s`;
+  if (!isFinite(seconds) || seconds < 0) {return '—';}
+  if (seconds < 60) {return `${Math.round(seconds)}s`;}
   const minutes = Math.floor(seconds / 60);
   const secs = Math.round(seconds % 60);
-  if (minutes < 60) return `${minutes}m ${secs}s`;
+  if (minutes < 60) {return `${minutes}m ${secs}s`;}
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
   return `${hours}h ${mins}m`;
@@ -214,12 +214,12 @@ export async function discoverFiles(
   const skipDirs = new Set(['.git', 'node_modules', '.next', 'dist', 'build', 'coverage', '.turbo', 'vendor', 'venv', '.venv']);
 
   async function walkDir(dir: string): Promise<void> {
-    if (signal?.aborted) return;
+    if (signal?.aborted) {return;}
     
     // Avoid cycles from symlinks
     try {
       const realPath = await fs.realpath(dir);
-      if (visited.has(realPath)) return;
+      if (visited.has(realPath)) {return;}
       visited.add(realPath);
     } catch {
       return; // Skip if can't resolve
@@ -234,7 +234,7 @@ export async function discoverFiles(
 
     try {
       for await (const entry of dirHandle) {
-        if (signal?.aborted) break;
+        if (signal?.aborted) {break;}
         
         const fullPath = path.join(dir, entry.name);
         
@@ -356,12 +356,12 @@ export async function processFiles(
   });
 
   async function walk(dir: string): Promise<void> {
-    if (signal?.aborted) return;
+    if (signal?.aborted) {return;}
     
     // Avoid cycles
     try {
       const realPath = await fs.realpath(dir);
-      if (visited.has(realPath)) return;
+      if (visited.has(realPath)) {return;}
       visited.add(realPath);
     } catch {
       return;
@@ -376,7 +376,7 @@ export async function processFiles(
 
     try {
       for await (const entry of dirHandle) {
-        if (signal?.aborted) break;
+        if (signal?.aborted) {break;}
         
         const fullPath = path.join(dir, entry.name);
         
@@ -386,7 +386,7 @@ export async function processFiles(
           }
         } else if (entry.isFile() && !entry.isSymbolicLink()) {
           await limiter(async () => {
-            if (signal?.aborted) return;
+            if (signal?.aborted) {return;}
             
             try {
               const result = await processFile(fullPath);

@@ -537,8 +537,8 @@ export async function expertCommand(question: string | undefined, options: Exper
     // Parse cost threshold once and reuse
     const envThreshold = process.env.PROMPTCODE_COST_THRESHOLD;
     const resolvedCostThreshold = (() => {
-      if (options.costThreshold !== undefined) return options.costThreshold;
-      if (!envThreshold) return 0.50;
+      if (options.costThreshold !== undefined) {return options.costThreshold;}
+      if (!envThreshold) {return 0.50;}
       const parsed = parseFloat(envThreshold);
       if (!Number.isFinite(parsed) || parsed < 0) {
         console.error(chalk.yellow(`Warning: Invalid PROMPTCODE_COST_THRESHOLD value "${envThreshold}". Using default $0.50.`));
@@ -641,7 +641,7 @@ export async function expertCommand(question: string | undefined, options: Exper
         exitWithCode(EXIT_CODES.APPROVAL_REQUIRED);
       }
       
-      console.log(chalk.yellow(`\n⚠️  This consultation will cost approximately $${estimatedTotalCost.toFixed(2)}`))
+      console.log(chalk.yellow(`\n⚠️  This consultation will cost approximately $${estimatedTotalCost.toFixed(2)}`));
       
       const readline = await import('readline');
       const rl = readline.createInterface({

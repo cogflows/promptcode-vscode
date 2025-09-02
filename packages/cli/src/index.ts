@@ -507,7 +507,7 @@ program
 // Parse command line arguments
 // Normalize argv across runtimes/OS (some environments may pass empty args)
 const rawArgs = process.argv.slice(2);
-let args = rawArgs.filter(arg => arg != null && arg.trim() !== '');
+let args = rawArgs.filter(arg => arg !== null && arg !== undefined && arg.trim() !== '');
 
 // If no meaningful args, show help and exit successfully
 if (args.length === 0) {

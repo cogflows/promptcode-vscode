@@ -307,7 +307,7 @@ export const updateCommand = program
       const tempDir = await fs.mkdtemp(path.join(require('os').tmpdir(), 'promptcode-update-'));
       const tempBinary = path.join(tempDir, binaryName);
       
-      await downloadFile(asset.browser_download_url, tempBinary)
+      await downloadFile(asset.browser_download_url, tempBinary);
       
       // Verify checksum if available
       spin.text = 'Verifying download...';

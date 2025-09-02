@@ -59,7 +59,7 @@ export function findUp(
     }
     
     const parentPath = path.dirname(currentPath);
-    if (parentPath === currentPath) break; // Reached root
+    if (parentPath === currentPath) {break;} // Reached root
     currentPath = parentPath;
   }
   
