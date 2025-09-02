@@ -402,14 +402,25 @@ export function isTooHighUp(dirPath: string): boolean {
  */
 export async function ensurePromptcodeScaffold(projectRoot: string, withPresets = true): Promise<void> {
   const root = path.resolve(projectRoot);
+  const debug = process.env.PROMPTCODE_DEBUG === '1';
+  
+  // Resolve real path to handle symlinked project roots
+  let rootReal: string;
+  try {
+    rootReal = fsSync.realpathSync.native?.(root) ?? fsSync.realpathSync(root);
+  } catch {
+    rootReal = root; // Fall back to unresolved if realpath fails
+  }
   
   // Refuse to create in risky locations
-  if (isTooHighUp(root)) {
-    // Silent return - this is best-effort during auto flows
+  if (isTooHighUp(rootReal)) {
+    if (debug) {
+      console.warn(chalk.gray(`[DEBUG] Skipping .promptcode creation in too-high location: ${rootReal}`));
+    }
     return;
   }
   
-  const pcDir = path.join(root, '.promptcode');
+  const pcDir = path.join(rootReal, '.promptcode');
   
   try {
     // Check if .promptcode exists and handle symlinks safely
@@ -417,11 +428,18 @@ export async function ensurePromptcodeScaffold(projectRoot: string, withPresets 
       const stats = fsSync.lstatSync(pcDir);
       // If it's not a directory or is a symlink, don't proceed
       if (!stats.isDirectory() || stats.isSymbolicLink()) {
+        if (debug) {
+          const reason = stats.isSymbolicLink() ? 'symlink' : 'not a directory';
+          console.warn(chalk.gray(`[DEBUG] Skipping .promptcode creation: existing path is ${reason}: ${pcDir}`));
+        }
         return;
       }
     } else {
       // Create .promptcode directory
       await fs.mkdir(pcDir, { recursive: true });
+      if (debug) {
+        console.log(chalk.gray(`[DEBUG] Created .promptcode directory: ${pcDir}`));
+      }
     }
     
     // Create presets subdirectory if requested
@@ -429,9 +447,15 @@ export async function ensurePromptcodeScaffold(projectRoot: string, withPresets 
       const presetsDir = path.join(pcDir, 'presets');
       if (!fsSync.existsSync(presetsDir)) {
         await fs.mkdir(presetsDir, { recursive: true });
+        if (debug) {
+          console.log(chalk.gray(`[DEBUG] Created presets directory: ${presetsDir}`));
+        }
       }
     }
-  } catch {
+  } catch (error) {
+    if (debug) {
+      console.warn(chalk.gray(`[DEBUG] Failed to create .promptcode scaffold: ${error}`));
+    }
     // Swallow errors - scaffolding is best-effort during auto flows
     // Commands that require .promptcode will show appropriate errors
   }

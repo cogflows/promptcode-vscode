@@ -113,6 +113,46 @@ describe('ensurePromptcodeScaffold', () => {
     // Should not throw, just silently fail
     await expect(ensurePromptcodeScaffold(projectDir, true)).resolves.toBeUndefined();
   });
+
+  it('should not create presets when .promptcode is a file', async () => {
+    const projectDir = path.join(testDir, 'my-project');
+    const promptcodeFile = path.join(projectDir, '.promptcode');
+    const presetsDir = path.join(projectDir, '.promptcode', 'presets');
+    
+    fs.mkdirSync(projectDir, { recursive: true });
+    fs.writeFileSync(promptcodeFile, 'this is a file, not a directory');
+
+    await ensurePromptcodeScaffold(projectDir, true);
+
+    // .promptcode is still a file, not replaced
+    expect(fs.existsSync(promptcodeFile)).toBe(true);
+    expect(fs.statSync(promptcodeFile).isFile()).toBe(true);
+    // presets directory should not exist
+    expect(fs.existsSync(presetsDir)).toBe(false);
+  });
+
+  it('should handle symlinked project root correctly', async () => {
+    const realProjectDir = path.join(testDir, 'real-project');
+    const symlinkProjectDir = path.join(testDir, 'symlink-project');
+    
+    // Create real directory and symlink to it
+    fs.mkdirSync(realProjectDir, { recursive: true });
+    fs.symlinkSync(realProjectDir, symlinkProjectDir, 'dir');
+
+    // Create scaffold through symlink
+    await ensurePromptcodeScaffold(symlinkProjectDir, true);
+
+    // Should create .promptcode in the real location
+    const realPromptcodeDir = path.join(realProjectDir, '.promptcode');
+    const realPresetsDir = path.join(realPromptcodeDir, 'presets');
+    
+    expect(fs.existsSync(realPromptcodeDir)).toBe(true);
+    expect(fs.existsSync(realPresetsDir)).toBe(true);
+    
+    // Verify it's accessible through symlink too
+    const symlinkPromptcodeDir = path.join(symlinkProjectDir, '.promptcode');
+    expect(fs.existsSync(symlinkPromptcodeDir)).toBe(true);
+  });
 });
 
 describe('isTooHighUp', () => {

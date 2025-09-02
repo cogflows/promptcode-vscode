@@ -1,0 +1,8 @@
+# implementation-review preset
+# Generated: 2025-09-02T13:06:14.827Z
+
+# Implementation files
+src/utils/paths.ts
+src/commands/integrate.ts
+src/commands/expert.ts
+test/utils/scaffold.test.ts
