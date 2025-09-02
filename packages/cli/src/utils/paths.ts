@@ -367,6 +367,77 @@ export function getHistoryPath(): string {
 }
 
 /**
+ * Check if a directory path is too high up in the filesystem
+ * (e.g., user home, root, or their immediate children)
+ */
+export function isTooHighUp(dirPath: string): boolean {
+  const normalizedPath = path.resolve(dirPath);
+  const homeDir = os.homedir();
+  const root = path.parse(normalizedPath).root;
+  
+  // Don't allow in root directory
+  if (normalizedPath === root) {
+    return true;
+  }
+  
+  // Don't allow in home directory
+  if (normalizedPath === homeDir) {
+    return true;
+  }
+  
+  // Don't allow in immediate children of home or root
+  const parent = path.dirname(normalizedPath);
+  if (parent === homeDir || parent === root) {
+    return true;
+  }
+  
+  return false;
+}
+
+/**
+ * Ensure .promptcode scaffold exists in a safe location
+ * This is called after integrations are set up to ensure the directory exists
+ * @param projectRoot - The project root directory (where .claude/.cursor exists)
+ * @param withPresets - Whether to create the presets subdirectory
+ */
+export async function ensurePromptcodeScaffold(projectRoot: string, withPresets = true): Promise<void> {
+  const root = path.resolve(projectRoot);
+  
+  // Refuse to create in risky locations
+  if (isTooHighUp(root)) {
+    // Silent return - this is best-effort during auto flows
+    return;
+  }
+  
+  const pcDir = path.join(root, '.promptcode');
+  
+  try {
+    // Check if .promptcode exists and handle symlinks safely
+    if (fsSync.existsSync(pcDir)) {
+      const stats = fsSync.lstatSync(pcDir);
+      // If it's not a directory or is a symlink, don't proceed
+      if (!stats.isDirectory() || stats.isSymbolicLink()) {
+        return;
+      }
+    } else {
+      // Create .promptcode directory
+      await fs.mkdir(pcDir, { recursive: true });
+    }
+    
+    // Create presets subdirectory if requested
+    if (withPresets) {
+      const presetsDir = path.join(pcDir, 'presets');
+      if (!fsSync.existsSync(presetsDir)) {
+        await fs.mkdir(presetsDir, { recursive: true });
+      }
+    }
+  } catch {
+    // Swallow errors - scaffolding is best-effort during auto flows
+    // Commands that require .promptcode will show appropriate errors
+  }
+}
+
+/**
  * Get the templates directory for Cursor integration.
  * Works correctly for development, local binaries, and global installations.
  */

@@ -1,9 +1,13 @@
+import * as path from 'path';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { detectIntegrations, hasAnyIntegration } from '../utils/integration-detector';
 import { isInteractive } from '../utils/environment';
 import { ccCommand } from './cc';
 import { cursorCommand } from './cursor';
+import { ensurePromptcodeScaffold } from '../utils/paths';
+import { findClaudeFolder } from '../utils/claude-integration';
+import { findCursorFolder, findCursorRulesFile } from '../utils/cursor-integration';
 
 interface IntegrateOptions {
   path?: string;
@@ -57,6 +61,14 @@ export async function integrateCommand(options: IntegrateOptions): Promise<void>
         skipModified: options.skipModified,
         force: options.force
       });
+      
+      // Create .promptcode next to .claude
+      const claudeDir = findClaudeFolder(projectPath);
+      if (claudeDir) {
+        const claudeRoot = path.dirname(claudeDir);
+        await ensurePromptcodeScaffold(claudeRoot, true);
+      }
+      
       setupCount++;
     }
   }
@@ -83,6 +95,15 @@ export async function integrateCommand(options: IntegrateOptions): Promise<void>
         skipModified: options.skipModified,
         force: options.force
       });
+      
+      // Create .promptcode next to .cursor or .cursorrules
+      const cursorDir = findCursorFolder(projectPath);
+      const cursorRules = findCursorRulesFile(projectPath);
+      const cursorRoot = cursorDir 
+        ? path.dirname(cursorDir) 
+        : (cursorRules ? path.dirname(cursorRules) : projectPath);
+      await ensurePromptcodeScaffold(cursorRoot, true);
+      
       setupCount++;
     }
   }

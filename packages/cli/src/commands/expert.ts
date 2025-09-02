@@ -61,9 +61,19 @@ function validatePatternsWithinProject(patterns: string[]): void {
 async function loadPreset(projectPath: string, presetName: string): Promise<string[]> {
   // Get preset path using helper
   const presetPath = getPresetPath(projectPath, presetName);
+  const presetDir = path.dirname(presetPath);
     
   if (!fs.existsSync(presetPath)) {
-    throw new Error(`Preset not found: ${presetName}\nCreate it with: promptcode preset --create ${presetName}`);
+    // Check if the directory exists to provide better error message
+    if (!fs.existsSync(presetDir)) {
+      throw new Error(
+        `Preset directory not found: ${presetDir}\n` +
+        `Try one of these:\n` +
+        `  • Run: promptcode integrate --auto-detect (if you use Claude/Cursor)\n` +
+        `  • Create it with: promptcode preset create ${presetName}`
+      );
+    }
+    throw new Error(`Preset not found: ${presetName}\nCreate it with: promptcode preset create ${presetName}`);
   }
   const content = await fs.promises.readFile(presetPath, 'utf8');
   const patterns = content
