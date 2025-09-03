@@ -1,6 +1,6 @@
 {
   "name": "promptcode-cli",
-  "version": "0.6.20",
+  "version": "0.6.21",
   "description": "CLI tool for PromptCode - Generate AI-ready prompts from codebases",
   "bin": {
     "promptcode": "./dist/promptcode"
