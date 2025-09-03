@@ -201,3 +201,28 @@ export XAI_API_KEY=...           # Grok models
 
 💡 **Tip**: Create focused presets for better context and lower costs.
 <!-- PROMPTCODE-CLI-END -->
+
+## CRITICAL: Claude Command Templates
+
+⚠️ **IMPORTANT**: The `.claude/commands/*.md` files in this project are **OVERWRITTEN** when users run `promptcode cc` (Claude Code integration)!
+
+### Where to Make Changes:
+- ❌ **NEVER** edit `.claude/commands/*.md` directly - changes will be lost
+- ✅ **ALWAYS** edit the source templates in `packages/cli/src/claude-templates/*.md`
+- ✅ After editing source templates, rebuild the CLI: `cd packages/cli && bun run build`
+
+### Template Locations:
+```
+packages/cli/
+├── src/claude-templates/        # SOURCE templates - EDIT THESE
+│   ├── promptcode-ask-expert.md
+│   ├── promptcode-preset-*.md
+│   └── ...
+└── dist/claude-templates/       # Built templates - auto-generated, don't edit
+```
+
+### Workflow for Command Changes:
+1. Edit files in `packages/cli/src/claude-templates/`
+2. Build CLI: `cd packages/cli && bun run build`
+3. Create new release with version bump
+4. Users get updated commands via `promptcode update` → `promptcode cc`

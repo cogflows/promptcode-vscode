@@ -1,5 +1,5 @@
 ---
-allowed-tools: Task, Read(/tmp/*), Read(/var/*), Write(/tmp/*), Write(/var/*), Edit(/tmp/*), Edit(/var/*), Edit(.promptcode/presets/*), Bash, Bash(*)
+allowed-tools: Task, Read(/tmp/*), Read(/var/*), Write(/tmp/*), Write(/var/*), Edit(/tmp/*), Edit(/var/*), Edit(.promptcode/presets/*), Bash
 description: Consult AI expert for complex problems with code context - supports ensemble mode for multiple models
 ---
 
