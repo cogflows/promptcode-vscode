@@ -201,22 +201,22 @@ Object.keys(checksums).forEach(fileName => {
       console.log(`  Previous checksums: ${previousChecksums.length} known version(s)`);
     }
     
-    // Automatically add the old checksum to previous-checksums.json if we're in a release
-    // The "old" checksum is what was in previous-checksums before this build
-    if (process.env.CI && process.env.GITHUB_REF_TYPE === 'tag') {
-      console.log(`  📝 Auto-preserving previous version checksum for backward compatibility`);
-      // Add the PREVIOUS current checksum (from last release) to the list
-      // This happens when we're building a new release
-      if (!updatedPreviousData[fileName]) {
-        updatedPreviousData[fileName] = [];
-      }
-      // The checksum that WAS current is now historical
-      // We get it from what was already in previous-checksums.json
-      const lastReleaseChecksum = previousChecksums[0];
-      if (lastReleaseChecksum && !updatedPreviousData[fileName].includes(lastReleaseChecksum)) {
-        updatedPreviousData[fileName].push(lastReleaseChecksum);
-      }
+    // IMPORTANT: Always preserve old checksums when templates change
+    // This ensures old versions are recognized as "known" not "modified"
+    // Without this, users won't get template updates during 'promptcode update'
+    console.log(`  📝 Preserving previous checksums for backward compatibility`);
+    
+    if (!updatedPreviousData[fileName]) {
+      updatedPreviousData[fileName] = [];
     }
+    
+    // Add ALL previous checksums to preserve full history
+    previousChecksums.forEach(oldChecksum => {
+      if (oldChecksum !== currentChecksum && !updatedPreviousData[fileName].includes(oldChecksum)) {
+        updatedPreviousData[fileName].push(oldChecksum);
+        console.log(`    + Preserving: ${oldChecksum.substring(0, 16)}...`);
+      }
+    });
   }
 });
 
@@ -250,10 +250,13 @@ if (needsUpdate) {
     console.log('\n⚠️  CI Build: Template checksums changed');
     console.log('This is expected during development. Release builds will auto-preserve checksums.');
   } else {
-    // Local development
-    console.log('\nTo preserve backward compatibility, you should:');
-    console.log('1. Update previous-checksums.json with the current checksums');
-    console.log('2. Keep existing checksums to recognize older versions');
+    // Local development - auto-update to prevent forgetting
+    console.log('\n📝 Auto-updating previous-checksums.json to preserve backward compatibility');
+    
+    // Write the updated file with preserved checksums
+    fs.writeFileSync(previousChecksumsPath, JSON.stringify(updatedPreviousData, null, 2) + '\n');
+    console.log('✅ Updated previous-checksums.json');
+    console.log('   Old checksums preserved for backward compatibility');
     console.log('\nRun this command to see the changes:');
     console.log('  git diff scripts/previous-checksums.json');
   }
