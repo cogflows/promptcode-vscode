@@ -30,6 +30,9 @@ process.exit(0);
     // Start mock GitHub API server
     await new Promise<void>((resolve) => {
       server = createServer((req, res) => {
+        // Get the actual port from the server at request time
+        const actualPort = server.address().port;
+        
         if (req.url === '/repos/cogflows/promptcode-vscode/releases/latest') {
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({
@@ -37,11 +40,11 @@ process.exit(0);
             assets: [
               {
                 name: `promptcode-${process.platform}-${process.arch}`,
-                browser_download_url: `http://localhost:${serverPort}/download/binary`
+                browser_download_url: `http://localhost:${actualPort}/download/binary`
               },
               {
                 name: `promptcode-${process.platform}-${process.arch}.sha256`,
-                browser_download_url: `http://localhost:${serverPort}/download/checksum`
+                browser_download_url: `http://localhost:${actualPort}/download/checksum`
               }
             ]
           }));
