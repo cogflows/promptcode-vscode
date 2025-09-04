@@ -335,8 +335,8 @@ export const updateCommand = program
         console.log(chalk.cyan('\nChecking for integration updates...'));
         await integrateCommand({ 
           autoDetect: true, 
-          path: process.cwd(),
-          skipModified: true
+          path: process.cwd()
+          // Removed skipModified to allow prompting users about template updates
         });
       }
       

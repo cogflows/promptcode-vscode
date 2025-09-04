@@ -20,7 +20,8 @@ export const TEMPLATE_CHECKSUMS: Record<string, string[]> = {
   ],
   "promptcode-ask-expert.md": [
     "c98a85082bc7db5b6b21b8639fa9e5e21ff7eb68a336fdcfa3a58770ca3b5e0a",
-    "71ca5ff74847b54ed6a33f6f6a6432730962fb6ef38bf02059a2fd72bbc7fff5"
+    "71ca5ff74847b54ed6a33f6f6a6432730962fb6ef38bf02059a2fd72bbc7fff5",
+    "ef78aa1a6554360e0eeae6af575e4edbb2b3d17622c85470ce3c332a9660f1d0"
   ],
   "CLAUDE.md.template": [
     "68ccd663cf594e3335ec9bfefe933c70e0ad210df96ff295e9387aaa5ec90b36",

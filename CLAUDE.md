@@ -224,5 +224,13 @@ packages/cli/
 ### Workflow for Command Changes:
 1. Edit files in `packages/cli/src/claude-templates/`
 2. Build CLI: `cd packages/cli && bun run build`
-3. Create new release with version bump
-4. Users get updated commands via `promptcode update` → `promptcode cc`
+3. **IMPORTANT**: Build process auto-preserves old checksums in `previous-checksums.json`
+4. Commit both the template changes AND the updated checksums
+5. Create new release with version bump
+6. Users get updated commands via `promptcode update` → `promptcode cc`
+
+### Critical: Template Checksums
+- **Why checksums matter**: CC uses checksums to distinguish "known old versions" from "user modifications"
+- **Without old checksums**: CC thinks old templates have "local changes" and skips updates
+- **Auto-preservation**: Build process now automatically preserves old checksums
+- **Always commit**: Include `scripts/previous-checksums.json` changes in your commits
