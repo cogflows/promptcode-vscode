@@ -1,5 +1,5 @@
 ---
-allowed-tools: Bash(promptcode preset create:*), Bash(promptcode preset info:*), Glob(**/*), Grep, Write(.promptcode/presets/*.patterns)
+allowed-tools: Bash(promptcode preset create:*), Bash(promptcode preset info:*), Glob(**/*), Grep, Write(.promptcode/presets/*.patterns), Read(/tmp/*), Write(/tmp/*), Bash, Bash(*)
 description: Create a promptcode preset from description
 ---
 

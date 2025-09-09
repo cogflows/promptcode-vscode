@@ -7,31 +7,36 @@
   ],
   "promptcode-ask-expert.md": [
     "71ca5ff74847b54ed6a33f6f6a6432730962fb6ef38bf02059a2fd72bbc7fff5",
-    "ef78aa1a6554360e0eeae6af575e4edbb2b3d17622c85470ce3c332a9660f1d0"
+    "ef78aa1a6554360e0eeae6af575e4edbb2b3d17622c85470ce3c332a9660f1d0",
+    "7258ca248659a0dc90eb0604fb7721fc29e47e6d0cbfe5beb2811b11e5511c77"
   ],
   "promptcode-ask-expert.mdc": [
     "919bdae89190e2915c7c5a360a4fde480d4f6a8beb5327d66e89294e8bc591d6"
   ],
   "promptcode-preset-create.md": [
-    "5fe5043502b273103d422a945c6181b9136d6ea97e9cfd2282eaa1b96c7c2766"
+    "5fe5043502b273103d422a945c6181b9136d6ea97e9cfd2282eaa1b96c7c2766",
+    "dbc5ffd37033bcd5afaa8edc12fb8b5abc1f0681e2c260957bdd5f2bcd4676c6"
   ],
   "promptcode-preset-create.mdc": [
     "468b8549f45ba8072e15140ff4d1324e11a7c67b7f5a04c74430baa5993ff7ed"
   ],
   "promptcode-preset-info.md": [
-    "da52a33a0efdf19fbad0559babc0844e48d93ed8eef00afb83e8cf7f054a1d7f"
+    "da52a33a0efdf19fbad0559babc0844e48d93ed8eef00afb83e8cf7f054a1d7f",
+    "d5ae582c010a300fc6a1bfa84191f0f7221f26492b85d1490f2e0bdab4a71ec1"
   ],
   "promptcode-preset-info.mdc": [
     "d9faaeee858e4cdf6c5b6aad2e6f6816eae403db6ea586405a88d4427bab1a39"
   ],
   "promptcode-preset-list.md": [
-    "e1481e4750c5a72d966720803e291b098bb4d41010b814fda034a1406b5b197c"
+    "e1481e4750c5a72d966720803e291b098bb4d41010b814fda034a1406b5b197c",
+    "f0e76bf215ecb267d6344f58134e5a39a6833aa3129c83d83ee2f0a5c3471f33"
   ],
   "promptcode-preset-list.mdc": [
     "77ed93f774f3d1a47bc5d21342594c68aa7f3fb4733a2e786452b780af65605d"
   ],
   "promptcode-preset-to-prompt.md": [
-    "dc46c41019c808d95fddfa5c6149ce01b117be03ac0b277fc50f61c92c5dedda"
+    "dc46c41019c808d95fddfa5c6149ce01b117be03ac0b277fc50f61c92c5dedda",
+    "99dfa6e473ee885a9ce64d1882fc3f1c989f854095a14597bc8c453f623a4972"
   ],
   "promptcode-preset-to-prompt.mdc": [
     "6bafc504afe719f083019025326a95e416d27bf6a32f5edcbc7a5e01e30116e1"

@@ -6,23 +6,28 @@
 export const TEMPLATE_CHECKSUMS: Record<string, string[]> = {
   "promptcode-preset-to-prompt.md": [
     "6b33d0542f3f97eb09083fc6d6d6ecab273e2e7d406635c8b2d30c8a3c68b9f1",
-    "dc46c41019c808d95fddfa5c6149ce01b117be03ac0b277fc50f61c92c5dedda"
+    "dc46c41019c808d95fddfa5c6149ce01b117be03ac0b277fc50f61c92c5dedda",
+    "99dfa6e473ee885a9ce64d1882fc3f1c989f854095a14597bc8c453f623a4972"
   ],
   "promptcode-preset-list.md": [
-    "e1481e4750c5a72d966720803e291b098bb4d41010b814fda034a1406b5b197c"
+    "e1481e4750c5a72d966720803e291b098bb4d41010b814fda034a1406b5b197c",
+    "f0e76bf215ecb267d6344f58134e5a39a6833aa3129c83d83ee2f0a5c3471f33"
   ],
   "promptcode-preset-info.md": [
     "70d04d2fe957b360f452cd18a9e7e831957165b6f9a2435ecfb762bc033101c4",
-    "da52a33a0efdf19fbad0559babc0844e48d93ed8eef00afb83e8cf7f054a1d7f"
+    "da52a33a0efdf19fbad0559babc0844e48d93ed8eef00afb83e8cf7f054a1d7f",
+    "d5ae582c010a300fc6a1bfa84191f0f7221f26492b85d1490f2e0bdab4a71ec1"
   ],
   "promptcode-preset-create.md": [
     "68db7f5f5c96b7c5c78dee19fcfafa786f6f2ffa33c0a05d896837a9da77b4a1",
-    "5fe5043502b273103d422a945c6181b9136d6ea97e9cfd2282eaa1b96c7c2766"
+    "5fe5043502b273103d422a945c6181b9136d6ea97e9cfd2282eaa1b96c7c2766",
+    "dbc5ffd37033bcd5afaa8edc12fb8b5abc1f0681e2c260957bdd5f2bcd4676c6"
   ],
   "promptcode-ask-expert.md": [
     "c98a85082bc7db5b6b21b8639fa9e5e21ff7eb68a336fdcfa3a58770ca3b5e0a",
     "71ca5ff74847b54ed6a33f6f6a6432730962fb6ef38bf02059a2fd72bbc7fff5",
-    "ef78aa1a6554360e0eeae6af575e4edbb2b3d17622c85470ce3c332a9660f1d0"
+    "ef78aa1a6554360e0eeae6af575e4edbb2b3d17622c85470ce3c332a9660f1d0",
+    "7258ca248659a0dc90eb0604fb7721fc29e47e6d0cbfe5beb2811b11e5511c77"
   ],
   "CLAUDE.md.template": [
     "68ccd663cf594e3335ec9bfefe933c70e0ad210df96ff295e9387aaa5ec90b36",

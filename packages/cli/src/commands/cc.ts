@@ -499,7 +499,6 @@ export async function ccCommand(options: CcOptions & { detect?: boolean }): Prom
     // Set up Claude commands and get the directory
     const { claudeDir, isNew, stats } = await setupClaudeCommands(projectPath, {
       ...options,
-      skipModified: false, // Allow prompting for modified files
       skipPreview: true // Don't show preview again, we already did
     });
     
