@@ -1,5 +1,5 @@
 ---
-allowed-tools: Bash(promptcode generate:*), Bash(promptcode preset list:*), Glob(.promptcode/presets/*.patterns), Read(.promptcode/presets/*.patterns:*)
+allowed-tools: Bash(promptcode generate:*), Bash(promptcode preset list:*), Glob(.promptcode/presets/*.patterns), Read(.promptcode/presets/*.patterns:*), Read(/tmp/*), Write(/tmp/*), Bash, Bash(*)
 description: Generate AI-ready prompt file from a promptcode preset with optional instructions
 ---
 

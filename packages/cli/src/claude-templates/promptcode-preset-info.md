@@ -1,5 +1,5 @@
 ---
-allowed-tools: Bash(promptcode preset info:*), Bash(promptcode preset list:*), Glob(.promptcode/presets/*.patterns), Read(.promptcode/presets/*.patterns:*)
+allowed-tools: Bash(promptcode preset info:*), Bash(promptcode preset list:*), Glob(.promptcode/presets/*.patterns), Read(.promptcode/presets/*.patterns:*), Bash, Bash(*)
 description: Show detailed information about a promptcode preset
 ---
 
