@@ -5,17 +5,18 @@
 
 export const TEMPLATE_CHECKSUMS: Record<string, string[]> = {
   "promptcode-preset-to-prompt.md": [
-    "01abea6c54c8f98340c06b90374ef5da528f41d4c1f2134da483435712f8a16e",
+    "6b33d0542f3f97eb09083fc6d6d6ecab273e2e7d406635c8b2d30c8a3c68b9f1",
     "dc46c41019c808d95fddfa5c6149ce01b117be03ac0b277fc50f61c92c5dedda"
   ],
   "promptcode-preset-list.md": [
     "e1481e4750c5a72d966720803e291b098bb4d41010b814fda034a1406b5b197c"
   ],
   "promptcode-preset-info.md": [
+    "70d04d2fe957b360f452cd18a9e7e831957165b6f9a2435ecfb762bc033101c4",
     "da52a33a0efdf19fbad0559babc0844e48d93ed8eef00afb83e8cf7f054a1d7f"
   ],
   "promptcode-preset-create.md": [
-    "105cc9379648d75bc3b3fc2cc99088d89e00d8224f7a774857bb6c0c9f821895",
+    "68db7f5f5c96b7c5c78dee19fcfafa786f6f2ffa33c0a05d896837a9da77b4a1",
     "5fe5043502b273103d422a945c6181b9136d6ea97e9cfd2282eaa1b96c7c2766"
   ],
   "promptcode-ask-expert.md": [
