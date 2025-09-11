@@ -309,60 +309,199 @@ install_binary() {
   print_success "${CLI_NAME} installed to ${target_path}"
 }
 
+# Detect user's actual shell(s) - more robust than just $SHELL
+detect_user_shells() {
+  local shells=()
+  
+  # 1. Check the actual parent process (most accurate for current session)
+  if command -v ps >/dev/null 2>&1; then
+    local parent_pid="${PPID:-$$}"
+    local parent_cmd=$(ps -p "$parent_pid" -o comm= 2>/dev/null | sed 's/^-//')
+    case "$parent_cmd" in
+      bash|zsh|fish|sh|dash|ksh) shells+=("$parent_cmd") ;;
+    esac
+  fi
+  
+  # 2. Check $SHELL environment variable (user's default shell)
+  if [[ -n "$SHELL" ]]; then
+    local shell_name=$(basename "$SHELL")
+    # Add if not already in array (handle empty array case)
+    if [[ ${#shells[@]} -eq 0 ]] || [[ ! " ${shells[@]} " =~ " ${shell_name} " ]]; then
+      shells+=("$shell_name")
+    fi
+  fi
+  
+  # 3. Check /etc/passwd for user's login shell
+  if command -v getent >/dev/null 2>&1; then
+    local login_shell=$(getent passwd "$USER" 2>/dev/null | cut -d: -f7)
+    if [[ -n "$login_shell" ]]; then
+      local shell_name=$(basename "$login_shell")
+      # Add if not already in array (handle empty array case)
+      if [[ ${#shells[@]} -eq 0 ]] || [[ ! " ${shells[@]} " =~ " ${shell_name} " ]]; then
+        shells+=("$shell_name")
+      fi
+    fi
+  fi
+  
+  # Return unique shells found (handle empty array)
+  if [[ ${#shells[@]} -gt 0 ]]; then
+    printf '%s\n' "${shells[@]}" | sort -u
+  fi
+}
+
+# Get shell config file(s) to update
+get_shell_configs() {
+  local configs=()
+  
+  # Get all detected shells
+  local detected_shells=($(detect_user_shells))
+  
+  # If no shells detected, fall back to common ones based on what configs exist
+  if [[ ${#detected_shells[@]} -eq 0 ]]; then
+    # Check for common shell configs that exist
+    [[ -f "$HOME/.zshrc" || -f "$HOME/.zprofile" ]] && detected_shells+=("zsh")
+    [[ -f "$HOME/.bashrc" || -f "$HOME/.bash_profile" ]] && detected_shells+=("bash") 
+    [[ -f "$HOME/.config/fish/config.fish" ]] && detected_shells+=("fish")
+  fi
+  
+  # Map each shell to its config file(s)
+  for shell in "${detected_shells[@]}"; do
+    case "$shell" in
+      bash)
+        # On macOS, .bash_profile is preferred for login shells
+        # On Linux, .bashrc is more common
+        if [[ "$(uname)" == "Darwin" ]]; then
+          [[ -f "$HOME/.bash_profile" ]] && configs+=("$HOME/.bash_profile")
+          [[ -f "$HOME/.bashrc" ]] && configs+=("$HOME/.bashrc")
+        else
+          [[ -f "$HOME/.bashrc" ]] && configs+=("$HOME/.bashrc")
+          [[ -f "$HOME/.bash_profile" ]] && configs+=("$HOME/.bash_profile")
+        fi
+        # Always check .profile as fallback
+        [[ -f "$HOME/.profile" ]] && configs+=("$HOME/.profile")
+        ;;
+      zsh)
+        # For zsh, .zshrc is preferred (runs for all shells)
+        # .zprofile only runs for login shells
+        [[ -f "$HOME/.zshrc" ]] && configs+=("$HOME/.zshrc")
+        [[ -f "$HOME/.zprofile" ]] && configs+=("$HOME/.zprofile")
+        # Create .zshrc if it doesn't exist (zsh is default on modern macOS)
+        if [[ ! -f "$HOME/.zshrc" && ! -f "$HOME/.zprofile" ]]; then
+          configs+=("$HOME/.zshrc")
+        fi
+        ;;
+      fish)
+        configs+=("$HOME/.config/fish/config.fish")
+        ;;
+    esac
+  done
+  
+  # Also add configs for other shells if they exist and have reasonable size
+  # This ensures we update PATH for all shells a user might use
+  if [[ ! " ${detected_shells[@]} " =~ " bash " ]]; then
+    if [[ -f "$HOME/.bashrc" && $(stat -f%z "$HOME/.bashrc" 2>/dev/null || stat -c%s "$HOME/.bashrc" 2>/dev/null || echo 0) -gt 0 ]] || \
+       [[ -f "$HOME/.bash_profile" && $(stat -f%z "$HOME/.bash_profile" 2>/dev/null || stat -c%s "$HOME/.bash_profile" 2>/dev/null || echo 0) -gt 0 ]]; then
+      [[ "$(uname)" == "Darwin" ]] && [[ -f "$HOME/.bash_profile" ]] && configs+=("$HOME/.bash_profile")
+      [[ -f "$HOME/.bashrc" ]] && configs+=("$HOME/.bashrc")
+    fi
+  fi
+  
+  if [[ ! " ${detected_shells[@]} " =~ " zsh " ]]; then
+    if [[ -f "$HOME/.zshrc" && $(stat -f%z "$HOME/.zshrc" 2>/dev/null || stat -c%s "$HOME/.zshrc" 2>/dev/null || echo 0) -gt 0 ]] || \
+       [[ -f "$HOME/.zprofile" && $(stat -f%z "$HOME/.zprofile" 2>/dev/null || stat -c%s "$HOME/.zprofile" 2>/dev/null || echo 0) -gt 0 ]]; then
+      [[ -f "$HOME/.zshrc" ]] && configs+=("$HOME/.zshrc")
+      [[ -f "$HOME/.zprofile" ]] && configs+=("$HOME/.zprofile")
+    fi
+  fi
+  
+  # Remove duplicates and return
+  printf '%s\n' "${configs[@]}" | sort -u
+}
+
 # Check and update PATH
 check_path() {
   if [[ ":$PATH:" != *":${INSTALL_DIR}:"* ]]; then
     print_warning "${INSTALL_DIR} is not in your PATH"
     echo ""
     
-    # Detect shell config file
-    local shell_config=""
-    case "$SHELL" in
-      */bash) 
-        if [[ -f "$HOME/.bash_profile" ]]; then
-          shell_config="$HOME/.bash_profile"
-        else
-          shell_config="$HOME/.bashrc"
-        fi
-        ;;
-      */zsh) shell_config="$HOME/.zshrc" ;;
-      */fish) shell_config="$HOME/.config/fish/config.fish" ;;
-      *) shell_config="" ;;
-    esac
+    # Get all shell configs to potentially update
+    local shell_configs=($(get_shell_configs))
     
-    if [[ -n "$shell_config" ]]; then
-      # Check if PATH export already exists (idempotent)
-      if ! grep -q "# PromptCode CLI PATH" "$shell_config" 2>/dev/null; then
+    if [[ ${#shell_configs[@]} -gt 0 ]]; then
+      print_info "Detected shell configuration file(s):"
+      for config in "${shell_configs[@]}"; do
+        echo "  - $config" >&2
+      done
+      echo ""
+      
+      # Track which configs need updating
+      local configs_to_update=()
+      for config in "${shell_configs[@]}"; do
+        if ! grep -q "# PromptCode CLI PATH" "$config" 2>/dev/null; then
+          configs_to_update+=("$config")
+        fi
+      done
+      
+      if [[ ${#configs_to_update[@]} -gt 0 ]]; then
         # Default to "N" in non-interactive mode for security
         if is_interactive; then
-          if ask_yes_no "Would you like to add ${INSTALL_DIR} to your PATH automatically? [Y/n] " "Y"; then
-            if [[ "$SHELL" == */fish ]]; then
-              # Ensure fish config directory exists
-              mkdir -p "$HOME/.config/fish"
-              echo "# PromptCode CLI PATH" >> "$shell_config"
-              echo "set -gx PATH \$PATH ${INSTALL_DIR}" >> "$shell_config"
-            else
-              echo "" >> "$shell_config"
-              echo "# PromptCode CLI PATH" >> "$shell_config"
-              echo "export PATH=\"\$PATH:${INSTALL_DIR}\"" >> "$shell_config"
-            fi
-            print_success "PATH updated in $shell_config"
-            echo "Please restart your shell or run: source $shell_config" >&2
+          if ask_yes_no "Would you like to add ${INSTALL_DIR} to your PATH in these files? [Y/n] " "Y"; then
+            for config in "${configs_to_update[@]}"; do
+              # Create parent directory if needed
+              local config_dir=$(dirname "$config")
+              [[ ! -d "$config_dir" ]] && mkdir -p "$config_dir"
+              
+              # Add PATH based on shell type
+              if [[ "$config" == *"fish/config.fish" ]]; then
+                echo "# PromptCode CLI PATH" >> "$config"
+                echo "fish_add_path -g ${INSTALL_DIR}" >> "$config"
+              else
+                # Bash/Zsh use same syntax
+                echo "" >> "$config"
+                echo "# PromptCode CLI PATH" >> "$config"
+                echo "export PATH=\"\$PATH:${INSTALL_DIR}\"" >> "$config"
+              fi
+              print_success "PATH updated in $config"
+            done
+            echo ""
+            echo "Please restart your shell or run one of:" >&2
+            for config in "${configs_to_update[@]}"; do
+              echo "  source $config" >&2
+            done
           else
-            echo "Add this to your shell configuration file ($shell_config):" >&2
+            echo "Add this to your shell configuration file(s):" >&2
             echo "  export PATH=\"\$PATH:${INSTALL_DIR}\"" >&2
+            echo "" >&2
+            echo "For fish shell, use:" >&2
+            echo "  set -gx PATH \$PATH ${INSTALL_DIR}" >&2
           fi
         else
           print_info "Non-interactive mode: skipping PATH modification for security."
-          echo "Add this to your shell configuration file ($shell_config):" >&2
+          echo "Add this to your shell configuration file(s):" >&2
+          for config in "${configs_to_update[@]}"; do
+            echo "  $config" >&2
+          done
+          echo "" >&2
+          echo "Use this command:" >&2
           echo "  export PATH=\"\$PATH:${INSTALL_DIR}\"" >&2
+          echo "" >&2
+          echo "For fish shell, use:" >&2
+          echo "  set -gx PATH \$PATH ${INSTALL_DIR}" >&2
         fi
       else
-        print_info "PATH entry already exists in $shell_config"
+        print_info "PATH entry already exists in all detected shell configs"
       fi
     else
+      # No shell configs detected, provide generic instructions
+      echo "Could not detect shell configuration files." >&2
+      echo "" >&2
       echo "Add this to your shell configuration file:" >&2
       echo "  export PATH=\"\$PATH:${INSTALL_DIR}\"" >&2
+      echo "" >&2
+      echo "Common configuration files:" >&2
+      echo "  - Bash: ~/.bashrc or ~/.bash_profile" >&2
+      echo "  - Zsh: ~/.zshrc or ~/.zprofile" >&2
+      echo "  - Fish: ~/.config/fish/config.fish" >&2
     fi
   fi
 }
@@ -397,12 +536,44 @@ uninstall() {
   # Remove PATH entries from shell configs
   echo ""
   if ask_yes_no "Remove PATH entries from shell configurations? [Y/n] " "Y"; then
-    local configs=()
-    [ -f "$HOME/.bashrc" ] && configs+=("$HOME/.bashrc")
-    [ -f "$HOME/.bash_profile" ] && configs+=("$HOME/.bash_profile")
-    [ -f "$HOME/.zshrc" ] && configs+=("$HOME/.zshrc")
-    [ -f "$HOME/.config/fish/config.fish" ] && configs+=("$HOME/.config/fish/config.fish")
-    [ -f "$HOME/.profile" ] && configs+=("$HOME/.profile")
+    # Use the same detection logic as installation
+    local all_configs=()
+    
+    # Get detected shell configs
+    local detected_configs=($(get_shell_configs))
+    for config in "${detected_configs[@]}"; do
+      [[ -f "$config" ]] && all_configs+=("$config")
+    done
+    
+    # Also check for any other configs that might have been modified
+    local other_configs=(
+      "$HOME/.bashrc"
+      "$HOME/.bash_profile"
+      "$HOME/.zshrc"
+      "$HOME/.zprofile"
+      "$HOME/.config/fish/config.fish"
+      "$HOME/.profile"
+    )
+    
+    for config in "${other_configs[@]}"; do
+      if [[ -f "$config" ]] && [[ ! " ${all_configs[@]} " =~ " ${config} " ]]; then
+        # Check if this config has our PATH entry
+        if grep -q "# PromptCode CLI PATH\|${INSTALL_DIR}" "$config" 2>/dev/null; then
+          all_configs+=("$config")
+        fi
+      fi
+    done
+    
+    # Remove duplicates
+    local configs=($(printf '%s\n' "${all_configs[@]}" | sort -u))
+    
+    if [[ ${#configs[@]} -gt 0 ]]; then
+      print_info "Found PromptCode PATH entries in:"
+      for config in "${configs[@]}"; do
+        echo "  - $config" >&2
+      done
+      echo ""
+    fi
     
     for config in "${configs[@]}"; do
       if grep -q "${INSTALL_DIR}" "$config" 2>/dev/null; then
@@ -414,7 +585,7 @@ uninstall() {
         
         # Remove PATH entries containing INSTALL_DIR (handle various formats)
         if [[ "$config" == *"config.fish" ]]; then
-          # Fish shell uses different syntax - remove both fish_add_path and set -gx PATH lines
+          # Fish shell uses fish_add_path - remove both old and new formats
           awk -v dir="${INSTALL_DIR}" '
             !(/fish_add_path/ && index($0, dir)) && 
             !((/^[[:space:]]*set[[:space:]]+-gx[[:space:]]+PATH/ || /^set[[:space:]]+-gx[[:space:]]+PATH/) && index($0, dir))
@@ -437,6 +608,38 @@ uninstall() {
 
 # Main installation flow
 main() {
+  # Parse flags
+  local DRY_RUN=false
+  local NO_PATH=false
+  local HELP=false
+  
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --dry-run)
+        DRY_RUN=true
+        shift
+        ;;
+      --no-path)
+        NO_PATH=true
+        shift
+        ;;
+      --uninstall)
+        # Open TTY file descriptor for interactive I/O (ignore failure)
+        open_tty || true
+        uninstall
+        exit 0
+        ;;
+      --help|-h)
+        HELP=true
+        shift
+        ;;
+      *)
+        print_error "Unknown option: $1"
+        exit 1
+        ;;
+    esac
+  done
+  
   # Open TTY file descriptor for interactive I/O (ignore failure)
   open_tty || true
   
@@ -447,10 +650,28 @@ main() {
   echo "  ╰───────────────────────────────╯" >&2
   echo "" >&2
 
-  # Handle uninstall
-  if [ "${1:-}" = "--uninstall" ]; then
-    uninstall
+  # Show help if requested
+  if [[ "$HELP" == "true" ]]; then
+    echo "Usage: curl -fsSL <installer-url> | bash [OPTIONS]" >&2
+    echo "" >&2
+    echo "Options:" >&2
+    echo "  --dry-run     Show what would be done without making changes" >&2
+    echo "  --no-path     Skip PATH modifications (manual setup required)" >&2
+    echo "  --uninstall   Remove PromptCode CLI from your system" >&2
+    echo "  --help, -h    Show this help message" >&2
     exit 0
+  fi
+  
+  # Dry run mode notification
+  if [[ "$DRY_RUN" == "true" ]]; then
+    print_info "DRY RUN MODE - No changes will be made"
+    echo "" >&2
+  fi
+
+  # Check if running as root (security and permission issues)
+  if [[ $EUID -eq 0 ]]; then
+    print_error "Please don't run this installer as root/sudo. Install for your user account instead."
+    exit 1
   fi
 
   # Block Git Bash/MSYS/Cygwin on Windows early
@@ -475,6 +696,13 @@ main() {
     local current_version=$(normalize_version "$current_version_raw")
     print_info "${CLI_NAME} is already installed (version: $current_version_raw)"
     print_info "Latest version available: $version"
+    
+    # Check if already up-to-date (idempotency)
+    local latest_normalized=$(normalize_version "$version")
+    if [[ "$current_version" == "$latest_normalized" ]] && [[ "$current_version_raw" != *"-dev."* ]]; then
+      print_success "Already up to date!"
+      exit 0
+    fi
     
     # Check if it's a development version or if update is available
     if [[ "$current_version_raw" == *"-dev."* ]]; then
@@ -554,7 +782,13 @@ main() {
   fi
 
   # Download binary
-  local temp_binary=$(download_binary "$version" "$platform")
+  if [[ "$DRY_RUN" == "true" ]]; then
+    print_info "Would download ${CLI_NAME} ${version} for ${platform}"
+    local temp_binary="/tmp/dry-run-placeholder"
+    touch "$temp_binary"  # Create placeholder for dry run
+  else
+    local temp_binary=$(download_binary "$version" "$platform")
+  fi
   
   # Check if download was successful
   if [ -z "$temp_binary" ] || [ ! -f "$temp_binary" ]; then
@@ -563,10 +797,24 @@ main() {
   fi
 
   # Install binary
-  install_binary "$temp_binary"
+  if [[ "$DRY_RUN" == "true" ]]; then
+    print_info "Would install binary to ${INSTALL_DIR}/${CLI_NAME}"
+    rm -f "$temp_binary"
+  else
+    install_binary "$temp_binary"
+  fi
 
   # Check PATH
-  check_path
+  if [[ "$NO_PATH" == "true" ]]; then
+    print_info "Skipping PATH modification (--no-path flag used)"
+    echo "" >&2
+    echo "To use ${CLI_NAME}, add this to your shell configuration:" >&2
+    echo "  export PATH=\"\$PATH:${INSTALL_DIR}\"" >&2
+  elif [[ "$DRY_RUN" == "true" ]]; then
+    print_info "Would update PATH in detected shell configuration files"
+  else
+    check_path
+  fi
 
   echo "" >&2
   print_success "Installation complete! 🎉"
