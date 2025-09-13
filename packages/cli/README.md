@@ -12,10 +12,10 @@ curl -fsSL https://raw.githubusercontent.com/cogflows/promptcode-vscode/main/pac
 ```
 
 The installation script will:
-- Install Bun if not already installed
-- Install all dependencies
-- Build the CLI
+- Download the latest prebuilt binary for your platform
+- Make it executable and add to your PATH (~/.local/bin)
 - Create a global `promptcode` command
+- Set up auto-update functionality
 
 ### Manual Installation
 
