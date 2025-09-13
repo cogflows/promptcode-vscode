@@ -9,7 +9,7 @@
 
 > **The ultimate rescue tool when AI code agents hit their limits**
 
-PromptCode is your go-to VS Code extension when code agents like Cursor or Windsurf hit a wall. Designed to supercharge your coding workflow, PromptCode seamlessly connects your codebase to your favorite AI models—including those without direct API access, like GPT-5 or Grok. Pick your file context, craft precise prompt templates, generate AI prompts, and even parse the responses—all within the comfort of your VS Code editor.
+PromptCode is your go-to solution when code agents like Cursor or Windsurf hit a wall. Available as both a powerful [VS Code extension](https://marketplace.visualstudio.com/items?itemName=cogflows.promptcode) and a standalone [CLI tool](https://github.com/cogflows/promptcode-vscode/tree/main/packages/cli#readme), PromptCode supercharges your workflow with improved code-to-AI connections. It seamlessly bridges your codebase with your favorite AI models—including those without direct API access, like GPT-5 or Grok. Pick your file context, craft precise prompt templates, generate AI prompts, and even parse the responses—whether you prefer the rich VS Code interface or the flexibility of the command line.
 
 ## Demo Video
 
