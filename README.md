@@ -35,7 +35,7 @@ curl -fsSL https://raw.githubusercontent.com/cogflows/promptcode-vscode/main/pac
 irm https://raw.githubusercontent.com/cogflows/promptcode-vscode/main/packages/cli/scripts/install.ps1 | iex
 
 # Quick test
-promptcode expert "Explain this code" src/**/*.ts
+promptcode expert "Explain this code" -f "src/**/*.ts"
 ```
 
 ## Why PromptCode?
@@ -76,7 +76,8 @@ No more fumbling with scattered tools or manual context copying—PromptCode kee
 - **Expert Mode**: Direct AI consultation with codebase context
 - **Preset Management**: Save and reuse file selection patterns
 - **Cost Controls**: Budget caps, dry-run mode, and approval workflows
-- **IDE Integration**: Works alongside Claude Code and Cursor
+- **Claude Code Integration**: Custom slash commands for Claude Code (`promptcode cc`)
+- **Cursor Integration**: Teach Cursor's AI about your codebase (`promptcode cursor`)
 - **Auto-Updates**: Keep CLI current with `promptcode update`
 
 ## Supported AI Models
@@ -102,6 +103,10 @@ Run `promptcode models` to see all available models and their capabilities.
 ### CLI Workflow
 
 ```bash
+# Set up AI agent integrations
+promptcode cc           # Install Claude Code slash commands
+promptcode cursor       # Enhance Cursor's AI capabilities
+
 # Create a reusable preset for your API files
 promptcode preset create api --from-files "src/api/**/*.ts" "src/models/**/*.ts"
 
@@ -112,7 +117,7 @@ promptcode expert "How can I optimize these database queries?" --preset api
 promptcode generate --preset api --template refactor -o prompt.txt
 
 # Direct file analysis
-promptcode expert "Review for security issues" src/auth/*.ts --model gpt-5
+promptcode expert "Review for security issues" -f "src/auth/*.ts" --model gpt-5
 ```
 
 ## Configuration
@@ -121,6 +126,17 @@ Tailor PromptCode to your needs with these options:
 
 - **Ignore Patterns**: Define which files to skip when selecting context (e.g., node_modules/ or .git/).
 - **Prompt Folders**: Point to directories housing your custom prompt templates for quick access (e.g., .cursorrule, ai-docs).
+
+## Requirements
+
+### VS Code Extension
+- VS Code ≥ 1.96.0
+- Windows, macOS, or Linux
+
+### CLI Tool
+- macOS (Intel/Apple Silicon), Linux (x64), or Windows (x64)
+- Internet connection for AI consultations
+- API keys for AI providers (OpenAI, Anthropic, Google, or xAI)
 
 ## Installation
 
@@ -161,14 +177,19 @@ promptcode uninstall   # Remove CLI and clean up
 - Preset Management: Save and reuse file selection patterns
 - Template Support: Apply structured prompts for common tasks
 - Multi-Model Support: Works with OpenAI, Anthropic, Google, and xAI models
-- IDE Integration: Set up integrations with Claude Code and Cursor
+- Claude Code Integration: Install custom slash commands with `promptcode cc`
+- Cursor Integration: Enhance Cursor's AI with `promptcode cursor`
 
-See the [CLI documentation](packages/cli/README.md) for detailed usage and examples.
+See the [CLI documentation](packages/cli/README.md) for detailed usage, integration setup, and examples.
+
+## Contributing
+
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details on how to get started.
 
 ## Telemetry
 
 PromptCode collects anonymous usage data (which features are used and any errors encountered) to improve the extension. This respects VS Code's telemetry settings and can be disabled via `promptcode.enableTelemetry` setting. No personal data, file contents, prompts, or code are ever collected.
 
-## Copyright 
+## Copyright
 
 © 2025 cogflows. All Rights Reserved.
