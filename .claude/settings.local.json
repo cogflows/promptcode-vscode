@@ -342,7 +342,8 @@
       "Read(/var/folders/03/g5gpxknx1jnfjjqtfd9kz0q00dwnyv/T/**)",
       "Read(//private/tmp/test-promptcode-install/**)",
       "Bash(./promptcode:*)",
-      "Bash($HOME/.bun/bin/bun -e \"console.log(''Bun.stdout:'', typeof Bun.stdout); console.log(''process.stdout:'', typeof process.stdout); console.log(''process.stderr:'', typeof process.stderr)\")"
+      "Bash($HOME/.bun/bin/bun -e \"console.log(''Bun.stdout:'', typeof Bun.stdout); console.log(''process.stdout:'', typeof process.stdout); console.log(''process.stderr:'', typeof process.stderr)\")",
+      "Bash($HOME/.bun/bin/bun install:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits",
