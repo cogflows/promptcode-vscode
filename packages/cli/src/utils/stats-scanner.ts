@@ -92,7 +92,7 @@ class ProgressTracker {
   private byteRateEWMA = createEWMA(0.2);
   private lastLogTime = 0;
   private updateInterval = 200; // ms
-  private isTTY = process.stderr.isTTY;
+  private isTTY = process.stderr?.isTTY || false;
 
   constructor(
     private totalFiles: number,
@@ -279,7 +279,7 @@ export async function discoverFiles(
     dirsProcessed += batch.length;
     
     // Show progress during discovery for large projects
-    if (showProgress && process.stderr.isTTY) {
+    if (showProgress && process.stderr?.isTTY) {
       const now = performance.now();
       if (now - lastProgressTime > progressInterval) {
         process.stderr.write(
@@ -291,7 +291,7 @@ export async function discoverFiles(
   }
   
   // Clear progress line
-  if (showProgress && process.stderr.isTTY) {
+  if (showProgress && process.stderr?.isTTY) {
     process.stderr.write('\r' + ' '.repeat(80) + '\r');
   }
 

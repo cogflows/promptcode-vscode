@@ -24,19 +24,23 @@ export function isCIEnvironment(): boolean {
  * Check if the current environment supports interactive prompts
  */
 export function isInteractive(): boolean {
-  return process.stdout.isTTY && 
-         process.stdin.isTTY && 
-         !isTestEnvironment() &&
-         !isCIEnvironment();
+  return Boolean(
+    process.stdout?.isTTY &&
+    process.stdin?.isTTY &&
+    !isTestEnvironment() &&
+    !isCIEnvironment()
+  );
 }
 
 /**
  * Check if spinner should be shown
  */
 export function shouldShowSpinner(options?: { json?: boolean }): boolean {
-  return !options?.json && 
-         process.stdout.isTTY && 
-         !isTestEnvironment();
+  return Boolean(
+    !options?.json &&
+    process.stdout?.isTTY &&
+    !isTestEnvironment()
+  );
 }
 
 /**

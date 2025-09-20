@@ -40,7 +40,7 @@ export async function savePreset(
   
   // Check if preset exists and we're not in overwrite mode
   if (fs.existsSync(presetPath) && !options.overwrite) {
-    if (!process.stdout.isTTY) {
+    if (!process.stdout?.isTTY) {
       throw new Error(`Preset '${name}' already exists. Remove it first or choose a different name.`);
     }
     // In TTY mode, we could prompt for confirmation here

@@ -661,7 +661,7 @@ async function editPreset(presetName: string, projectPath: string): Promise<void
   }
   
   // Check if we're in an interactive terminal
-  const isInteractive = process.stdout.isTTY && process.stdin.isTTY;
+  const isInteractive = process.stdout?.isTTY && process.stdin?.isTTY;
   
   if (!isInteractive) {
     console.log(chalk.yellow('Non-interactive environment detected.'));

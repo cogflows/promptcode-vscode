@@ -1,6 +1,10 @@
 #!/usr/bin/env bun
 
-// IMPORTANT: This must be the very first import/execution
+// CRITICAL: Polyfills MUST be loaded before ANY other imports
+// This ensures process.stderr/stdout exist for the Bun standalone binary
+import './polyfills';
+
+// IMPORTANT: This must be the second import/execution
 // It handles pending update finalization before any other initialization
 import { finalizeUpdateIfNeeded } from './early-update';
 finalizeUpdateIfNeeded();

@@ -339,7 +339,9 @@
       "Bash(./promptcode-old --version)",
       "Read(/var/folders/03/g5gpxknx1jnfjjqtfd9kz0q00dwnyv/T/**)",
       "Read(/var/folders/03/g5gpxknx1jnfjjqtfd9kz0q00dwnyv/T/**)",
-      "Read(/var/folders/03/g5gpxknx1jnfjjqtfd9kz0q00dwnyv/T/**)"
+      "Read(/var/folders/03/g5gpxknx1jnfjjqtfd9kz0q00dwnyv/T/**)",
+      "Read(//private/tmp/test-promptcode-install/**)",
+      "Bash(./promptcode:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits",
