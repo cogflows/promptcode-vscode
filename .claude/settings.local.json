@@ -107,11 +107,9 @@
       "Bash(PROMPTCODE_TEST=1 PROMPTCODE_MOCK_LLM=1 OPENAI_API_KEY=test-key timeout 1 ./dist/promptcode expert \"Analyze this\" --model o3-pro)",
       "Bash(PROMPTCODE_TEST=1 PROMPTCODE_MOCK_LLM=1 OPENAI_API_KEY=test-key ./dist/promptcode expert \"Analyze this\" --model o3-pro 1)",
       "Bash(/dev/null)",
-      "Bash(PROMPTCODE_TEST=1 PROMPTCODE_MOCK_LLM=1 OPENAI_API_KEY=test-key /Users/aviv.s/workspace/reference-projects/promptcode-vscode/packages/cli/dist/promptcode expert \"Analyze this\" --model o3-pro)",
       "Bash(if [[ -n \"$GOOGLE_API_KEY\" ]])",
       "Bash(else echo \"No Google API key found\")",
       "Bash(fi)",
-      "Bash(/Users/aviv.s/.local/bin/promptcode:*)",
       "Bash(./packages/cli/dist/promptcode:*)",
       "Bash(PROMPTCODE_TEST=1 bun test test/commands/expert.test.ts)",
       "Bash(../../dist/promptcode preset optimize cli-core-review:*)",
@@ -158,7 +156,6 @@
       "Bash(PROMPTCODE_TEST=1 PROMPTCODE_MOCK_LLM=1 OPENAI_API_KEY=test-key ./dist/promptcode expert \"Analyze\" --model o3-pro --json --yes)",
       "Bash(gh workflow run:*)",
       "Bash(PROMPTCODE_TEST=1 ./promptcode cc --path /tmp/test-cc-dx --yes)",
-      "Bash(PROMPTCODE_TEST=1 /Users/aviv.s/workspace/reference-projects/promptcode-vscode/packages/cli/dist/promptcode cc --path /tmp/test-cc-dx --uninstall)",
       "Bash(PROMPTCODE_TEST=1 bun test test/commands/cc.test.ts)",
       "Bash(for:*)",
       "Bash(head:*)",
@@ -201,7 +198,6 @@
       "Bash(PROMPTCODE_TEST=1 ./dist/promptcode cc --path /tmp/test-cc-dx --yes)",
       "Bash(PROMPTCODE_TEST=1 ./dist/promptcode cc docs update --path /tmp/test-cc-dx)",
       "Bash(PROMPTCODE_TEST=1 ./dist/promptcode cc --with-docs --path /tmp/test-cc-dx --yes)",
-      "Bash(PROMPTCODE_TEST=1 /Users/aviv.s/workspace/reference-projects/promptcode-vscode/packages/cli/dist/promptcode cc --yes)",
       "Bash(PROMPTCODE_TEST=1 ./dist/promptcode cc --yes)",
       "Bash(kill:*)",
       "Bash(tty)",
@@ -221,7 +217,6 @@
       "Bash(OPENAI_API_KEY=\"\" ./dist/promptcode expert \"Test question\" --model gpt-5 --estimate-cost)",
       "Bash(git describe:*)",
       "Bash(gh pr create:*)",
-      "Bash(NONINTERACTIVE=1 bash /Users/aviv.s/workspace/reference-projects/promptcode-vscode/packages/cli/scripts/install.sh)",
       "Bash(git branch:*)",
       "Bash(:*promptcode:*)",
       "Bash(PROMPTCODE_TEST=1:*)",
@@ -292,7 +287,6 @@
       "Bash(:*|:*tail:*)",
       "Bash(/tmp/test-promptcode-install.sh:*)",
       "Bash(/tmp/test-cli-flows.sh:*)",
-      "Bash(/Users/aviv.s/workspace/reference-projects/promptcode-vscode/packages/cli/dist/promptcode cc:*)",
       "Bash(PROMPTCODE_TEST=1 CI=true bun test --bail=1)",
       "Bash(XDG_CONFIG_HOME=/tmp/test-xdg-config XDG_CACHE_HOME=/tmp/test-xdg-cache node -e:*)",
       "Bash(PROMPTCODE_TEST=1 ./dist/promptcode preset create test-mixed --from-files \"src/**/*.ts\" \"src/utils\" \"package.json\" \"README.md\" --path /tmp/test-promptcode)",
@@ -350,9 +344,7 @@
     "deny": [],
     "defaultMode": "acceptEdits",
     "additionalDirectories": [
-      "/tmp",
-      "/Users/aviv.s/workspace",
-      "/Users/aviv.s/.local/bin"
+      "/tmp"
     ]
   }
 }
