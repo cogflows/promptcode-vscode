@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { getCacheDir, getConfigDir, isSafeToRemove } from '../utils/paths';
 import { removeFromClaudeMd, removePromptCodeCommands, findClaudeFolder, findClaudeMd, hasPromptCodeSection, PROMPTCODE_CLAUDE_COMMANDS, LEGACY_CLAUDE_COMMANDS } from '../utils/claude-integration';
-import inquirer from 'inquirer';
+import { safeConfirm } from '../utils/safe-prompts';
 
 async function removeDirectory(dir: string, description: string, dryRun: boolean = false): Promise<boolean> {
   try {
@@ -60,15 +60,10 @@ async function removeClaudeIntegration(projectPath: string, skipPrompts: boolean
   if (hasClaudeMdSection) {
     let shouldRemove = skipPrompts;
     if (!skipPrompts && !dryRun) {
-      const { removeClaudeMdSection } = await inquirer.prompt([
-        {
-          type: 'confirm',
-          name: 'removeClaudeMdSection',
-          message: `Remove PromptCode section from ${path.basename(claudeMdPath)}?`,
-          default: false  // Safe default
-        }
-      ]);
-      shouldRemove = removeClaudeMdSection;
+      shouldRemove = await safeConfirm(
+        `Remove PromptCode section from ${path.basename(claudeMdPath)}?`,
+        false  // Safe default
+      );
     }
     
     if (shouldRemove) {
@@ -101,15 +96,10 @@ async function removeClaudeIntegration(projectPath: string, skipPrompts: boolean
       
       let shouldRemove = skipPrompts;
       if (!skipPrompts && !dryRun) {
-        const { removeCommands } = await inquirer.prompt([
-          {
-            type: 'confirm',
-            name: 'removeCommands',
-            message: `Remove these ${existingCommands.length} PromptCode command(s)?`,
-            default: false  // Safe default
-          }
-        ]);
-        shouldRemove = removeCommands;
+        shouldRemove = await safeConfirm(
+          `Remove these ${existingCommands.length} PromptCode command(s)?`,
+          false  // Safe default
+        );
       }
       
       if (shouldRemove) {
@@ -222,15 +212,11 @@ export const uninstallCommand = program
     
     // Confirm uninstall
     if (!options.yes && !options.dryRun) {
-      const { confirmUninstall } = await inquirer.prompt([
-        {
-          type: 'confirm',
-          name: 'confirmUninstall',
-          message: 'Are you sure you want to uninstall PromptCode CLI?',
-          default: false
-        }
-      ]);
-      
+      const confirmUninstall = await safeConfirm(
+        'Are you sure you want to uninstall PromptCode CLI?',
+        false
+      );
+
       if (!confirmUninstall) {
         console.log(chalk.yellow('Uninstall cancelled'));
         process.exit(0);
@@ -246,15 +232,11 @@ export const uninstallCommand = program
     // Remove data directories unless --keep-data is specified
     if (!options.keepData) {
       if (!options.yes && !options.dryRun) {
-        const { removeData } = await inquirer.prompt([
-          {
-            type: 'confirm',
-            name: 'removeData',
-            message: 'Remove all configuration and cache files?',
-            default: false  // Safe default
-          }
-        ]);
-        
+        const removeData = await safeConfirm(
+          'Remove all configuration and cache files?',
+          false  // Safe default
+        );
+
         if (removeData) {
           removedSomething = await removeDirectory(getCacheDir(), 'cache', options.dryRun) || removedSomething;
           removedSomething = await removeDirectory(getConfigDir(), 'config', options.dryRun) || removedSomething;
@@ -265,15 +247,11 @@ export const uninstallCommand = program
           
           const currentPromptcode = path.join(process.cwd(), '.promptcode');
           if (await fsp.access(currentPromptcode).then(() => true).catch(() => false)) {
-            const { removeProject } = await inquirer.prompt([
-              {
-                type: 'confirm',
-                name: 'removeProject',
-                message: `Remove project PromptCode directory at ${currentPromptcode}?`,
-                default: false
-              }
-            ]);
-            
+            const removeProject = await safeConfirm(
+              `Remove project PromptCode directory at ${currentPromptcode}?`,
+              false
+            );
+
             if (removeProject) {
               removedSomething = await removeDirectory(currentPromptcode, 'project data', options.dryRun) || removedSomething;
             }

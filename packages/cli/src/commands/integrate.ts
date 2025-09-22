@@ -1,6 +1,6 @@
 import * as path from 'path';
 import chalk from 'chalk';
-import inquirer from 'inquirer';
+import { safePrompt } from '../utils/safe-prompts';
 import { detectIntegrations, hasAnyIntegration } from '../utils/integration-detector';
 import { isInteractive } from '../utils/environment';
 import { ccCommand } from './cc';
@@ -44,12 +44,15 @@ export async function integrateCommand(options: IntegrateOptions): Promise<void>
     let shouldSetup = !options.autoDetect;
     
     if (options.autoDetect && isInteractive()) {
-      const { proceed } = await inquirer.prompt([{
-        type: 'confirm',
-        name: 'proceed',
-        message: 'Claude Code detected. Set up integration?',
-        default: true
-      }]);
+      const { proceed } = await safePrompt(
+        [{
+          type: 'confirm',
+          name: 'proceed',
+          message: 'Claude Code detected. Set up integration?',
+          default: true
+        }],
+        { proceed: true }  // Default if prompts fail
+      );
       shouldSetup = proceed;
     }
     
@@ -78,12 +81,15 @@ export async function integrateCommand(options: IntegrateOptions): Promise<void>
     let shouldSetup = !options.autoDetect;
     
     if (options.autoDetect && isInteractive()) {
-      const { proceed } = await inquirer.prompt([{
-        type: 'confirm',
-        name: 'proceed',
-        message: `Cursor ${integrations.cursor.hasLegacyRules ? '(.cursorrules)' : ''} detected. Set up integration?`,
-        default: true
-      }]);
+      const { proceed } = await safePrompt(
+        [{
+          type: 'confirm',
+          name: 'proceed',
+          message: `Cursor ${integrations.cursor.hasLegacyRules ? '(.cursorrules)' : ''} detected. Set up integration?`,
+          default: true
+        }],
+        { proceed: true }  // Default if prompts fail
+      );
       shouldSetup = proceed;
     }
     

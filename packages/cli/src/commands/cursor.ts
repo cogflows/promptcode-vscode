@@ -2,7 +2,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import chalk from 'chalk';
 import { createTwoFilesPatch } from 'diff';
-import inquirer from 'inquirer';
+import { safePrompt } from '../utils/safe-prompts';
 import { getCursorTemplatesDir } from '../utils/paths';
 import { spinner } from '../utils/spinner';
 import { isInteractive } from '../utils/environment';
@@ -101,17 +101,20 @@ async function updateTemplateFile(
   console.log(chalk.yellow(`\n📝 File has local changes: ${fileName}`));
   console.log(patch);
   
-  const { action } = await inquirer.prompt([{
-    type: 'list',
-    name: 'action',
-    message: 'What would you like to do?',
-    choices: [
-      { name: 'Keep my version', value: 'keep' },
-      { name: 'Use new version (discard my changes)', value: 'replace' },
-      { name: 'Skip for now', value: 'skip' }
-    ],
-    default: 'keep'
-  }]);
+  const { action } = await safePrompt(
+    [{
+      type: 'list',
+      name: 'action',
+      message: 'What would you like to do?',
+      choices: [
+        { name: 'Keep my version', value: 'keep' },
+        { name: 'Use new version (discard my changes)', value: 'replace' },
+        { name: 'Skip for now', value: 'skip' }
+      ],
+      default: 'keep'
+    }],
+    { action: 'keep' } // Default to keep if prompts fail
+  );
   
   if (action === 'replace') {
     await fs.promises.writeFile(targetPath, newContent);
@@ -375,12 +378,15 @@ export async function cursorCommand(options: CursorOptions & { detect?: boolean 
         
         let updateLegacy = false;
         if (!options.yes && !options.force && isInteractive()) {
-          const { proceed } = await inquirer.prompt([{
-            type: 'confirm',
-            name: 'proceed',
-            message: 'Update .cursorrules with PromptCode instructions?',
-            default: false // Default to No like CC does
-          }]);
+          const { proceed } = await safePrompt(
+            [{
+              type: 'confirm',
+              name: 'proceed',
+              message: 'Update .cursorrules with PromptCode instructions?',
+              default: false // Default to No like CC does
+            }],
+            { proceed: false } // Default to not update if prompts fail
+          );
           updateLegacy = proceed;
         } else if (options.yes || options.force) {
           updateLegacy = true;

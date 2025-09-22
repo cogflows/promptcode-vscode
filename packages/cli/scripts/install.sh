@@ -109,28 +109,30 @@ safe_read() {
 safe_read_char() {
   local prompt="$1"
   local default="${2:-}"
-  
+  local ch=""
+
   if (( TTY_FD >= 0 )); then
     # Write prompt to terminal and read single char
     printf "%s" "$prompt" >&$TTY_FD
-    if IFS= read -r -n 1 -u $TTY_FD REPLY; then
+    if IFS= read -r -n 1 -u $TTY_FD ch; then
       printf "\n" >&$TTY_FD  # Add newline after single char read
     else
-      REPLY="$default"
+      ch="$default"
     fi
   else
     # Non-interactive environment, use default
     [[ -n "$prompt" ]] && print_info "Non-interactive mode detected, using default: $default"
-    REPLY="$default"
+    ch="$default"
   fi
+  printf "%s" "$ch"
 }
 
 # Ask yes/no question with default
 ask_yes_no() {
   local prompt="$1"
   local default="${2:-Y}"
-  safe_read_char "$prompt" ""
-  local ans="${REPLY:-$default}"
+  local ans
+  ans="$(safe_read_char "$prompt" "")"
   [[ -z "$ans" ]] && ans="$default"
   [[ "$ans" =~ ^[Yy]$ ]]
 }
@@ -730,8 +732,9 @@ main() {
         echo "" >&2
         echo "  ${CLI_NAME} update --force" >&2
         echo "" >&2
-        safe_read_char "Run this command now? [Y/n] " "Y"
-        if [[ $REPLY =~ ^[Yy]$ ]] || [ -z "$REPLY" ]; then
+        local reply
+        reply="$(safe_read_char "Run this command now? [Y/n] " "Y")"
+        if [[ $reply =~ ^[Yy]$ ]] || [ -z "$reply" ]; then
           # Try to run update --force, but if it fails (old version), continue with direct install
           if ! "$CLI_NAME" update --force 2>&1; then
             print_warning "Current version doesn't support --force flag"
@@ -755,8 +758,9 @@ main() {
       if [[ "$version_ok_for_update" == "false" ]] && [[ "$current_version" =~ ^0\.6\.[0-8]$ ]]; then
         print_warning "Version $current_version has a known update issue. Direct reinstall required."
         print_info "Will perform clean installation of version $version"
-        safe_read_char "Proceed with direct reinstall? [Y/n] " "Y"
-        if [[ ! $REPLY =~ ^[Yy]$ ]] && [ -n "$REPLY" ]; then
+        local reply
+        reply="$(safe_read_char "Proceed with direct reinstall? [Y/n] " "Y")"
+        if [[ ! $reply =~ ^[Yy]$ ]] && [ -n "$reply" ]; then
           print_info "Installation cancelled"
           exit 0
         fi
@@ -764,16 +768,18 @@ main() {
       elif [[ "$current_version" == *"-dev."* ]]; then
         print_warning "This development version doesn't support update."
         print_info "Will force reinstall with latest release version ($version)"
-        safe_read_char "Proceed with force reinstall? [Y/n] " "Y"
-        if [[ ! $REPLY =~ ^[Yy]$ ]] && [ -n "$REPLY" ]; then
+        local reply
+        reply="$(safe_read_char "Proceed with force reinstall? [Y/n] " "Y")"
+        if [[ ! $reply =~ ^[Yy]$ ]] && [ -n "$reply" ]; then
           print_info "Installation cancelled"
           exit 0
         fi
         # Continue with installation - will overwrite the dev version
       else
         print_warning "This version doesn't support update. Manual reinstall required."
-        safe_read_char "Proceed with manual reinstall? [Y/n] " "Y"
-        if [[ ! $REPLY =~ ^[Yy]$ ]] && [ -n "$REPLY" ]; then
+        local reply
+        reply="$(safe_read_char "Proceed with manual reinstall? [Y/n] " "Y")"
+        if [[ ! $reply =~ ^[Yy]$ ]] && [ -n "$reply" ]; then
           print_info "Installation cancelled"
           exit 0
         fi
@@ -822,20 +828,48 @@ main() {
   # Automatically check for integrations
   echo "" >&2
   print_info "Checking for AI environment integrations..."
-  # Run integration check with proper TTY handling using our FD
+
+  # Run integration check with proper error handling for Bun/macOS kqueue issue
+  # Create temp file for capturing stderr
+  local temp_err=$(mktemp 2>/dev/null || mktemp -t promptcode)
+  local integrate_failed=false
+
   if (( TTY_FD >= 0 )); then
     # Ensure integrate both reads from and writes to the terminal
     if (( TTY_FD == 0 )); then
       # stdin is already TTY, run normally
-      "${CLI_NAME}" integrate --auto-detect || true
+      if ! "${CLI_NAME}" integrate --auto-detect 2>"$temp_err"; then
+        integrate_failed=true
+      fi
     else
-      # Redirect stdin/stdout/stderr to TTY for full interaction
-      "${CLI_NAME}" integrate --auto-detect <&$TTY_FD >&$TTY_FD 2>&$TTY_FD || true
+      # Redirect stdin/stdout to TTY for interaction, capture stderr
+      if ! "${CLI_NAME}" integrate --auto-detect <&$TTY_FD >&$TTY_FD 2>"$temp_err"; then
+        integrate_failed=true
+      fi
     fi
   else
     # Non-interactive, just do silent check
     "${CLI_NAME}" integrate --auto-detect 2>/dev/null || true
   fi
+
+  # Check if integration failed due to kqueue error
+  if [[ "$integrate_failed" == "true" ]]; then
+    local err_content=$(cat "$temp_err" 2>/dev/null || echo "")
+    # Check for known Bun/macOS kqueue error patterns
+    if echo "$err_content" | grep -q -E "(EINVAL.*kqueue|WriteStream.*tty|error:.*kqueue)" 2>/dev/null; then
+      # Known issue - provide helpful message
+      if [[ "$(uname)" == "Darwin" ]]; then
+        print_info "Note: Interactive prompts temporarily unavailable on macOS."
+        print_info "Run 'promptcode integrate' manually after installation."
+      fi
+    elif [[ -n "$err_content" ]]; then
+      # Other error - show it
+      echo "$err_content" >&2
+    fi
+  fi
+
+  # Clean up temp file
+  rm -f "$temp_err"
   
   echo "" >&2
   echo "Get started with:" >&2
