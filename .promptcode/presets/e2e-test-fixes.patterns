@@ -1,6 +1,0 @@
-# e2e-test-fixes preset
-# Generated: 2025-08-31T19:29:24.389Z
-
-!**/node_modules/**
-!**/dist/**
-!**/build/**
