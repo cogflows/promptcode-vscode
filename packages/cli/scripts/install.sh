@@ -855,12 +855,13 @@ main() {
   # Check if integration failed due to kqueue error
   if [[ "$integrate_failed" == "true" ]]; then
     local err_content=$(cat "$temp_err" 2>/dev/null || echo "")
-    # Check for known Bun/macOS kqueue error patterns
+    # Check for known Bun/macOS kqueue error patterns (should be fixed in newer versions)
     if echo "$err_content" | grep -q -E "(EINVAL.*kqueue|WriteStream.*tty|error:.*kqueue)" 2>/dev/null; then
-      # Known issue - provide helpful message
+      # This error should be fixed in promptcode v0.6.29+
+      # If you're seeing this, you may have an older version
       if [[ "$(uname)" == "Darwin" ]]; then
-        print_info "Note: Interactive prompts temporarily unavailable on macOS."
-        print_info "Run 'promptcode integrate' manually after installation."
+        print_warning "Detected TTY issue. If prompts don't work, run 'promptcode integrate' manually after installation."
+        print_info "Consider updating to promptcode v0.6.29+ which includes a fix for this issue."
       fi
     elif [[ -n "$err_content" ]]; then
       # Other error - show it
