@@ -11,7 +11,7 @@ import { bunTextPrompt, bunConfirmPrompt, bunSelectPrompt, shouldUseBunPrompts }
 
 // Lazy-load inquirer to avoid crashes and reduce startup cost
 let _inquirer: typeof import('inquirer').default | null = null;
-const getInquirer = async () => {
+const getInquirer = async (): Promise<typeof import('inquirer').default> => {
   if (!_inquirer) {
     _inquirer = (await import('inquirer')).default;
   }
