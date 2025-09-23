@@ -614,7 +614,8 @@ main() {
   local DRY_RUN=false
   local NO_PATH=false
   local HELP=false
-  
+  local LOCAL_BINARY=""
+
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --dry-run)
@@ -624,6 +625,14 @@ main() {
       --no-path)
         NO_PATH=true
         shift
+        ;;
+      --local)
+        # Use local binary instead of downloading
+        LOCAL_BINARY="$2"
+        if [[ -z "$LOCAL_BINARY" ]] || [[ ! -f "$LOCAL_BINARY" ]]; then
+          print_error "Local mode requires path to binary: --local /path/to/promptcode"
+        fi
+        shift 2
         ;;
       --uninstall)
         # Open TTY file descriptor for interactive I/O (ignore failure)
@@ -657,10 +666,11 @@ main() {
     echo "Usage: curl -fsSL <installer-url> | bash [OPTIONS]" >&2
     echo "" >&2
     echo "Options:" >&2
-    echo "  --dry-run     Show what would be done without making changes" >&2
-    echo "  --no-path     Skip PATH modifications (manual setup required)" >&2
-    echo "  --uninstall   Remove PromptCode CLI from your system" >&2
-    echo "  --help, -h    Show this help message" >&2
+    echo "  --dry-run            Show what would be done without making changes" >&2
+    echo "  --no-path            Skip PATH modifications (manual setup required)" >&2
+    echo "  --local <path>       Use local binary instead of downloading" >&2
+    echo "  --uninstall          Remove PromptCode CLI from your system" >&2
+    echo "  --help, -h           Show this help message" >&2
     exit 0
   fi
   
@@ -787,25 +797,35 @@ main() {
     fi
   fi
 
-  # Download binary
-  if [[ "$DRY_RUN" == "true" ]]; then
+  # Download binary or use local one
+  local temp_binary=""
+  if [[ -n "$LOCAL_BINARY" ]]; then
+    # Use provided local binary
+    print_info "Using local binary: $LOCAL_BINARY"
+    temp_binary="$LOCAL_BINARY"
+    # Extract version from binary if possible
+    if "$temp_binary" --version &>/dev/null; then
+      version="v$("$temp_binary" --version)"
+      print_info "Detected version: $version"
+    fi
+  elif [[ "$DRY_RUN" == "true" ]]; then
     print_info "Would download ${CLI_NAME} ${version} for ${platform}"
-    local temp_binary="/tmp/dry-run-placeholder"
+    temp_binary="/tmp/dry-run-placeholder"
     touch "$temp_binary"  # Create placeholder for dry run
   else
-    local temp_binary=$(download_binary "$version" "$platform")
+    temp_binary=$(download_binary "$version" "$platform")
   fi
-  
-  # Check if download was successful
+
+  # Check if binary exists
   if [ -z "$temp_binary" ] || [ ! -f "$temp_binary" ]; then
-    print_error "Failed to download binary"
+    print_error "Failed to get binary"
     exit 1
   fi
 
   # Install binary
   if [[ "$DRY_RUN" == "true" ]]; then
     print_info "Would install binary to ${INSTALL_DIR}/${CLI_NAME}"
-    rm -f "$temp_binary"
+    [[ "$temp_binary" == "/tmp/dry-run-placeholder" ]] && rm -f "$temp_binary"
   else
     install_binary "$temp_binary"
   fi
