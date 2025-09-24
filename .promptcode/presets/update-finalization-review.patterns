@@ -1,9 +1,0 @@
-# update-finalization-review preset
-# Generated: 2025-08-31T06:46:15.588Z
-
-!**/node_modules/**
-!**/dist/**
-!**/build/**
-
-packages/cli/src/early-update.ts
-packages/cli/src/index.ts

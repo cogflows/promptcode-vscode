@@ -1,6 +1,0 @@
-# final-update-review preset
-# Generated: 2025-08-31T12:04:22.287Z
-
-!**/node_modules/**
-!**/dist/**
-!**/build/**

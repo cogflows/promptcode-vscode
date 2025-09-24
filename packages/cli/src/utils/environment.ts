@@ -6,7 +6,7 @@
  * Check if running in test environment
  */
 export function isTestEnvironment(): boolean {
-  return process.env.PROMPTCODE_TEST === '1' || 
+  return process.env.PROMPTCODE_TEST === '1' ||
          process.env.NODE_ENV === 'test';
 }
 
@@ -14,22 +14,53 @@ export function isTestEnvironment(): boolean {
  * Check if running in CI environment
  */
 export function isCIEnvironment(): boolean {
-  return process.env.CI === 'true' || 
+  return process.env.CI === 'true' ||
          process.env.GITHUB_ACTIONS === 'true' ||
          process.env.GITLAB_CI === 'true' ||
          process.env.CIRCLECI === 'true';
 }
 
 /**
+ * Check if running in Bun runtime
+ */
+export function isBunRuntime(): boolean {
+  return typeof process.versions?.bun === 'string';
+}
+
+/**
+ * Check if running Bun on macOS (has TTY/kqueue issues)
+ */
+export function isBunOnMacOS(): boolean {
+  return isBunRuntime() && process.platform === 'darwin';
+}
+
+/**
  * Check if the current environment supports interactive prompts
  */
 export function isInteractive(): boolean {
-  return Boolean(
-    process.stdout?.isTTY &&
-    process.stdin?.isTTY &&
-    !isTestEnvironment() &&
-    !isCIEnvironment()
-  );
+  // Force non-interactive in test/CI environments
+  if (isTestEnvironment() || isCIEnvironment()) {
+    return false;
+  }
+
+  // Use POSIX FD checks for accurate TTY detection
+  const fs = require('fs');
+  const isTerm = (fd: 0 | 1): boolean => {
+    try {
+      return fs.fstatSync(fd).isCharacterDevice();
+    } catch {
+      return false;
+    }
+  };
+
+  return isTerm(1) && isTerm(0);
+}
+
+/**
+ * Check if interactive prompts can be used (considering runtime limitations)
+ */
+export function canUseInteractivePrompts(): boolean {
+  return isInteractive();
 }
 
 /**

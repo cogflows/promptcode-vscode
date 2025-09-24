@@ -144,6 +144,52 @@ npm run package  # Creates .vsix file
 cd packages/cli
 bun run build    # Creates dist/promptcode binary
 ```
+## Bun Runtime Considerations
+
+### TTY/Interactive Prompts on macOS
+**Issue**: Bun v1.2.22 doesn't set `process.stdout.isTTY` properties, causing issues with inquirer.js on macOS (kqueue EINVAL errors).
+
+**Solution Architecture**:
+1. **Polyfill** (`src/polyfills.ts`): Detects Bun runtime and sets `isTTY` based on environment heuristics
+2. **Bun-native prompts** (`src/utils/bun-prompts.ts`): Uses Bun's console async iterator for stdin
+3. **Safe wrapper** (`src/utils/safe-prompts.ts`): Tries Bun-native prompts first, falls back to inquirer, then to defaults
+
+### Building with Bun
+```bash
+cd packages/cli
+bun install                    # Install dependencies
+bun run build                  # Build standalone binary
+bun test                       # Run test suite
+```
+
+**Build Process**:
+1. Injects version from package.json
+2. Generates template checksums (preserves old for backward compatibility)
+3. Embeds templates into binary
+4. Uses `bun build --compile` to create standalone executable
+5. Copies template files to dist/
+
+**Key Files**:
+- `src/polyfills.ts` - Bun compatibility layer
+- `src/utils/bun-prompts.ts` - Native Bun prompt implementations
+- `src/utils/safe-prompts.ts` - Unified prompt interface with fallbacks
+- `src/utils/environment.ts` - Runtime detection helpers
+
+### Testing in Bun
+```bash
+# Run all tests
+cd packages/cli && bun test
+
+# Run specific test file
+bun test test/commands/expert.test.ts
+
+# Test with specific pattern
+bun test -t "pattern"
+
+# Test environment variables
+PROMPTCODE_TEST=1 bun test  # Disables interactive features
+```
+
 ## Notes for Claude Code
 
 After recent changes:
@@ -154,54 +200,6 @@ After recent changes:
 - To release: Create a tag and push to trigger GitHub Actions
 - DO NOT make shortcuts, always use the most idiomatic and generic solution
 - **We are in 2025**, when using web search, you should use the most recent information (don't state 2024)
-
-<!-- PROMPTCODE-CLI-START -->
-# PromptCode CLI
-
-AI-ready code analysis via presets and expert consultations.
-
-## Commands
-- `/promptcode-preset-list` - List available presets
-- `/promptcode-preset-info <name>` - Show preset details & tokens
-- `/promptcode-preset-create <description>` - Create preset from description
-- `/promptcode-preset-to-prompt <preset> [-- instructions]` - Export preset to file with optional instructions
-- `/promptcode-ask-expert <question>` - AI consultation with code context
-
-## Workflow Examples
-
-### Discovery → Context → Expert
-```bash
-/promptcode-preset-list                    # Find existing presets
-/promptcode-preset-create auth system      # Or create focused preset
-/promptcode-preset-to-prompt auth -- Review for security issues  # Export with instructions
-/promptcode-ask-expert Why is login slow?  # Consult with context
-```
-
-### Direct CLI Usage
-
-```bash
-promptcode expert "Review this" --preset api --yes   # After cost approval
-promptcode generate -f "src/**/*.ts" -o prompt.txt   # Export for external use
-```
-
-## Cost Approval Protocol
-
-1. CLI estimates cost (threshold: $0.50)
-2. CC asks user ONCE for approval
-3. CC re-runs with `--yes` flag
-
-## API Keys Required
-
-```bash
-export OPENAI_API_KEY=sk-...     # GPT/O3 models
-export ANTHROPIC_API_KEY=sk-...  # Claude models
-export GOOGLE_API_KEY=...        # Gemini models
-export XAI_API_KEY=...           # Grok models
-```
-
-💡 **Tip**: Create focused presets for better context and lower costs.
-<!-- PROMPTCODE-CLI-END -->
-
 ## CRITICAL: Claude Command Templates
 
 ⚠️ **IMPORTANT**: The `.claude/commands/*.md` files in this project are **OVERWRITTEN** when users run `promptcode cc` (Claude Code integration)!

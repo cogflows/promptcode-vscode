@@ -117,8 +117,8 @@ process.exit(0);
       cwd: installDir
     });
     
-    // Should successfully download and stage  
-    expect(result.stdout + result.stderr).toContain('Update');
+    // Should successfully download and stage
+    expect((result.stdout as string) + (result.stderr as string)).toContain('Update');
     expect(result.status).toBe(0);
     
     // Check that staged binary exists at the real CLI location
@@ -194,7 +194,8 @@ process.exit(0);
     
     tamperedPort = await new Promise<number>((resolve) => {
       tamperedServer.listen(0, '127.0.0.1', () => {
-        tamperedPort = tamperedServer.address().port;
+        const address = tamperedServer.address();
+        tamperedPort = typeof address === 'string' ? 0 : address!.port;
         resolve(tamperedPort);
       });
     });
@@ -208,7 +209,7 @@ process.exit(0);
     });
     
     // Should fail on checksum mismatch
-    expect(result.stdout + result.stderr).toContain('Checksum');
+    expect((result.stdout as string) + (result.stderr as string)).toContain('Checksum');
     expect(result.status).not.toBe(0);
     
     tamperedServer.close();

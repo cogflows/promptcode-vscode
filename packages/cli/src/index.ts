@@ -1,7 +1,6 @@
 #!/usr/bin/env bun
 
-// CRITICAL: Polyfills MUST be loaded before ANY other imports
-// This ensures process.stderr/stdout exist for the Bun standalone binary
+// Minimal polyfills for Bun TTY compatibility
 import './polyfills';
 
 // IMPORTANT: This must be the second import/execution
@@ -281,7 +280,7 @@ Examples:
 
 // CC command - Claude integration setup
 const ccCmd = program
-  .command('cc [action]')
+  .command('cc [action] [subaction]')
   .description('Set up or manage Claude Code integration')
   .addHelpText('after', `
 Actions:
@@ -305,16 +304,15 @@ Examples:
   .option('--dry-run', 'preview changes without applying')
   .option('--all', 'when uninstalling, remove both commands and docs')
   .option('--detect', 'detect Claude Code environment (exit 0 if found)', false)
-  .action(async (action, options) => {
+  .action(async (action, subaction, options) => {
     // Handle subcommands
     if (action === 'docs') {
-      // docs subcommand needs additional parsing
-      const docsAction = process.argv[process.argv.indexOf('docs') + 1];
-      if (docsAction === 'update') {
+      // docs subcommand with subaction
+      if (subaction === 'update') {
         await ccCommand({ ...options, docsOnly: true });
-      } else if (docsAction === 'diff') {
+      } else if (subaction === 'diff') {
         await ccCommand({ ...options, docsOnly: true, diff: true });
-      } else if (docsAction === 'check') {
+      } else if (subaction === 'check') {
         await ccCommand({ ...options, docsOnly: true, check: true });
       } else {
         // Default to update

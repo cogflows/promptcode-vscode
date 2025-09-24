@@ -109,28 +109,30 @@ safe_read() {
 safe_read_char() {
   local prompt="$1"
   local default="${2:-}"
-  
+  local ch=""
+
   if (( TTY_FD >= 0 )); then
     # Write prompt to terminal and read single char
     printf "%s" "$prompt" >&$TTY_FD
-    if IFS= read -r -n 1 -u $TTY_FD REPLY; then
+    if IFS= read -r -n 1 -u $TTY_FD ch; then
       printf "\n" >&$TTY_FD  # Add newline after single char read
     else
-      REPLY="$default"
+      ch="$default"
     fi
   else
     # Non-interactive environment, use default
     [[ -n "$prompt" ]] && print_info "Non-interactive mode detected, using default: $default"
-    REPLY="$default"
+    ch="$default"
   fi
+  printf "%s" "$ch"
 }
 
 # Ask yes/no question with default
 ask_yes_no() {
   local prompt="$1"
   local default="${2:-Y}"
-  safe_read_char "$prompt" ""
-  local ans="${REPLY:-$default}"
+  local ans
+  ans="$(safe_read_char "$prompt" "")"
   [[ -z "$ans" ]] && ans="$default"
   [[ "$ans" =~ ^[Yy]$ ]]
 }
@@ -612,7 +614,8 @@ main() {
   local DRY_RUN=false
   local NO_PATH=false
   local HELP=false
-  
+  local LOCAL_BINARY=""
+
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --dry-run)
@@ -622,6 +625,14 @@ main() {
       --no-path)
         NO_PATH=true
         shift
+        ;;
+      --local)
+        # Use local binary instead of downloading
+        LOCAL_BINARY="$2"
+        if [[ -z "$LOCAL_BINARY" ]] || [[ ! -f "$LOCAL_BINARY" ]]; then
+          print_error "Local mode requires path to binary: --local /path/to/promptcode"
+        fi
+        shift 2
         ;;
       --uninstall)
         # Open TTY file descriptor for interactive I/O (ignore failure)
@@ -655,10 +666,11 @@ main() {
     echo "Usage: curl -fsSL <installer-url> | bash [OPTIONS]" >&2
     echo "" >&2
     echo "Options:" >&2
-    echo "  --dry-run     Show what would be done without making changes" >&2
-    echo "  --no-path     Skip PATH modifications (manual setup required)" >&2
-    echo "  --uninstall   Remove PromptCode CLI from your system" >&2
-    echo "  --help, -h    Show this help message" >&2
+    echo "  --dry-run            Show what would be done without making changes" >&2
+    echo "  --no-path            Skip PATH modifications (manual setup required)" >&2
+    echo "  --local <path>       Use local binary instead of downloading" >&2
+    echo "  --uninstall          Remove PromptCode CLI from your system" >&2
+    echo "  --help, -h           Show this help message" >&2
     exit 0
   fi
   
@@ -730,8 +742,9 @@ main() {
         echo "" >&2
         echo "  ${CLI_NAME} update --force" >&2
         echo "" >&2
-        safe_read_char "Run this command now? [Y/n] " "Y"
-        if [[ $REPLY =~ ^[Yy]$ ]] || [ -z "$REPLY" ]; then
+        local reply
+        reply="$(safe_read_char "Run this command now? [Y/n] " "Y")"
+        if [[ $reply =~ ^[Yy]$ ]] || [ -z "$reply" ]; then
           # Try to run update --force, but if it fails (old version), continue with direct install
           if ! "$CLI_NAME" update --force 2>&1; then
             print_warning "Current version doesn't support --force flag"
@@ -755,8 +768,9 @@ main() {
       if [[ "$version_ok_for_update" == "false" ]] && [[ "$current_version" =~ ^0\.6\.[0-8]$ ]]; then
         print_warning "Version $current_version has a known update issue. Direct reinstall required."
         print_info "Will perform clean installation of version $version"
-        safe_read_char "Proceed with direct reinstall? [Y/n] " "Y"
-        if [[ ! $REPLY =~ ^[Yy]$ ]] && [ -n "$REPLY" ]; then
+        local reply
+        reply="$(safe_read_char "Proceed with direct reinstall? [Y/n] " "Y")"
+        if [[ ! $reply =~ ^[Yy]$ ]] && [ -n "$reply" ]; then
           print_info "Installation cancelled"
           exit 0
         fi
@@ -764,16 +778,18 @@ main() {
       elif [[ "$current_version" == *"-dev."* ]]; then
         print_warning "This development version doesn't support update."
         print_info "Will force reinstall with latest release version ($version)"
-        safe_read_char "Proceed with force reinstall? [Y/n] " "Y"
-        if [[ ! $REPLY =~ ^[Yy]$ ]] && [ -n "$REPLY" ]; then
+        local reply
+        reply="$(safe_read_char "Proceed with force reinstall? [Y/n] " "Y")"
+        if [[ ! $reply =~ ^[Yy]$ ]] && [ -n "$reply" ]; then
           print_info "Installation cancelled"
           exit 0
         fi
         # Continue with installation - will overwrite the dev version
       else
         print_warning "This version doesn't support update. Manual reinstall required."
-        safe_read_char "Proceed with manual reinstall? [Y/n] " "Y"
-        if [[ ! $REPLY =~ ^[Yy]$ ]] && [ -n "$REPLY" ]; then
+        local reply
+        reply="$(safe_read_char "Proceed with manual reinstall? [Y/n] " "Y")"
+        if [[ ! $reply =~ ^[Yy]$ ]] && [ -n "$reply" ]; then
           print_info "Installation cancelled"
           exit 0
         fi
@@ -781,25 +797,35 @@ main() {
     fi
   fi
 
-  # Download binary
-  if [[ "$DRY_RUN" == "true" ]]; then
+  # Download binary or use local one
+  local temp_binary=""
+  if [[ -n "$LOCAL_BINARY" ]]; then
+    # Use provided local binary
+    print_info "Using local binary: $LOCAL_BINARY"
+    temp_binary="$LOCAL_BINARY"
+    # Extract version from binary if possible
+    if "$temp_binary" --version &>/dev/null; then
+      version="v$("$temp_binary" --version)"
+      print_info "Detected version: $version"
+    fi
+  elif [[ "$DRY_RUN" == "true" ]]; then
     print_info "Would download ${CLI_NAME} ${version} for ${platform}"
-    local temp_binary="/tmp/dry-run-placeholder"
+    temp_binary="/tmp/dry-run-placeholder"
     touch "$temp_binary"  # Create placeholder for dry run
   else
-    local temp_binary=$(download_binary "$version" "$platform")
+    temp_binary=$(download_binary "$version" "$platform")
   fi
-  
-  # Check if download was successful
+
+  # Check if binary exists
   if [ -z "$temp_binary" ] || [ ! -f "$temp_binary" ]; then
-    print_error "Failed to download binary"
+    print_error "Failed to get binary"
     exit 1
   fi
 
   # Install binary
   if [[ "$DRY_RUN" == "true" ]]; then
     print_info "Would install binary to ${INSTALL_DIR}/${CLI_NAME}"
-    rm -f "$temp_binary"
+    [[ "$temp_binary" == "/tmp/dry-run-placeholder" ]] && rm -f "$temp_binary"
   else
     install_binary "$temp_binary"
   fi
@@ -822,20 +848,49 @@ main() {
   # Automatically check for integrations
   echo "" >&2
   print_info "Checking for AI environment integrations..."
-  # Run integration check with proper TTY handling using our FD
+
+  # Run integration check with proper error handling for Bun/macOS kqueue issue
+  # Create temp file for capturing stderr
+  local temp_err=$(mktemp 2>/dev/null || mktemp -t promptcode)
+  local integrate_failed=false
+
   if (( TTY_FD >= 0 )); then
     # Ensure integrate both reads from and writes to the terminal
     if (( TTY_FD == 0 )); then
       # stdin is already TTY, run normally
-      "${CLI_NAME}" integrate --auto-detect || true
+      if ! "${CLI_NAME}" integrate --auto-detect 2>"$temp_err"; then
+        integrate_failed=true
+      fi
     else
-      # Redirect stdin/stdout/stderr to TTY for full interaction
-      "${CLI_NAME}" integrate --auto-detect <&$TTY_FD >&$TTY_FD 2>&$TTY_FD || true
+      # Redirect stdin/stdout to TTY for interaction, capture stderr
+      if ! "${CLI_NAME}" integrate --auto-detect <&$TTY_FD >&$TTY_FD 2>"$temp_err"; then
+        integrate_failed=true
+      fi
     fi
   else
     # Non-interactive, just do silent check
     "${CLI_NAME}" integrate --auto-detect 2>/dev/null || true
   fi
+
+  # Check if integration failed due to kqueue error
+  if [[ "$integrate_failed" == "true" ]]; then
+    local err_content=$(cat "$temp_err" 2>/dev/null || echo "")
+    # Check for known Bun/macOS kqueue error patterns (should be fixed in newer versions)
+    if echo "$err_content" | grep -q -E "(EINVAL.*kqueue|WriteStream.*tty|error:.*kqueue)" 2>/dev/null; then
+      # This error should be fixed in promptcode v0.6.29+
+      # If you're seeing this, you may have an older version
+      if [[ "$(uname)" == "Darwin" ]]; then
+        print_warning "Detected TTY issue. If prompts don't work, run 'promptcode integrate' manually after installation."
+        print_info "Consider updating to promptcode v0.6.29+ which includes a fix for this issue."
+      fi
+    elif [[ -n "$err_content" ]]; then
+      # Other error - show it
+      echo "$err_content" >&2
+    fi
+  fi
+
+  # Clean up temp file
+  rm -f "$temp_err"
   
   echo "" >&2
   echo "Get started with:" >&2

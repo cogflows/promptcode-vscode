@@ -2,7 +2,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import chalk from 'chalk';
 import { createTwoFilesPatch } from 'diff';
-import inquirer from 'inquirer';
+import { safeConfirm, safePrompt } from '../utils/safe-prompts';
 import { getClaudeTemplatesDir } from '../utils/paths';
 import { spinner } from '../utils/spinner';
 import { shouldSkipConfirmation, isInteractive } from '../utils/environment';
@@ -86,17 +86,20 @@ async function updateTemplateFile(
   console.log(chalk.yellow(`\n📝 File has local changes: ${fileName}`));
   console.log(patch);
   
-  const { action } = await inquirer.prompt([{
-    type: 'list',
-    name: 'action',
-    message: 'What would you like to do?',
-    choices: [
-      { name: 'Keep my version', value: 'keep' },
-      { name: 'Use new version (discard my changes)', value: 'replace' },
-      { name: 'Skip for now', value: 'skip' }
-    ],
-    default: 'keep'
-  }]);
+  const { action } = await safePrompt(
+    [{
+      type: 'list',
+      name: 'action',
+      message: 'What would you like to do?',
+      choices: [
+        { name: 'Keep my version', value: 'keep' },
+        { name: 'Use new version (discard my changes)', value: 'replace' },
+        { name: 'Skip for now', value: 'skip' }
+      ],
+      default: 'keep'
+    }],
+    { action: 'keep' } // Default to keep if prompts fail
+  );
   
   if (action === 'replace') {
     await fs.promises.writeFile(targetPath, newContent);
@@ -556,14 +559,17 @@ export async function ccCommand(options: CcOptions & { detect?: boolean }): Prom
         console.log(chalk.gray('  • API key configuration guide'));
         console.log(chalk.gray('  • Cost approval protocol for expensive models'));
         
-        const { updateDocs } = await inquirer.prompt([{
-          type: 'confirm',
-          name: 'updateDocs',
-          message: claudeMdExists ? 
-            'Would you like to update CLAUDE.md with PromptCode instructions?' :
-            'Would you like to add CLAUDE.md with PromptCode instructions?',
-          default: false // Default to No
-        }]);
+        const { updateDocs } = await safePrompt(
+          [{
+            type: 'confirm',
+            name: 'updateDocs',
+            message: claudeMdExists ?
+              'Would you like to update CLAUDE.md with PromptCode instructions?' :
+              'Would you like to add CLAUDE.md with PromptCode instructions?',
+            default: false // Default to No
+          }],
+          { updateDocs: false } // Default to not update if prompts fail
+        );
         installDocs = updateDocs;
       }
     }

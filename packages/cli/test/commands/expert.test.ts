@@ -345,7 +345,7 @@ describe('expert command', () => {
     // Should include all unique providers from models
     const modelProviders = new Set(json.models.map((m: any) => m.provider));
     modelProviders.forEach(provider => {
-      expect(providerKeys).toContain(provider);
+      expect(providerKeys).toContain(provider as string);
     });
   });
 
