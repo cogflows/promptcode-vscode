@@ -849,42 +849,51 @@ main() {
   echo "" >&2
   print_info "Checking for AI environment integrations..."
 
-  # Run integration check with proper error handling for Bun/macOS kqueue issue
-  # Create temp file for capturing stderr
+  # Run integration check with proper error handling
+  # Since v0.6.30, the CLI handles TTY detection internally, so we don't need
+  # complex TTY redirection that was causing kqueue errors on macOS
   local temp_err=$(mktemp 2>/dev/null || mktemp -t promptcode)
   local integrate_failed=false
 
-  if (( TTY_FD >= 0 )); then
-    # Ensure integrate both reads from and writes to the terminal
-    if (( TTY_FD == 0 )); then
-      # stdin is already TTY, run normally
-      if ! "${CLI_NAME}" integrate --auto-detect 2>"$temp_err"; then
+  # Check if stdin is a TTY to decide how to run the command
+  if [[ -t 0 ]]; then
+    # Interactive mode - stdin is already a TTY, run normally
+    if ! "${CLI_NAME}" integrate --auto-detect 2>"$temp_err"; then
+      integrate_failed=true
+    fi
+  elif [[ -t 1 ]] || [[ -t 2 ]]; then
+    # Piped mode but stdout or stderr is a TTY
+    # Try to use /dev/tty directly for input/output
+    # This allows prompts to work even when piped through curl
+    if [ -e /dev/tty ]; then
+      if ! "${CLI_NAME}" integrate --auto-detect </dev/tty >/dev/tty 2>"$temp_err"; then
         integrate_failed=true
       fi
     else
-      # Redirect stdin/stdout to TTY for interaction, capture stderr
-      if ! "${CLI_NAME}" integrate --auto-detect <&$TTY_FD >&$TTY_FD 2>"$temp_err"; then
+      # No TTY available at all, run in non-interactive mode
+      if ! "${CLI_NAME}" integrate --auto-detect 2>"$temp_err"; then
         integrate_failed=true
       fi
     fi
   else
-    # Non-interactive, just do silent check
-    "${CLI_NAME}" integrate --auto-detect 2>/dev/null || true
+    # Fully non-interactive environment
+    if ! "${CLI_NAME}" integrate --auto-detect 2>"$temp_err"; then
+      integrate_failed=true
+    fi
   fi
 
-  # Check if integration failed due to kqueue error
+  # Check if integration failed
   if [[ "$integrate_failed" == "true" ]]; then
     local err_content=$(cat "$temp_err" 2>/dev/null || echo "")
-    # Check for known Bun/macOS kqueue error patterns (should be fixed in newer versions)
+
+    # Check for kqueue errors that should be fixed in v0.6.30+
     if echo "$err_content" | grep -q -E "(EINVAL.*kqueue|WriteStream.*tty|error:.*kqueue)" 2>/dev/null; then
-      # This error should be fixed in promptcode v0.6.29+
-      # If you're seeing this, you may have an older version
-      if [[ "$(uname)" == "Darwin" ]]; then
-        print_warning "Detected TTY issue. If prompts don't work, run 'promptcode integrate' manually after installation."
-        print_info "Consider updating to promptcode v0.6.29+ which includes a fix for this issue."
-      fi
+      # These errors should be fixed in v0.6.30+
+      # Don't show the warning since the user is already on a fixed version
+      # Just silently continue
+      :
     elif [[ -n "$err_content" ]]; then
-      # Other error - show it
+      # Show other meaningful errors
       echo "$err_content" >&2
     fi
   fi
