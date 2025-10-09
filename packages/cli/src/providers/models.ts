@@ -8,7 +8,7 @@
  * Example: If a provider charges $0.001 per 1K tokens, 
  * the value here should be 1.0 (1000x conversion)
  * 
- * Pricing last updated: August 2025
+ * Pricing last updated: October 2025
  */
 
 import { z } from 'zod';
@@ -43,7 +43,7 @@ export const MODELS: Record<string, ModelConfig> = {
     modelId: 'gpt-5',
     name: 'GPT-5',
     description: 'State-of-the-art model with superior coding and reasoning',
-    contextWindow: 256000,
+    contextWindow: 400000,
     pricing: { input: 1.25, output: 10 },
     supportsWebSearch: true
   },
@@ -52,7 +52,7 @@ export const MODELS: Record<string, ModelConfig> = {
     modelId: 'gpt-5-mini',
     name: 'GPT-5 Mini',
     description: 'Balanced GPT-5 model for efficient performance',
-    contextWindow: 256000,
+    contextWindow: 400000,
     pricing: { input: 0.25, output: 2 },
     supportsWebSearch: true
   },
@@ -61,11 +61,20 @@ export const MODELS: Record<string, ModelConfig> = {
     modelId: 'gpt-5-nano',
     name: 'GPT-5 Nano',
     description: 'Ultra-fast GPT-5 model for quick tasks',
-    contextWindow: 256000,
+    contextWindow: 400000,
     pricing: { input: 0.05, output: 0.4 },
     supportsWebSearch: true
   },
-  
+  'gpt-5-pro': {
+    provider: 'openai',
+    modelId: 'gpt-5-pro',
+    name: 'GPT-5 Pro',
+    description: 'Most advanced reasoning model with extended thinking time',
+    contextWindow: 400000,
+    pricing: { input: 5, output: 20 },
+    supportsWebSearch: true
+  },
+
   // OpenAI O3 models (reasoning specialists)
   'o3': {
     provider: 'openai',
