@@ -67,6 +67,7 @@ claude*.md
 !CLAUDE.md
 !packages/cli/src/claude-templates/**
 !.claude/**
+.claude/settings.local.json
 
 # TypeScript build info
 *.tsbuildinfo
