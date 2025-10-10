@@ -291,7 +291,7 @@ Actions:
 
 Scope:
   --scope project  Install to project directory (default)
-  --scope user     Install to user config directory (~/.config/promptcode/claude-commands/)
+  --scope user     Install to user-wide directory (~/.claude/commands/)
 
 Examples:
   $ promptcode cc                          # Install commands (project scope)
@@ -352,7 +352,7 @@ The .cursor folder is automatically detected in current or parent directories.
 
 Scope:
   --scope project  Install to project directory (default)
-  --scope user     Install to user config directory (~/.config/promptcode/cursor-rules/)
+  --scope user     Install to user-wide directory (~/.cursor/rules/)
 
 Examples:
   $ promptcode cursor                          # Set up Cursor integration (project scope)

@@ -463,22 +463,20 @@ export async function ensurePromptcodeScaffold(projectRoot: string, withPresets 
 
 /**
  * Get the user-wide Claude commands directory
- * Respects XDG_CONFIG_HOME environment variable
- * Returns: ~/.config/promptcode/claude-commands/ (or $XDG_CONFIG_HOME/promptcode/claude-commands/)
+ * Uses Claude Code's standard user-wide commands location
+ * Returns: ~/.claude/commands/
  */
 export function getUserClaudeCommandsDir(): string {
-  const base = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
-  return path.join(base, 'promptcode', 'claude-commands');
+  return path.join(os.homedir(), '.claude', 'commands');
 }
 
 /**
  * Get the user-wide Cursor rules directory
- * Respects XDG_CONFIG_HOME environment variable
- * Returns: ~/.config/promptcode/cursor-rules/ (or $XDG_CONFIG_HOME/promptcode/cursor-rules/)
+ * Uses Cursor's standard user-wide rules location
+ * Returns: ~/.cursor/rules/
  */
 export function getUserCursorRulesDir(): string {
-  const base = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
-  return path.join(base, 'promptcode', 'cursor-rules');
+  return path.join(os.homedir(), '.cursor', 'rules');
 }
 
 /**
