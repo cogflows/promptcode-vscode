@@ -289,15 +289,23 @@ Actions:
   docs             Manage CLAUDE.md documentation
   uninstall        Remove Claude integration
 
+Scope:
+  --scope project  Install to project directory (default)
+  --scope user     Install to user config directory (~/.config/promptcode/claude-commands/)
+
 Examples:
-  $ promptcode cc                     # Install commands, asks about CLAUDE.md
-  $ promptcode cc install             # Same as above
-  $ promptcode cc docs update         # Update CLAUDE.md only
-  $ promptcode cc docs diff           # Show CLAUDE.md changes
-  $ promptcode cc docs check          # Check if CLAUDE.md needs update (CI)
-  $ promptcode cc uninstall           # Remove commands
-  $ promptcode cc uninstall --all     # Remove commands and CLAUDE.md`)
+  $ promptcode cc                          # Install commands (project scope)
+  $ promptcode cc --scope user             # Install commands (user-wide)
+  $ promptcode cc install                  # Same as first example
+  $ promptcode cc docs update              # Update CLAUDE.md only (project scope)
+  $ promptcode cc docs diff                # Show CLAUDE.md changes
+  $ promptcode cc docs check               # Check if CLAUDE.md needs update (CI)
+  $ promptcode cc uninstall                # Remove commands (project scope)
+  $ promptcode cc uninstall --scope user   # Remove user-wide commands
+  $ promptcode cc uninstall --all          # Remove commands and CLAUDE.md (project scope)`)
   .option('--path <dir>', 'project root directory', process.cwd())
+  .option('--scope <value>', 'installation scope: project (default) or user', 'project')
+  .option('-s <value>', 'alias for --scope')
   .option('--with-docs', 'install CLAUDE.md (for backwards compatibility/CI)')
   .option('--force', 'update existing structure / skip confirmation prompts')
   .option('-y, --yes', 'alias for --force (CI-friendly)')
@@ -342,12 +350,20 @@ This command creates a .cursor/rules folder with:
   - Pseudo-commands matching Claude Code: /promptcode-preset-list, /promptcode-preset-info, etc.
 The .cursor folder is automatically detected in current or parent directories.
 
+Scope:
+  --scope project  Install to project directory (default)
+  --scope user     Install to user config directory (~/.config/promptcode/cursor-rules/)
+
 Examples:
-  $ promptcode cursor                     # Set up Cursor integration
-  $ promptcode cursor --uninstall         # Remove rules only
-  $ promptcode cursor --uninstall --all   # Remove rules and .cursorrules
-  $ promptcode cursor --yes               # Skip confirmation prompts`)
+  $ promptcode cursor                          # Set up Cursor integration (project scope)
+  $ promptcode cursor --scope user             # Set up user-wide integration
+  $ promptcode cursor --uninstall              # Remove rules only (project scope)
+  $ promptcode cursor --uninstall --scope user # Remove user-wide rules
+  $ promptcode cursor --uninstall --all        # Remove rules and .cursorrules (project scope)
+  $ promptcode cursor --yes                    # Skip confirmation prompts`)
   .option('--path <dir>', 'project directory', process.cwd())
+  .option('--scope <value>', 'installation scope: project (default) or user', 'project')
+  .option('-s <value>', 'alias for --scope')
   .option('--uninstall', 'remove Cursor integration', false)
   .option('--all', 'with --uninstall, also remove from .cursorrules', false)
   .option('--yes', 'skip confirmation prompts', false)

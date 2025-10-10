@@ -17,6 +17,7 @@ import {
 import { findOrCreateIntegrationDir } from '../utils/integration-helper';
 import { calculateChecksum, areContentsEquivalent } from '../utils/canonicalize';
 import { isKnownTemplateVersion } from '../utils/template-checksums';
+import { setupUserIntegration, removeUserIntegration, getUserIntegrationDir } from '../utils/user-integration';
 
 interface CursorOptions {
   path?: string;
@@ -25,6 +26,7 @@ interface CursorOptions {
   uninstall?: boolean;
   skipModified?: boolean;
   all?: boolean;
+  scope?: 'project' | 'user';
 }
 
 /**
@@ -303,58 +305,125 @@ export async function cursorCommand(options: CursorOptions & { detect?: boolean 
   
   // Handle uninstall
   if (options.uninstall) {
-    console.log(chalk.bold('Removing PromptCode Cursor integration...'));
-    
+    const scope = options.scope || 'project'; // Default to project scope
+    console.log(chalk.bold(`Removing PromptCode Cursor integration (${scope} scope)...`));
+
     let removed = false;
-    
-    // Always remove PromptCode rules from .cursor/rules/
-    if (await removePromptCodeRules(projectPath)) {
-      removed = true;
-      console.log(chalk.green('✓ Removed Cursor rules'));
-    }
-    
-    // Remove from .cursorrules (legacy) if --all flag is provided
-    if (options.all) {
-      if (await removeFromCursorRules(projectPath)) {
+
+    if (scope === 'user') {
+      // User scope: remove from user config directory
+      if (await removeUserIntegration('cursor')) {
         removed = true;
-        console.log(chalk.green('✓ Removed PromptCode section from .cursorrules'));
+        const userDir = getUserIntegrationDir('cursor');
+        console.log(chalk.green(`✓ Removed user-wide Cursor rules from ${userDir}`));
       }
+    } else {
+      // Project scope: remove from project directory (existing behavior)
+      // Always remove PromptCode rules from .cursor/rules/
+      if (await removePromptCodeRules(projectPath)) {
+        removed = true;
+        console.log(chalk.green('✓ Removed Cursor rules'));
+      }
+
+      // Remove from .cursorrules (legacy) if --all flag is provided
+      if (options.all) {
+        if (await removeFromCursorRules(projectPath)) {
+          removed = true;
+          console.log(chalk.green('✓ Removed PromptCode section from .cursorrules'));
+        }
+      }
+
+      // Remove from MCP config (future implementation)
+      // if (await removeFromMcpConfig(projectPath)) {
+      //   removed = true;
+      // }
     }
-    
-    // Remove from MCP config (future implementation)
-    // if (await removeFromMcpConfig(projectPath)) {
-    //   removed = true;
-    // }
-    
+
     if (!removed) {
       console.log(chalk.yellow('No PromptCode Cursor integration found'));
     } else {
-      console.log(chalk.gray('\nTo reinstall, run: promptcode cursor'));
+      const reinstallCmd = scope === 'user' ? 'promptcode cursor --scope user' : 'promptcode cursor';
+      console.log(chalk.gray(`\nTo reinstall, run: ${reinstallCmd}`));
     }
-    
+
     return;
   }
   
   // Handle setup
-  
+  const scope = options.scope || 'project'; // Default to project scope
+
+  // USER SCOPE: Install rules to user config directory
+  if (scope === 'user') {
+    const userDir = getUserIntegrationDir('cursor');
+
+    console.log(chalk.bold('📦 Rules to be installed (user-wide):'));
+    for (const rule of PROMPTCODE_CURSOR_RULES) {
+      const ruleName = rule.replace('.mdc', '');
+      console.log(chalk.green(`  + ${ruleName}`));
+    }
+
+    console.log(chalk.bold(`\n📁 Installation location:`));
+    console.log(chalk.cyan(`  ${userDir}`));
+    console.log();
+
+    try {
+      const templatesDir = getCursorTemplatesDir();
+      const stats = await setupUserIntegration({
+        integrationType: 'cursor',
+        files: PROMPTCODE_CURSOR_RULES,
+        templatesDir,
+        skipModified: options.skipModified,
+        force: options.force
+      });
+
+      console.log(chalk.green('✓ User-wide Cursor rules installed successfully!'));
+
+      // Show stats
+      const actions = [];
+      if (stats.installed > 0) { actions.push(`${stats.installed} new`); }
+      if (stats.updated > 0) { actions.push(`${stats.updated} updated`); }
+      if (stats.skipped > 0) { actions.push(`${stats.skipped} skipped`); }
+
+      if (actions.length > 0) {
+        console.log(chalk.gray(`  ${actions.join(', ')}`));
+      }
+
+      console.log(chalk.bold(`\n📝 Installed to: ${chalk.cyan(userDir)}`));
+      for (const rule of PROMPTCODE_CURSOR_RULES) {
+        const ruleName = rule.replace('.mdc', '');
+        console.log(chalk.gray(`  • ${ruleName}`));
+      }
+
+      console.log(chalk.bold('\n🚀 Available in all Cursor projects!'));
+      console.log(chalk.gray('These rules are now accessible from any project.'));
+
+      return;
+    } catch (error) {
+      console.log(chalk.red(`Error: ${(error as Error).message}`));
+      process.exit(1);
+    }
+  }
+
+  // PROJECT SCOPE: Install rules to project directory (existing behavior)
+
   // First show what will be installed BEFORE creating directories
   const cursorDirExists = fs.existsSync(path.join(projectPath, '.cursor'));
-  
+
   console.log(chalk.bold('📦 Rules to be installed:'));
   for (const rule of PROMPTCODE_CURSOR_RULES) {
     const ruleName = rule.replace('.mdc', '');
     console.log(chalk.green(`  + ${ruleName}`));
   }
-  
+
   if (!cursorDirExists) {
     console.log(chalk.bold('\n📁 Directory to be created:'));
     console.log(chalk.green('  + .cursor/'));
   }
   console.log();
-  
+
   const spin = spinner();
   spin.start('Setting up PromptCode Cursor integration...');
-  
+
   try {
     // Set up modern Cursor rules
     spin.text = 'Installing Cursor rules...';
