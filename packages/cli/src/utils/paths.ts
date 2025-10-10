@@ -462,6 +462,24 @@ export async function ensurePromptcodeScaffold(projectRoot: string, withPresets 
 }
 
 /**
+ * Get the user-wide Claude commands directory
+ * Uses Claude Code's standard user-wide commands location
+ * Returns: ~/.claude/commands/
+ */
+export function getUserClaudeCommandsDir(): string {
+  return path.join(os.homedir(), '.claude', 'commands');
+}
+
+/**
+ * Get the user-wide Cursor rules directory
+ * Uses Cursor's standard user-wide rules location
+ * Returns: ~/.cursor/rules/
+ */
+export function getUserCursorRulesDir(): string {
+  return path.join(os.homedir(), '.cursor', 'rules');
+}
+
+/**
  * Get the templates directory for Cursor integration.
  * Works correctly for development, local binaries, and global installations.
  */

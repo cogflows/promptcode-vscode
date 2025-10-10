@@ -10,6 +10,7 @@ import { findClaudeFolder, findClaudeMd, removeFromClaudeMd, removePromptCodeCom
 import { findOrCreateIntegrationDir } from '../utils/integration-helper';
 import { calculateChecksum, areContentsEquivalent } from '../utils/canonicalize';
 import { isKnownTemplateVersion } from '../utils/template-checksums';
+import { setupUserIntegration, removeUserIntegration, getUserIntegrationDir } from '../utils/user-integration';
 
 interface CcOptions {
   path?: string;
@@ -24,6 +25,7 @@ interface CcOptions {
   diff?: boolean;
   check?: boolean;
   skipPreview?: boolean;
+  scope?: 'project' | 'user';
 }
 
 /**
@@ -446,44 +448,110 @@ export async function ccCommand(options: CcOptions & { detect?: boolean }): Prom
   
   // Handle uninstall
   if (options.uninstall) {
-    console.log(chalk.bold('Removing PromptCode CLI integration...'));
-    
+    const scope = options.scope || 'project'; // Default to project scope
+    console.log(chalk.bold(`Removing PromptCode CLI integration (${scope} scope)...`));
+
     let removed = false;
-    
-    // Remove commands (always)
-    if (await removePromptCodeCommands(projectPath)) {
-      removed = true;
-      console.log(chalk.green('✓ Removed Claude commands'));
-    }
-    
-    // Remove from CLAUDE.md if --all flag is provided
-    if (options.all) {
-      if (await removeFromClaudeMd(projectPath)) {
+
+    if (scope === 'user') {
+      // User scope: remove from user config directory
+      if (await removeUserIntegration('claude')) {
         removed = true;
-        console.log(chalk.green('✓ Removed PromptCode section from CLAUDE.md'));
+        const userDir = getUserIntegrationDir('claude');
+        console.log(chalk.green(`✓ Removed user-wide Claude commands from ${userDir}`));
+      }
+    } else {
+      // Project scope: remove from project directory (existing behavior)
+      if (await removePromptCodeCommands(projectPath)) {
+        removed = true;
+        console.log(chalk.green('✓ Removed Claude commands'));
+      }
+
+      // Remove from CLAUDE.md if --all flag is provided (project scope only)
+      if (options.all) {
+        if (await removeFromClaudeMd(projectPath)) {
+          removed = true;
+          console.log(chalk.green('✓ Removed PromptCode section from CLAUDE.md'));
+        }
       }
     }
-    
+
     if (!removed) {
       console.log(chalk.yellow('No PromptCode integration found'));
     } else {
-      console.log(chalk.gray('\nTo reinstall, run: promptcode cc'));
+      const reinstallCmd = scope === 'user' ? 'promptcode cc --scope user' : 'promptcode cc';
+      console.log(chalk.gray(`\nTo reinstall, run: ${reinstallCmd}`));
     }
-    
+
     return;
   }
   
   // Handle setup
-  
+  const scope = options.scope || 'project'; // Default to project scope
+
+  // USER SCOPE: Install commands to user config directory
+  if (scope === 'user') {
+    const userDir = getUserIntegrationDir('claude');
+
+    console.log(chalk.bold('📦 Commands to be installed (user-wide):'));
+    for (const cmd of PROMPTCODE_CLAUDE_COMMANDS) {
+      const slashCommand = `/${cmd.replace('.md', '').replace('.mdc', '')}`;
+      console.log(chalk.green(`  + ${slashCommand}`));
+    }
+
+    console.log(chalk.bold(`\n📁 Installation location:`));
+    console.log(chalk.cyan(`  ${userDir}`));
+    console.log();
+
+    try {
+      const templatesDir = getClaudeTemplatesDir();
+      const stats = await setupUserIntegration({
+        integrationType: 'claude',
+        files: PROMPTCODE_CLAUDE_COMMANDS,
+        templatesDir,
+        skipModified: options.skipModified,
+        force: options.force
+      });
+
+      console.log(chalk.green('✓ User-wide Claude commands installed successfully!'));
+
+      // Show stats
+      const actions = [];
+      if (stats.installed > 0) { actions.push(`${stats.installed} new`); }
+      if (stats.updated > 0) { actions.push(`${stats.updated} updated`); }
+      if (stats.skipped > 0) { actions.push(`${stats.skipped} skipped`); }
+
+      if (actions.length > 0) {
+        console.log(chalk.gray(`  ${actions.join(', ')}`));
+      }
+
+      console.log(chalk.bold(`\n📝 Installed to: ${chalk.cyan(userDir)}`));
+      for (const cmd of PROMPTCODE_CLAUDE_COMMANDS) {
+        const slashCommand = `/${cmd.replace('.md', '').replace('.mdc', '')}`;
+        console.log(chalk.gray(`  • ${slashCommand}`));
+      }
+
+      console.log(chalk.bold('\n🚀 Available in all Claude Code projects!'));
+      console.log(chalk.gray('These commands are now accessible from any project.'));
+
+      return;
+    } catch (error) {
+      console.log(chalk.red(`Error: ${(error as Error).message}`));
+      process.exit(1);
+    }
+  }
+
+  // PROJECT SCOPE: Install commands to project directory (existing behavior)
+
   // Check if .claude directory already exists (including in parent directories)
   const existingClaudeDir = findClaudeFolder(projectPath);
-  
+
   console.log(chalk.bold('📦 Commands to be installed:'));
   for (const cmd of PROMPTCODE_CLAUDE_COMMANDS) {
     const slashCommand = `/${cmd.replace('.md', '').replace('.mdc', '')}`;
     console.log(chalk.green(`  + ${slashCommand}`));
   }
-  
+
   if (!existingClaudeDir) {
     console.log(chalk.bold('\n📁 Directory to be created:'));
     console.log(chalk.green('  + .claude/'));
@@ -497,19 +565,19 @@ export async function ccCommand(options: CcOptions & { detect?: boolean }): Prom
     }
   }
   console.log();
-  
+
   try {
     // Set up Claude commands and get the directory
     const { claudeDir, isNew, stats } = await setupClaudeCommands(projectPath, {
       ...options,
       skipPreview: true // Don't show preview again, we already did
     });
-    
+
     if (!claudeDir) {
       console.log(chalk.red('Setup cancelled'));
       return;
     }
-    
+
     console.log(chalk.green('✓ Commands installed successfully!'));
     
     // Ask about CLAUDE.md installation/update
