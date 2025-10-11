@@ -26,71 +26,99 @@ Note: The default model is **gpt-5** unless explicitly specified otherwise.
 
 ## Long-Running Models (gpt-5-pro, o3-pro)
 
-These models can take 1-10 minutes due to extended thinking time. Use background execution with proper error handling and timeouts:
+These models can take 1-10 minutes due to extended thinking time. Use background execution with proper error handling and cross-platform support:
 
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Create temporary files with unique names (mktemp is more reliable than /tmp/manual-names)
-RESULT_FILE="$(mktemp -t expert-result-XXXXXX.json)"
-LOG_FILE="$(mktemp -t expert-log-XXXXXX.txt)"
-STATUS_FILE="$(mktemp -t expert-status-XXXXXX.json)"
+# Cross-platform timeout command (macOS needs gtimeout from coreutils)
+if command -v timeout >/dev/null 2>&1; then
+  TIMEOUT_CMD="timeout"
+elif command -v gtimeout >/dev/null 2>&1; then
+  TIMEOUT_CMD="gtimeout"
+else
+  echo "⚠️  Warning: timeout command not found. Install coreutils (brew install coreutils on macOS)"
+  echo "Proceeding without timeout protection..."
+  TIMEOUT_CMD=""
+fi
 
-# Prepare the command with timeout protection (15 minutes max)
+# Cross-platform mktemp (BSD mktemp on macOS behaves differently)
+TMP="${TMPDIR:-/tmp}"
+RESULT_FILE="${TMP%/}/expert-result-$(date +%Y%m%d-%H%M%S)-$$.json"
+LOG_FILE="${TMP%/}/expert-log-$(date +%Y%m%d-%H%M%S)-$$.txt"
+STATUS_FILE="${TMP%/}/expert-status-$(date +%Y%m%d-%H%M%S)-$$.json"
+
+# Prepare the consultation
 QUESTION="<your question here>"
 MODEL="gpt-5-pro"  # or o3-pro
 
-# Save initial status
-cat > "$STATUS_FILE" << EOF
-{
-  "status": "starting",
-  "model": "$MODEL",
-  "started": "$(date +%s)",
-  "result": "$RESULT_FILE",
-  "log": "$LOG_FILE"
+# Helper function for atomic status writes
+write_status() {
+  printf '%s' "$1" > "${STATUS_FILE}.tmp" && mv "${STATUS_FILE}.tmp" "$STATUS_FILE"
 }
-EOF
+
+# Save initial status
+write_status "{
+  \"status\": \"starting\",
+  \"model\": \"$MODEL\",
+  \"started\": \"$(date +%s)\",
+  \"result\": \"$RESULT_FILE\",
+  \"log\": \"$LOG_FILE\"
+}"
 
 echo "⏳ Starting background consultation with $MODEL..."
 echo "   Results: $RESULT_FILE"
 echo "   Log: $LOG_FILE"
 echo "   Status: $STATUS_FILE"
 
-# Run in background with nohup, timeout, and proper quoting
+# Run in background with nohup and proper quoting
 # Note: Use bash -lc to ensure login shell environment (API keys loaded)
 nohup bash -lc "
   set -euo pipefail
-  timeout 15m promptcode expert \"$QUESTION\" \
-    --model \"$MODEL\" \
-    --yes \
-    --output \"$RESULT_FILE\" \
-    --json \
-    2>&1 | tee -a \"$LOG_FILE\"
-  EXIT_CODE=\${PIPESTATUS[0]}
-  if [ \$EXIT_CODE -eq 0 ]; then
-    echo '{\"status\":\"success\",\"completed\":\"'"\$(date +%s)"'\"}' >> \"$STATUS_FILE\"
-  elif [ \$EXIT_CODE -eq 124 ]; then
-    echo '{\"status\":\"timeout\",\"completed\":\"'"\$(date +%s)"'\"}' >> \"$STATUS_FILE\"
+
+  # Helper for atomic writes
+  write_status() {
+    printf '%s' \"\$1\" > \"${STATUS_FILE}.tmp\" && mv \"${STATUS_FILE}.tmp\" \"$STATUS_FILE\"
+  }
+
+  # Run consultation with timeout and capture JSON to stdout
+  if [ -n \"${TIMEOUT_CMD}\" ]; then
+    \${TIMEOUT_CMD} 15m promptcode expert \"$QUESTION\" \\
+      --model \"$MODEL\" \\
+      --yes \\
+      --json > \"$RESULT_FILE\" 2>> \"$LOG_FILE\"
   else
-    echo '{\"status\":\"failed\",\"exitCode\":'\"\$EXIT_CODE\"',\"completed\":\"'"\$(date +%s)"'\"}' >> \"$STATUS_FILE\"
+    promptcode expert \"$QUESTION\" \\
+      --model \"$MODEL\" \\
+      --yes \\
+      --json > \"$RESULT_FILE\" 2>> \"$LOG_FILE\"
   fi
-" &
+
+  EXIT_CODE=\$?
+
+  # Update status based on exit code (atomic write)
+  if [ \$EXIT_CODE -eq 0 ]; then
+    write_status \"{\\\"status\\\":\\\"success\\\",\\\"exitCode\\\":0,\\\"completed\\\":\\\"\$(date +%s)\\\"}\"
+  elif [ \$EXIT_CODE -eq 124 ]; then
+    write_status \"{\\\"status\\\":\\\"timeout\\\",\\\"exitCode\\\":124,\\\"completed\\\":\\\"\$(date +%s)\\\"}\"
+  else
+    write_status \"{\\\"status\\\":\\\"failed\\\",\\\"exitCode\\\":\$EXIT_CODE,\\\"completed\\\":\\\"\$(date +%s)\\\"}\"
+  fi
+" >> "$LOG_FILE" 2>&1 &
 
 BG_PID=$!
 disown "$BG_PID" 2>/dev/null || true
 
-# Update status with PID
-cat > "$STATUS_FILE" << EOF
-{
-  "status": "running",
-  "pid": $BG_PID,
-  "model": "$MODEL",
-  "started": "$(date +%s)",
-  "result": "$RESULT_FILE",
-  "log": "$LOG_FILE"
-}
-EOF
+# Update status with PID (atomic write)
+write_status "{
+  \"status\": \"running\",
+  \"pid\": $BG_PID,
+  \"model\": \"$MODEL\",
+  \"started\": \"$(date +%s)\",
+  \"result\": \"$RESULT_FILE\",
+  \"log\": \"$LOG_FILE\"
+}"
 
 echo ""
 echo "✓ Background consultation launched (PID: $BG_PID)"
@@ -100,12 +128,23 @@ echo "  tail -f \"$LOG_FILE\""
 echo ""
 echo "Check status:"
 echo "  kill -0 $BG_PID 2>/dev/null && echo 'Still running' || echo 'Complete or failed'"
-echo "  cat \"$STATUS_FILE\" | jq ."
+if command -v jq >/dev/null 2>&1; then
+  echo "  cat \"$STATUS_FILE\" | jq ."
+else
+  echo "  cat \"$STATUS_FILE\"  # Install jq for pretty output: brew install jq"
+fi
 echo ""
 echo "View results when complete:"
-echo "  cat \"$RESULT_FILE\" | jq ."
+if command -v jq >/dev/null 2>&1; then
+  echo "  cat \"$RESULT_FILE\" | jq ."
+  echo "  cat \"$RESULT_FILE\" | jq -r '.response'  # Just the response text"
+else
+  echo "  cat \"$RESULT_FILE\"  # Install jq for pretty output: brew install jq"
+fi
 echo ""
-echo "Note: 15-minute timeout will auto-kill if needed"
+if [ -n "$TIMEOUT_CMD" ]; then
+  echo "Note: 15-minute timeout will auto-kill if needed"
+fi
 ```
 
 **Monitoring a running consultation:**
@@ -115,13 +154,22 @@ echo "Note: 15-minute timeout will auto-kill if needed"
 kill -0 <PID> 2>/dev/null && echo "Running" || echo "Stopped"
 
 # View live progress
-tail -f /tmp/expert-log-XXXXXX.txt
+tail -f /var/folders/.../expert-log-*.txt
 
 # Check final status
-cat /tmp/expert-status-XXXXXX.json | jq .
+if command -v jq >/dev/null 2>&1; then
+  cat /var/folders/.../expert-status-*.json | jq .
+else
+  cat /var/folders/.../expert-status-*.json
+fi
 
-# Read result (when complete)
-cat /tmp/expert-result-XXXXXX.json | jq .
+# Read result when complete (actual response in .response field)
+if command -v jq >/dev/null 2>&1; then
+  cat /var/folders/.../expert-result-*.json | jq -r '.response'
+  cat /var/folders/.../expert-result-*.json | jq '.costBreakdown.actualTotal'  # Actual cost
+else
+  cat /var/folders/.../expert-result-*.json
+fi
 ```
 
 ## API Keys

@@ -1,5 +1,5 @@
 ---
-allowed-tools: Task, Read(/tmp/*), Write(/tmp/*), Edit(/tmp/*), Edit(.promptcode/presets/*), Bash, Bash(*)
+allowed-tools: Task, Read(/tmp/*), Read(/var/folders/*), Write(/tmp/*), Write(/var/folders/*), Edit(/tmp/*), Edit(/var/folders/*), Edit(.promptcode/presets/*), Bash, Bash(*)
 description: Consult AI expert for complex problems with code context - supports ensemble mode for multiple models
 ---
 
@@ -79,8 +79,10 @@ Consult an expert about: $ARGUMENTS
    ```bash
    promptcode expert --prompt-file "$PROMPT_FILE" --model <model> --estimate-cost --json
    ```
-   - Parse JSON for `cost.total` and `tokens.input`
-   - Exit code: 0 = success, 2 = approval required (cost > threshold)
+   - Parse JSON for cost estimate using correct schema:
+     - Total cost: `.cost.total`
+     - Input tokens: `.tokens.input`
+   - Exit code: Always 0 for estimate (not 2 - that's for actual consultation requiring approval)
    
    **For single model:**
    - Say: "Ready to consult {model} using preset '{preset_name}' ({tokens} tokens, ~${cost}). Reply 'yes' to proceed."
@@ -104,8 +106,9 @@ Consult an expert about: $ARGUMENTS
    **For long-running models (gpt-5-pro, o3-pro - can take 1-10 minutes):**
    Use the Task tool for non-blocking execution (idiomatic Claude Code pattern):
 
-   1. Create result file path with concrete absolute path:
+   1. Create result file path using temp directory:
       ```bash
+      TMP="${TMPDIR:-/tmp}"
       RESULT_FILE="${TMP%/}/expert-result-$(date +%Y%m%d-%H%M%S)-$$.json"
       ```
 
@@ -121,48 +124,62 @@ Consult an expert about: $ARGUMENTS
    3. **Invoke the Task tool directly** with concrete paths and explicit tool usage:
       ```
       Task("Consult {model}: {short_question_summary}", """
-You have access to: Bash, Read(/tmp/*), Write(/tmp/*).
+You have access to: Bash, Read(/tmp/*), Read(/var/folders/*), Write(/tmp/*), Write(/var/folders/*).
 
 Your task: Run a long-running AI consultation (1-10 minutes) and report back with results.
 
-**Step 1: Run consultation with timeout**
+**Step 1: Run consultation with timeout and capture JSON to stdout**
 Use Bash tool to run:
-timeout 15m promptcode expert --prompt-file "{absolute_path_to_PROMPT_FILE}" --model {model} --yes --output "{absolute_path_to_RESULT_FILE}" --json 2>&1
+timeout 15m promptcode expert --prompt-file "{absolute_path_to_PROMPT_FILE}" --model {model} --yes --json > "{absolute_path_to_RESULT_FILE}"
+EXIT=$?
 
 Notes:
-- Replace {absolute_path_to_PROMPT_FILE} with the actual path (e.g., /tmp/expert-consultation-20251011-094021-48499.txt)
-- Replace {absolute_path_to_RESULT_FILE} with the actual path (e.g., /tmp/expert-result-20251011-094021-48499.json)
-- The --json flag provides structured output
+- Replace {absolute_path_to_PROMPT_FILE} with actual path (e.g., /var/folders/.../expert-consultation-20251011-094021-48499.txt)
+- Replace {absolute_path_to_RESULT_FILE} with actual path (e.g., /var/folders/.../expert-result-20251011-094021-48499.json)
+- --json outputs structured JSON to stdout (NOT to --output file!)
+- Redirect stdout to capture JSON: > "{absolute_path_to_RESULT_FILE}"
 - 15-minute timeout prevents runaway processes
-- If timeout occurs, report "TIMEOUT" and exit
+- Capture exit code in $EXIT variable
 
-**Step 2: Verify result**
+**Step 2: Check exit code and classify status**
 Use Bash tool:
-test -s "{absolute_path_to_RESULT_FILE}" && echo "SUCCESS" || echo "FAILED"
+if [ $EXIT -eq 0 ]; then
+  STATUS="SUCCESS"
+elif [ $EXIT -eq 124 ]; then
+  STATUS="TIMEOUT"
+else
+  STATUS="FAILED"
+fi
 
-**Step 3: Read and parse JSON result**
-Use Read tool to read: {absolute_path_to_RESULT_FILE}
+Exit codes:
+- 0 = Success
+- 124 = Timeout (from timeout command)
+- Other = Failed
 
-Parse the JSON for:
-- cost.total (actual cost)
-- tokens.input and tokens.output
-- responseTime (in seconds)
-- The main response text
+**Step 3: Read and parse JSON result (only if SUCCESS)**
+If STATUS is SUCCESS:
+- Use Read tool to read: {absolute_path_to_RESULT_FILE}
+- Parse the JSON using correct schema:
+  - Response text: .response
+  - Actual cost: .costBreakdown.actualTotal
+  - Input tokens: .usage.promptTokens
+  - Output tokens: .usage.completionTokens
+  - Response time: .responseTime (in seconds)
 
 **Step 4: Report back**
 Return a structured report:
 - Status: SUCCESS | FAILED | TIMEOUT
 - Model: {model}
-- Cost: $X.XX
-- Tokens: X input, Y output
-- Response time: X.Xs
-- Summary: Brief summary of key insights (2-3 sentences)
+- Cost: $X.XX (from .costBreakdown.actualTotal)
+- Tokens: X input, Y output (from .usage.promptTokens and .usage.completionTokens)
+- Response time: X.Xs (from .responseTime)
+- Summary: Brief summary of key insights from .response (2-3 sentences)
 - Result file: {absolute_path_to_RESULT_FILE}
 
-**On failure:**
-- Capture exit code
-- Report error message
-- Include last 50 lines of stderr if available
+**On TIMEOUT or FAILED:**
+- Report the status and exit code
+- If result file exists, include any partial output
+- No need for full error details - just status
 
 Return all information to the main conversation so the user can see the results.
 """)
@@ -178,8 +195,10 @@ Return all information to the main conversation so the user can see the results.
 
    Create unique result files for each model:
    ```bash
+   TMP="${TMPDIR:-/tmp}"
    RESULT_FILE_1="${TMP%/}/expert-{model1}-$(date +%Y%m%d-%H%M%S)-$$.json"
    RESULT_FILE_2="${TMP%/}/expert-{model2}-$(date +%Y%m%d-%H%M%S)-$$.json"
+   SYNTHESIS_FILE="${TMP%/}/expert-synthesis-$(date +%Y%m%d-%H%M%S)-$$.md"
    # Add more for additional models (max 4)
    ```
 
@@ -187,106 +206,120 @@ Return all information to the main conversation so the user can see the results.
    ```
    ⏳ Starting ensemble consultation with {model1}, {model2}...
       This will run in parallel. Each model may take 1-10 minutes.
-      Launching autonomous Task to orchestrate...
-      You can continue working - the Task will report back with synthesis and winner.
+      Launching parallel Tasks...
+      You can continue working - I'll synthesize results when both complete.
    ```
 
-   **Invoke a parent Task that spawns parallel sub-tasks:**
+   **Launch parallel Tasks at top level (not nested):**
+
+   Invoke Task for model1:
    ```
-   Task("Ensemble: {model1} vs {model2} on {short_question}", """
-You have access to: Task, Bash, Read(/tmp/*), Write(/tmp/*).
+   Task("Consult {model1}: {short_question}", """
+You have access to: Bash, Read(/tmp/*), Read(/var/folders/*).
 
-Your task: Run parallel AI consultations with multiple models, then synthesize and declare a winner.
+Run consultation with timeout and capture JSON:
+timeout 15m promptcode expert --prompt-file "{absolute_path_to_PROMPT_FILE}" --model {model1} --yes --json > "{absolute_path_to_RESULT_FILE_1}"
+EXIT=$?
 
-**Step 1: Launch parallel sub-tasks**
+Classify status:
+if [ $EXIT -eq 0 ]; then STATUS="SUCCESS"
+elif [ $EXIT -eq 124 ]; then STATUS="TIMEOUT"
+else STATUS="FAILED"; fi
 
-Spawn these Tasks in parallel (do not wait between them):
+If SUCCESS, read JSON from {absolute_path_to_RESULT_FILE_1} and parse:
+- Response: .response
+- Cost: .costBreakdown.actualTotal
+- Tokens: .usage.promptTokens, .usage.completionTokens
+- Time: .responseTime
 
-Task("Consult {model1}", '''
-You have access to: Bash, Read(/tmp/*).
-
-Run: timeout 15m promptcode expert --prompt-file "{absolute_path_to_PROMPT_FILE}" --model {model1} --yes --output "{absolute_path_to_RESULT_FILE_1}" --json 2>&1
-
-Then:
-1. Verify: test -s "{absolute_path_to_RESULT_FILE_1}"
-2. Read the JSON result file
-3. Return: {{status: "SUCCESS|FAILED", model: "{model1}", cost: $X.XX, tokens: "X in, Y out", time: X.Xs, file: "{absolute_path_to_RESULT_FILE_1}"}}
-''')
-
-Task("Consult {model2}", '''
-You have access to: Bash, Read(/tmp/*).
-
-Run: timeout 15m promptcode expert --prompt-file "{absolute_path_to_PROMPT_FILE}" --model {model2} --yes --output "{absolute_path_to_RESULT_FILE_2}" --json 2>&1
-
-Then:
-1. Verify: test -s "{absolute_path_to_RESULT_FILE_2}"
-2. Read the JSON result file
-3. Return: {{status: "SUCCESS|FAILED", model: "{model2}", cost: $X.XX, tokens: "X in, Y out", time: X.Xs, file: "{absolute_path_to_RESULT_FILE_2}"}}
-''')
-
-**Step 2: Wait for all sub-tasks to complete**
-Both Tasks will run in parallel. Wait for both to report back.
-
-**Step 3: Read all result files**
-Use Read tool to read:
-- {absolute_path_to_RESULT_FILE_1}
-- {absolute_path_to_RESULT_FILE_2}
-
-Parse each JSON for the actual response text, cost, tokens, and timing.
-
-**Step 4: Create synthesis report**
-Analyze both responses and create a synthesis file:
-
-Use Write tool to create: {absolute_path_to_SYNTHESIS_FILE}
-
-Format:
-# Ensemble Expert Consultation Results
-
-## Question
-{original_question}
-
-## Expert Responses
-
-### {Model1} - ${actual_cost}, {response_time}s
-**Key Points:**
-- [Extract 3-4 main points from model1's response]
-
-### {Model2} - ${actual_cost}, {response_time}s
-**Key Points:**
-- [Extract 3-4 main points from model2's response]
-
-## Synthesis
-
-**Consensus Points:**
-- [Points where both models agree]
-
-**Divergent Views:**
-- {Model1}: [Unique perspective]
-- {Model2}: [Unique perspective]
-
-**🏆 WINNER: {winning_model}**
-Reason: [Clear, specific reason why this model provided the better answer - e.g., "More thorough analysis of edge cases", "Better practical recommendations", "Deeper technical insights"]
-
-(Or if genuinely tied: "TIE - Both provided equally valuable but complementary insights")
-
-**Performance Summary:**
-- Total Cost: ${sum_of_costs}
-- {Model1}: ${cost1}, {time1}s
-- {Model2}: ${cost2}, {time2}s
-- Best Value: {model with best quality/cost ratio}
-
-**Step 5: Report back**
-Return to main conversation:
-- Which model won and why
-- Key consensus points
-- Total cost and timing
-- Path to synthesis file: {absolute_path_to_SYNTHESIS_FILE}
+Return structured report:
+- Status: SUCCESS|TIMEOUT|FAILED
+- Model: {model1}
+- Cost: $X.XX
+- Tokens: X in, Y out
+- Time: X.Xs
+- File: {absolute_path_to_RESULT_FILE_1}
 """)
    ```
 
+   Invoke Task for model2 (in same turn, runs in parallel):
+   ```
+   Task("Consult {model2}: {short_question}", """
+You have access to: Bash, Read(/tmp/*), Read(/var/folders/*).
+
+Run consultation with timeout and capture JSON:
+timeout 15m promptcode expert --prompt-file "{absolute_path_to_PROMPT_FILE}" --model {model2} --yes --json > "{absolute_path_to_RESULT_FILE_2}"
+EXIT=$?
+
+Classify status:
+if [ $EXIT -eq 0 ]; then STATUS="SUCCESS"
+elif [ $EXIT -eq 124 ]; then STATUS="TIMEOUT"
+else STATUS="FAILED"; fi
+
+If SUCCESS, read JSON from {absolute_path_to_RESULT_FILE_2} and parse:
+- Response: .response
+- Cost: .costBreakdown.actualTotal
+- Tokens: .usage.promptTokens, .usage.completionTokens
+- Time: .responseTime
+
+Return structured report:
+- Status: SUCCESS|TIMEOUT|FAILED
+- Model: {model2}
+- Cost: $X.XX
+- Tokens: X in, Y out
+- Time: X.Xs
+- File: {absolute_path_to_RESULT_FILE_2}
+""")
+   ```
+
+   **After both Tasks complete:**
+
+   1. Read both result JSON files using Read tool
+   2. Parse each using correct schema (.response, .costBreakdown.actualTotal, etc.)
+   3. Create synthesis report using Write tool at {absolute_path_to_SYNTHESIS_FILE}:
+
+   ```markdown
+   # Ensemble Expert Consultation Results
+
+   ## Question
+   {original_question}
+
+   ## Expert Responses
+
+   ### {Model1} - ${actual_cost}, {time}s
+   **Key Points:**
+   - [Extract 3-4 main insights from .response]
+
+   ### {Model2} - ${actual_cost}, {time}s
+   **Key Points:**
+   - [Extract 3-4 main insights from .response]
+
+   ## Synthesis
+
+   **Consensus Points:**
+   - [Where both models agree]
+
+   **Divergent Views:**
+   - {Model1}: [Unique insight]
+   - {Model2}: [Unique insight]
+
+   **🏆 WINNER: {model_name}**
+   Reason: [Clear, specific reason - e.g., "More thorough analysis", "Better practical recommendations"]
+
+   (Or: "TIE - Both provided equally valuable but complementary insights")
+
+   **Performance Summary:**
+   - Total Cost: ${total}
+   - {Model1}: ${cost1}, {time1}s
+   - {Model2}: ${cost2}, {time2}s
+   ```
+
+   4. Open synthesis file in Cursor if available
+   5. Report winner and key findings to user
+
    **Important**:
-   - Replace all placeholder paths with actual absolute paths before invoking Task
-   - The sub-tasks spawn in parallel - do not make them sequential
+   - Replace all placeholder paths with actual absolute paths
+   - Invoke both Tasks in same turn for parallel execution
    - Limit to maximum 4 models for practical reasons
    - User has already approved costs via --yes flag
 
@@ -329,18 +362,26 @@ Return to main conversation:
 - **Single approval flow**: Estimate cost → Ask user ONCE → Execute with --yes
 - **Show the preset name** to the user so they know what context is being used
 - **Default model is gpt-5** - use this unless user explicitly requests another model
-- Discover default model via `promptcode expert --models --json` (look for `defaultModel: "gpt-5"`)
 - For ensemble mode: limit to maximum 4 models
 - NEVER automatically add --yes without user approval
-- **Always use --json flag** for structured output (easier parsing, more reliable than text scraping)
-- **Always use --output flag** for file output (more reliable than stdout redirection)
-- **Timeout protection**: All consultations have 15-minute timeout via `timeout 15m` command
-- **Task-based execution**: For long-running models (gpt-5-pro, o3-pro), use the Task tool to spawn an autonomous sub-agent
+- **JSON output modes**:
+  - Fast models (foreground): `--json` outputs to stdout, parse directly
+  - Long-running (Task): Redirect stdout to file: `--json > "$FILE"`, then Read file
+  - Never use `--output` with `--json` (--output writes plain text, not JSON!)
+- **JSON schema differences**:
+  - Estimate mode: Use `.cost.total`, `.tokens.input`
+  - Actual result: Use `.response`, `.costBreakdown.actualTotal`, `.usage.promptTokens/.completionTokens`, `.responseTime`
+- **Timeout protection**: All consultations use `timeout 15m` command, exit code 124 = timeout
+- **Task-based execution**: For long-running models (gpt-5-pro, o3-pro), use Task tool for non-blocking execution
   - Pass concrete absolute file paths to Task (not shell variables like $PROMPT_FILE)
   - Explicitly state tool usage (Bash, Read, Write) in Task prompt
+  - Capture exit code: `EXIT=$?` after command, then classify: 0=SUCCESS, 124=TIMEOUT, else=FAILED
   - Task provides true non-blocking execution that persists across sessions
   - Task will report back when complete
 - **Fast vs slow models**: Fast models (gpt-5, sonnet-4, opus-4, etc) take <30s and run in foreground. Long-running models (gpt-5-pro, o3-pro) take 1-10 minutes and should use Task tool
-- **Ensemble execution**: Parent Task spawns parallel sub-tasks (one per model), waits for all, synthesizes, and declares winner
-- **File paths**: Always use absolute paths in Task prompts. Result files should be .json for structured output
+- **Ensemble execution**: Invoke multiple Tasks at top level in same turn for parallel execution (not nested Tasks!)
+  - Each Task runs one model consultation
+  - After all Tasks complete, synthesize results yourself
+  - Declare clear winner with reasoning
+- **File paths**: Always use `${TMPDIR:-/tmp}` pattern for cross-platform temp directories (macOS uses /var/folders, Linux uses /tmp)
 - Reasoning effort defaults to 'high' (set in CLI) - no need to specify
