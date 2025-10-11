@@ -94,9 +94,61 @@ Consult an expert about: $ARGUMENTS
 6. Execute based on mode:
 
    **Single Model Mode:**
+
+   **For fast models (gpt-5, sonnet-4, opus-4, gemini-2.5-pro, grok-4, etc.):**
+   Run in foreground:
    ```bash
    promptcode expert --prompt-file "$PROMPT_FILE" --model {model} --yes
    ```
+
+   **For long-running models (gpt-5-pro, o3-pro - can take 1-10 minutes):**
+   Use the Task tool for non-blocking execution (idiomatic Claude Code pattern):
+
+   1. Create result file path:
+      ```bash
+      RESULT_FILE="${TMP%/}/expert-result-$(date +%Y%m%d-%H%M%S)-$$.txt"
+      ```
+
+   2. Inform the user:
+      ```
+      ⏳ Starting background consultation with {model}...
+         This may take several minutes (1-10 min). Launching as autonomous Task...
+         Results will be saved to: $RESULT_FILE
+         You can continue working - the Task will report back when complete.
+      ```
+
+   3. **Invoke the Task tool directly** (you are Claude Code - you have this tool):
+      ```
+      Task("Consult {model} on code")
+      ```
+
+      With this prompt for the subagent:
+      ```
+      Run this long-running AI consultation command and wait for completion:
+
+      promptcode expert --prompt-file '$PROMPT_FILE' --model {model} --yes --output '$RESULT_FILE'
+
+      This consultation may take 1-10 minutes. When complete:
+
+      1. Verify result file exists: test -s '$RESULT_FILE'
+      2. Read the full response: cat '$RESULT_FILE'
+      3. Extract and report:
+         - Actual cost (look for "Cost:" or "$")
+         - Response time (look for "Response time:")
+         - Token usage (input/output tokens)
+      4. Summarize the key insights from the consultation
+
+      If command fails:
+      - Report exit code
+      - Show error message
+      - Provide last 50 lines of output
+
+      Return all information to main conversation.
+      ```
+
+   4. Return immediately so user can continue working
+   5. Task runs autonomously and persists across Claude Code sessions
+   6. When Task completes and reports back, summarize the findings for the user
    
    **Ensemble Mode (Parallel Execution):**
    - Use a SINGLE parent Task that orchestrates parallel sub-tasks (idiomatic for Claude Code)
@@ -198,3 +250,5 @@ Consult an expert about: $ARGUMENTS
 - NEVER automatically add --yes without user approval
 - Reasoning effort defaults to 'high' (set in CLI) - no need to specify
 - Always use `--output` flag instead of stdout redirection for reliability
+- **Task-based execution**: For long-running models (gpt-5-pro, o3-pro), use the Task tool to spawn an autonomous sub-agent. This provides true non-blocking execution that persists across sessions. The Task will report back when complete.
+- **Fast vs slow models**: Fast models (gpt-5, sonnet-4, opus-4, etc) take <30s and run in foreground. Long-running models (gpt-5-pro, o3-pro) take 1-10 minutes and should use Task tool.

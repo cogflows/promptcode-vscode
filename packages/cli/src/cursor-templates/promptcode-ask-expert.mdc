@@ -16,13 +16,39 @@ promptcode expert "<question>" -f "src/**/*.ts"
 ```
 
 Options:
-- `--model <name>`: Choose AI model (default: gpt-5, others: opus-4, sonnet-4, gemini-2.5-pro, grok-4, o3, o3-pro)
+- `--model <name>`: Choose AI model (default: gpt-5, others: opus-4, sonnet-4, gemini-2.5-pro, grok-4, o3, o3-pro, gpt-5-pro)
 - `--web-search`: Enable web search for current information
 - `--yes`: Skip cost confirmation prompts
+- `--output <file>`: Save response to file (required for background execution)
 
 Note: The default model is **gpt-5** unless explicitly specified otherwise.
 
-Important: This requires API keys to be set:
+## Long-Running Models (gpt-5-pro, o3-pro)
+
+These models can take 1-10 minutes due to extended thinking time. Use background execution:
+
+```bash
+# Create result file
+RESULT_FILE="/tmp/expert-result-$(date +%Y%m%d-%H%M%S).txt"
+STATUS_FILE="/tmp/expert-status-$(date +%Y%m%d-%H%M%S).json"
+
+# Run in background with nohup for session persistence
+nohup promptcode expert "<question>" --model gpt-5-pro --yes --output "$RESULT_FILE" > "${RESULT_FILE}.log" 2>&1 &
+BG_PID=$!
+disown $BG_PID
+
+# Save status for monitoring
+echo "{\"pid\":$BG_PID,\"result\":\"$RESULT_FILE\",\"log\":\"${RESULT_FILE}.log\",\"started\":\"$(date +%s)\"}" > "$STATUS_FILE"
+
+echo "⏳ Consultation running in background (PID: $BG_PID)"
+echo "Results will be saved to: $RESULT_FILE"
+echo "Monitor progress: tail -f ${RESULT_FILE}.log"
+echo "Check if complete: kill -0 $BG_PID 2>/dev/null || echo 'Complete'"
+```
+
+## API Keys
+
+This requires API keys to be set:
 - `OPENAI_API_KEY` for O3/GPT models
 - `ANTHROPIC_API_KEY` for Claude models
 - `GOOGLE_API_KEY` for Gemini models

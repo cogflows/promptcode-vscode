@@ -24,7 +24,7 @@ export const TEMPLATE_CHECKSUMS: Record<string, string[]> = {
     "dbc5ffd37033bcd5afaa8edc12fb8b5abc1f0681e2c260957bdd5f2bcd4676c6"
   ],
   "promptcode-ask-expert.md": [
-    "c98a85082bc7db5b6b21b8639fa9e5e21ff7eb68a336fdcfa3a58770ca3b5e0a",
+    "202c8932aed700ba14c5fbd1411ef9fde0b1a64b24e315e08743fe384e62dd3b",
     "71ca5ff74847b54ed6a33f6f6a6432730962fb6ef38bf02059a2fd72bbc7fff5",
     "ef78aa1a6554360e0eeae6af575e4edbb2b3d17622c85470ce3c332a9660f1d0",
     "7258ca248659a0dc90eb0604fb7721fc29e47e6d0cbfe5beb2811b11e5511c77"
@@ -55,7 +55,7 @@ export const TEMPLATE_CHECKSUMS: Record<string, string[]> = {
     "468b8549f45ba8072e15140ff4d1324e11a7c67b7f5a04c74430baa5993ff7ed"
   ],
   "promptcode-ask-expert.mdc": [
-    "57589a2cc49002d9d0d8f4d356511f9921708fa368ab182468ec956e98d8a593",
+    "0f890d74e2da494cee769e9e1b533b8c0386ceb765f245e1d8bd5a73f06a4eb9",
     "919bdae89190e2915c7c5a360a4fde480d4f6a8beb5327d66e89294e8bc591d6"
   ]
 };
