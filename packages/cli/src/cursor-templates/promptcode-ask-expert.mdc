@@ -20,30 +20,108 @@ Options:
 - `--web-search`: Enable web search for current information
 - `--yes`: Skip cost confirmation prompts
 - `--output <file>`: Save response to file (required for background execution)
+- `--json`: Return structured JSON output (recommended for parsing)
 
 Note: The default model is **gpt-5** unless explicitly specified otherwise.
 
 ## Long-Running Models (gpt-5-pro, o3-pro)
 
-These models can take 1-10 minutes due to extended thinking time. Use background execution:
+These models can take 1-10 minutes due to extended thinking time. Use background execution with proper error handling and timeouts:
 
 ```bash
-# Create result file
-RESULT_FILE="/tmp/expert-result-$(date +%Y%m%d-%H%M%S).txt"
-STATUS_FILE="/tmp/expert-status-$(date +%Y%m%d-%H%M%S).json"
+#!/usr/bin/env bash
+set -euo pipefail
 
-# Run in background with nohup for session persistence
-nohup promptcode expert "<question>" --model gpt-5-pro --yes --output "$RESULT_FILE" > "${RESULT_FILE}.log" 2>&1 &
+# Create temporary files with unique names (mktemp is more reliable than /tmp/manual-names)
+RESULT_FILE="$(mktemp -t expert-result-XXXXXX.json)"
+LOG_FILE="$(mktemp -t expert-log-XXXXXX.txt)"
+STATUS_FILE="$(mktemp -t expert-status-XXXXXX.json)"
+
+# Prepare the command with timeout protection (15 minutes max)
+QUESTION="<your question here>"
+MODEL="gpt-5-pro"  # or o3-pro
+
+# Save initial status
+cat > "$STATUS_FILE" << EOF
+{
+  "status": "starting",
+  "model": "$MODEL",
+  "started": "$(date +%s)",
+  "result": "$RESULT_FILE",
+  "log": "$LOG_FILE"
+}
+EOF
+
+echo "⏳ Starting background consultation with $MODEL..."
+echo "   Results: $RESULT_FILE"
+echo "   Log: $LOG_FILE"
+echo "   Status: $STATUS_FILE"
+
+# Run in background with nohup, timeout, and proper quoting
+# Note: Use bash -lc to ensure login shell environment (API keys loaded)
+nohup bash -lc "
+  set -euo pipefail
+  timeout 15m promptcode expert \"$QUESTION\" \
+    --model \"$MODEL\" \
+    --yes \
+    --output \"$RESULT_FILE\" \
+    --json \
+    2>&1 | tee -a \"$LOG_FILE\"
+  EXIT_CODE=\${PIPESTATUS[0]}
+  if [ \$EXIT_CODE -eq 0 ]; then
+    echo '{\"status\":\"success\",\"completed\":\"'"\$(date +%s)"'\"}' >> \"$STATUS_FILE\"
+  elif [ \$EXIT_CODE -eq 124 ]; then
+    echo '{\"status\":\"timeout\",\"completed\":\"'"\$(date +%s)"'\"}' >> \"$STATUS_FILE\"
+  else
+    echo '{\"status\":\"failed\",\"exitCode\":'\"\$EXIT_CODE\"',\"completed\":\"'"\$(date +%s)"'\"}' >> \"$STATUS_FILE\"
+  fi
+" &
+
 BG_PID=$!
-disown $BG_PID
+disown "$BG_PID" 2>/dev/null || true
 
-# Save status for monitoring
-echo "{\"pid\":$BG_PID,\"result\":\"$RESULT_FILE\",\"log\":\"${RESULT_FILE}.log\",\"started\":\"$(date +%s)\"}" > "$STATUS_FILE"
+# Update status with PID
+cat > "$STATUS_FILE" << EOF
+{
+  "status": "running",
+  "pid": $BG_PID,
+  "model": "$MODEL",
+  "started": "$(date +%s)",
+  "result": "$RESULT_FILE",
+  "log": "$LOG_FILE"
+}
+EOF
 
-echo "⏳ Consultation running in background (PID: $BG_PID)"
-echo "Results will be saved to: $RESULT_FILE"
-echo "Monitor progress: tail -f ${RESULT_FILE}.log"
-echo "Check if complete: kill -0 $BG_PID 2>/dev/null || echo 'Complete'"
+echo ""
+echo "✓ Background consultation launched (PID: $BG_PID)"
+echo ""
+echo "Monitor progress:"
+echo "  tail -f \"$LOG_FILE\""
+echo ""
+echo "Check status:"
+echo "  kill -0 $BG_PID 2>/dev/null && echo 'Still running' || echo 'Complete or failed'"
+echo "  cat \"$STATUS_FILE\" | jq ."
+echo ""
+echo "View results when complete:"
+echo "  cat \"$RESULT_FILE\" | jq ."
+echo ""
+echo "Note: 15-minute timeout will auto-kill if needed"
+```
+
+**Monitoring a running consultation:**
+
+```bash
+# Check if still running (replace PID)
+kill -0 <PID> 2>/dev/null && echo "Running" || echo "Stopped"
+
+# View live progress
+tail -f /tmp/expert-log-XXXXXX.txt
+
+# Check final status
+cat /tmp/expert-status-XXXXXX.json | jq .
+
+# Read result (when complete)
+cat /tmp/expert-result-XXXXXX.json | jq .
 ```
 
 ## API Keys
