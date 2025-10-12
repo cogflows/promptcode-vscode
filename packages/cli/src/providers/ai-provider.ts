@@ -99,9 +99,11 @@ export class AIProvider {
 
   private initializeProviders() {
     const keys = this.config.getAllKeys();
-    
+
     if (keys.openai) {
-      this.providers.openai = createOpenAI({ apiKey: keys.openai });
+      this.providers.openai = createOpenAI({
+        apiKey: keys.openai,
+      });
     }
     if (keys.anthropic) {
       this.providers.anthropic = createAnthropic({ apiKey: keys.anthropic });
@@ -117,6 +119,94 @@ export class AIProvider {
   /* ────────────────────────────
    * Helpers
    * ──────────────────────────── */
+
+  /**
+   * Get appropriate timeout for a model based on its capabilities and reasoning effort
+   *
+   * Extended reasoning models (GPT-5 Pro, O3 Pro) can take 60-120+ minutes per request
+   * with high reasoning effort. Timeout scales dynamically based on effort level.
+   *
+   * Base timeouts (in milliseconds):
+   * - Pro reasoning models: 30 minutes (1800000ms)
+   * - Standard reasoning models: 5 minutes (300000ms)
+   * - Fast models: 2 minutes (120000ms)
+   *
+   * Reasoning effort multipliers (validated through real-world testing):
+   * - minimal: 0.5x (15 minutes for pro models)
+   * - low: 1x (30 minutes for pro models)
+   * - medium: 2x (60 minutes for pro models)
+   * - high: 4x (120 minutes for pro models - validated with actual GPT-5 Pro consultations)
+   *
+   * Environment variable overrides:
+   * - PROMPTCODE_TIMEOUT_MS: Global timeout override
+   * - PROMPTCODE_TIMEOUT_<MODEL>_MS: Model-specific override (e.g., PROMPTCODE_TIMEOUT_GPT_5_PRO_MS)
+   * - PROMPTCODE_TIMEOUT_CAP_MS: Maximum timeout cap (default: 7200000ms = 120 minutes)
+   */
+  private getModelTimeout(modelKey: string, reasoningEffort: 'minimal' | 'low' | 'medium' | 'high' = 'high'): number {
+    // Base timeouts by model tier
+    const BASE_TIMEOUTS = {
+      fast: 120000,      // 2 minutes
+      standard: 300000,  // 5 minutes
+      pro: 1800000,      // 30 minutes
+    };
+
+    // Reasoning effort multipliers (validated through real-world testing)
+    const EFFORT_MULTIPLIERS: Record<string, number> = {
+      minimal: 0.5,
+      low: 1,
+      medium: 2,
+      high: 4,  // For 60-120 minute extended reasoning (real GPT-5 Pro consultations)
+    };
+
+    // Maximum timeout cap to prevent runaway (increased from 60min after real-world testing)
+    const MAX_CAP = Number(process.env.PROMPTCODE_TIMEOUT_CAP_MS) || 7200000; // 120 minutes
+
+    // Determine model tier
+    const config = MODELS[modelKey];
+    let tier: 'fast' | 'standard' | 'pro';
+
+    if (!config) {
+      tier = 'standard'; // Unknown model, use safe default
+    } else if (modelKey === 'gpt-5-pro' || modelKey === 'o3-pro') {
+      tier = 'pro';
+    } else if (modelKey.startsWith('o3') || modelKey.startsWith('gpt-5')) {
+      tier = 'standard';
+    } else {
+      tier = 'fast';
+    }
+
+    // Calculate timeout with effort multiplier
+    const baseTimeout = BASE_TIMEOUTS[tier];
+    const multiplier = EFFORT_MULTIPLIERS[reasoningEffort] || 1;
+    const calculatedTimeout = Math.min(baseTimeout * multiplier, MAX_CAP);
+
+    // Debug logging for timeout calculation
+    if (process.env.DEBUG || modelKey.includes('gpt-5-pro')) {
+      console.error(`[DEBUG getModelTimeout] modelKey=${modelKey}, tier=${tier}, reasoningEffort=${reasoningEffort}, baseTimeout=${baseTimeout}ms, multiplier=${multiplier}, calculatedTimeout=${calculatedTimeout}ms, MAX_CAP=${MAX_CAP}ms`);
+    }
+
+    // Check for model-specific environment variable override
+    // Normalize model key: gpt-5-pro -> GPT_5_PRO
+    const normalizedModelKey = modelKey.toUpperCase().replace(/[-.]/g, '_');
+    const modelSpecificEnv = process.env[`PROMPTCODE_TIMEOUT_${normalizedModelKey}_MS`];
+    if (modelSpecificEnv) {
+      const overrideTimeout = Number(modelSpecificEnv);
+      if (!isNaN(overrideTimeout) && overrideTimeout > 0) {
+        return Math.min(overrideTimeout, MAX_CAP);
+      }
+    }
+
+    // Check for global environment variable override
+    const globalEnv = process.env.PROMPTCODE_TIMEOUT_MS;
+    if (globalEnv) {
+      const overrideTimeout = Number(globalEnv);
+      if (!isNaN(overrideTimeout) && overrideTimeout > 0) {
+        return Math.min(overrideTimeout, MAX_CAP);
+      }
+    }
+
+    return calculatedTimeout;
+  }
 
   private getWebSearchTools(modelKey: string): Record<string, any> | undefined {
     const config = MODELS[modelKey];
@@ -164,24 +254,12 @@ export class AIProvider {
     if (process.env.PROMPTCODE_MOCK_LLM === '1') {
       return {} as LanguageModel; // Return dummy model object
     }
-    
+
     const config = MODELS[modelKey];
     if (!config) {throw new Error(`Unknown model: ${modelKey}`);}
 
-    // Special handling for OpenAI with web search
-    if (config.provider === 'openai' && useWebSearch && config.supportsWebSearch) {
-      const keys = this.config.getAllKeys();
-      if (!keys.openai) {
-        throw new Error(
-          `API key not configured for openai. ` +
-          `Set via environment variable: export OPENAI_API_KEY=...`
-        );
-      }
-      // Use responses API for web search support
-      const openaiProvider = createOpenAI({ apiKey: keys.openai });
-      return openaiProvider.responses(config.modelId);
-    }
-
+    // Web search is handled via tools in getWebSearchTools(), not via a separate API
+    // Just return the standard model - web search tools will be added in generateText/streamText
     const providerInstance = this.providers[config.provider];
     if (!providerInstance) {
       const envName = config.provider.toUpperCase() + '_API_KEY';
@@ -235,30 +313,39 @@ export class AIProvider {
     }
     
     messages.push({ role: 'user', content: prompt });
-    
-    // Prepare the request configuration
+
+    // Prepare the request configuration with dynamic timeout based on reasoning effort
+    const reasoningEffort = options.reasoningEffort || 'high';
+    const timeoutMs = this.getModelTimeout(modelKey, reasoningEffort);
+
+    // Debug: Log the timeout value being used for AbortSignal
+    if (modelKey.includes('gpt-5-pro') || process.env.DEBUG) {
+      console.error(`[DEBUG generateText/streamText] Creating AbortSignal with timeout: ${timeoutMs}ms (${timeoutMs/60000} minutes)`);
+    }
+
     const requestConfig: any = {
       model,
       messages,
-      maxCompletionTokens: options.maxTokens || 4096,
+      maxTokens: options.maxTokens || 4096,
+      abortSignal: AbortSignal.timeout(timeoutMs),
     };
-    
-    // Only add temperature for non-GPT-5 models (GPT-5 doesn't support it)
-    if (!modelKey.startsWith('gpt-5')) {
+
+    // Only add temperature for non-reasoning models (reasoning models ignore it)
+    if (!modelKey.startsWith('gpt-5') && !modelKey.startsWith('o3')) {
       requestConfig.temperature = options.temperature || 0.7;
     }
-    
+
     // Add GPT-5 specific parameters with smart defaults
     if (modelConfig?.provider === 'openai' && modelKey.startsWith('gpt-5')) {
       // Default to low verbosity for concise responses
       requestConfig.textVerbosity = options.textVerbosity || 'low';
-      // Default to high reasoning effort for best quality
-      requestConfig.reasoningEffort = options.reasoningEffort || 'high';
+      // Use the reasoning effort passed to the function
+      requestConfig.reasoningEffort = reasoningEffort;
       if (options.serviceTier) {
         requestConfig.serviceTier = options.serviceTier;
       }
     }
-    
+
     // Add web search tools if enabled
     if (enableWebSearch) {
       const tools = this.getWebSearchTools(modelKey);
@@ -266,13 +353,25 @@ export class AIProvider {
         requestConfig.tools = tools;
       }
     }
-    
-    const result = await generateText(requestConfig);
-    
-    return {
-      text: result.text,
-      usage: normalizeUsage(result.usage)
-    };
+
+    try {
+      const result = await generateText(requestConfig);
+
+      return {
+        text: result.text,
+        usage: normalizeUsage(result.usage)
+      };
+    } catch (error: any) {
+      // Debug: Log timeout errors with details
+      if (error.message?.includes('timeout') || error.message?.includes('timed out')) {
+        console.error(`[DEBUG TIMEOUT ERROR] Message: ${error.message}`);
+        console.error(`[DEBUG TIMEOUT ERROR] Error type: ${error.constructor.name}`);
+        console.error(`[DEBUG TIMEOUT ERROR] Error code: ${error.code}`);
+        console.error(`[DEBUG TIMEOUT ERROR] Error cause: ${error.cause}`);
+        console.error(`[DEBUG TIMEOUT ERROR] Stack:`, error.stack?.split('\n').slice(0, 5).join('\n'));
+      }
+      throw error;
+    }
   }
   
   async streamText(
@@ -322,30 +421,39 @@ export class AIProvider {
     }
     
     messages.push({ role: 'user', content: prompt });
-    
-    // Prepare the request configuration
+
+    // Prepare the request configuration with dynamic timeout based on reasoning effort
+    const reasoningEffort = options.reasoningEffort || 'high';
+    const timeoutMs = this.getModelTimeout(modelKey, reasoningEffort);
+
+    // Debug: Log the timeout value being used for AbortSignal
+    if (modelKey.includes('gpt-5-pro') || process.env.DEBUG) {
+      console.error(`[DEBUG generateText/streamText] Creating AbortSignal with timeout: ${timeoutMs}ms (${timeoutMs/60000} minutes)`);
+    }
+
     const requestConfig: any = {
       model,
       messages,
-      maxCompletionTokens: options.maxTokens || 4096,
+      maxTokens: options.maxTokens || 4096,
+      abortSignal: AbortSignal.timeout(timeoutMs),
     };
-    
-    // Only add temperature for non-GPT-5 models (GPT-5 doesn't support it)
-    if (!modelKey.startsWith('gpt-5')) {
+
+    // Only add temperature for non-reasoning models (reasoning models ignore it)
+    if (!modelKey.startsWith('gpt-5') && !modelKey.startsWith('o3')) {
       requestConfig.temperature = options.temperature || 0.7;
     }
-    
+
     // Add GPT-5 specific parameters with smart defaults
     if (modelConfig?.provider === 'openai' && modelKey.startsWith('gpt-5')) {
       // Default to low verbosity for concise responses
       requestConfig.textVerbosity = options.textVerbosity || 'low';
-      // Default to high reasoning effort for best quality
-      requestConfig.reasoningEffort = options.reasoningEffort || 'high';
+      // Use the reasoning effort passed to the function
+      requestConfig.reasoningEffort = reasoningEffort;
       if (options.serviceTier) {
         requestConfig.serviceTier = options.serviceTier;
       }
     }
-    
+
     // Add web search tools if enabled
     if (enableWebSearch) {
       const tools = this.getWebSearchTools(modelKey);
@@ -353,7 +461,7 @@ export class AIProvider {
         requestConfig.tools = tools;
       }
     }
-    
+
     const result = await streamText(requestConfig);
     
     let fullText = '';

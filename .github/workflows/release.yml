@@ -35,6 +35,12 @@ jobs:
       - name: Setup Bun for CLI tests
         uses: oven-sh/setup-bun@v2
           
+      - name: TypeScript type check (CLI)
+        run: |
+          cd packages/cli
+          bun install --frozen-lockfile
+          npm run typecheck
+
       - name: CLI tests
         timeout-minutes: 5  # Add step-level timeout
         env:
@@ -42,7 +48,6 @@ jobs:
           PROMPTCODE_TEST: 1
         run: |
           cd packages/cli
-          bun install --frozen-lockfile
           bun run build
           PROMPTCODE_TEST=1 CI=true bun test --bail=1 --timeout 5000
 
@@ -118,7 +123,12 @@ jobs:
         run: |
           cd packages/cli
           bun install
-          
+
+      - name: TypeScript type check
+        run: |
+          cd packages/cli
+          npm run typecheck
+
       - name: Inject version and build CLI binary
         env:
           CI: true

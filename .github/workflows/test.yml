@@ -101,7 +101,12 @@ jobs:
         run: |
           cd packages/cli
           bun install
-          
+
+      - name: TypeScript type check
+        run: |
+          cd packages/cli
+          npm run typecheck
+
       - name: Build CLI
         run: |
           cd packages/cli
