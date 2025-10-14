@@ -15,14 +15,35 @@ import type {
 
 type ReasoningEffort = BackgroundTaskOptions['reasoningEffort'];
 
+export interface OpenAIBackgroundClientConfig {
+  fetch?: typeof fetch;
+  timeout?: number;
+  maxRetries?: number;
+  client?: OpenAI;
+}
+
 export class OpenAIBackgroundClient {
   private client: OpenAI;
 
-  constructor(apiKey: string, fetchImpl?: typeof fetch) {
-    const options: OpenAIClientOptions = { apiKey };
-    if (fetchImpl) {
-      options.fetch = fetchImpl as any;
+  constructor(
+    apiKey: string,
+    config: OpenAIBackgroundClientConfig = {}
+  ) {
+    if (config?.client) {
+      this.client = config.client;
+      return;
     }
+
+    const options: OpenAIClientOptions = {
+      apiKey,
+      timeout: config?.timeout ?? 0,
+      maxRetries: config?.maxRetries ?? 2,
+    };
+
+    if (config?.fetch) {
+      options.fetch = config.fetch as any;
+    }
+
     this.client = new OpenAI(options);
   }
 
@@ -85,11 +106,12 @@ export class OpenAIBackgroundClient {
       };
     } catch (error: any) {
       if (error.status === 404) {
-        return {
-          id: taskId,
-          status: 'failed',
-          error: 'Task not found',
-        };
+        const notReadyError = new Error('Background task not yet visible');
+        notReadyError.name = 'OpenAIBackgroundTaskNotReady';
+        (notReadyError as any).code = 'BACKGROUND_TASK_NOT_READY';
+        (notReadyError as any).status = 404;
+        (notReadyError as any).temporary = true;
+        throw notReadyError;
       }
       throw error;
     }

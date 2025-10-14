@@ -5,14 +5,14 @@
  * background mode API, polling for completion, and providing progress updates.
  */
 
-import { OpenAIBackgroundClient } from './openai-background-client.js';
+import { OpenAIBackgroundClient, type OpenAIBackgroundClientConfig } from './openai-background-client.js';
 import { ProgressReporter } from '../utils/progress-reporter.js';
 import type {
   BackgroundTaskOptions,
   BackgroundTaskResult,
 } from '../types/background-task.js';
 
-type BackgroundClientConfig = ConstructorParameters<typeof OpenAIBackgroundClient>[1];
+type BackgroundClientConfig = OpenAIBackgroundClientConfig | undefined;
 
 export class BackgroundTaskHandler {
   private client: OpenAIBackgroundClient;
