@@ -12,6 +12,8 @@ import type {
   BackgroundTaskResult,
 } from '../types/background-task.js';
 
+type BackgroundClientConfig = ConstructorParameters<typeof OpenAIBackgroundClient>[1];
+
 export class BackgroundTaskHandler {
   private client: OpenAIBackgroundClient;
   private progressReporter: ProgressReporter;
@@ -23,7 +25,9 @@ export class BackgroundTaskHandler {
   constructor(apiKey: string, options?: { pollInterval?: number; maxWaitTime?: number; fetch?: typeof fetch; maxNotReadyRetries?: number; client?: OpenAIBackgroundClient }) {
     const injectedClient = options?.client;
     const injectedFetch = options?.fetch;
-    const clientConfig = injectedFetch ? { fetch: injectedFetch } : undefined;
+    const clientConfig: BackgroundClientConfig = injectedFetch
+      ? { fetch: injectedFetch }
+      : undefined;
     this.client = injectedClient ?? new OpenAIBackgroundClient(apiKey, clientConfig);
     this.progressReporter = new ProgressReporter();
 
