@@ -103,8 +103,9 @@ Consult an expert about: $ARGUMENTS
    promptcode expert --prompt-file "$PROMPT_FILE" --model {model} --yes --json
    ```
 
-   **For long-running models (gpt-5-pro, o3-pro - can take 1-10 minutes):**
-   Use the Task tool for non-blocking execution (idiomatic Claude Code pattern):
+   **For long-running models (gpt-5-pro - can take 10-120 minutes):**
+   Use the Task tool for non-blocking execution. The CLI will automatically switch to
+   OpenAI's background API for GPT-5 Pro, so no manual timeout wrapper is needed.
 
    1. Create result file path using temp directory:
       ```bash
@@ -115,7 +116,7 @@ Consult an expert about: $ARGUMENTS
    2. Inform the user:
       ```
       ⏳ Starting background consultation with {model}...
-         This may take several minutes (1-10 min). Launching as autonomous Task...
+         This may take a long time (10-120 min). Launching as autonomous Task...
          Prompt file: $PROMPT_FILE
          Results will be saved to: $RESULT_FILE
          You can continue working - the Task will report back when complete.
@@ -126,11 +127,11 @@ Consult an expert about: $ARGUMENTS
       Task("Consult {model}: {short_question_summary}", """
 You have access to: Bash, Read(/tmp/*), Read(/var/folders/*), Write(/tmp/*), Write(/var/folders/*).
 
-Your task: Run a long-running AI consultation (1-10 minutes) and report back with results.
+Your task: Run a long-running AI consultation (10-120 minutes) and report back with results.
 
-**Step 1: Run consultation with timeout and capture JSON to stdout**
+**Step 1: Run consultation and capture JSON to stdout**
 Use Bash tool to run:
-timeout 15m promptcode expert --prompt-file "{absolute_path_to_PROMPT_FILE}" --model {model} --yes --json > "{absolute_path_to_RESULT_FILE}"
+promptcode expert --prompt-file "{absolute_path_to_PROMPT_FILE}" --model {model} --yes --json > "{absolute_path_to_RESULT_FILE}"
 EXIT=$?
 
 Notes:
@@ -138,23 +139,15 @@ Notes:
 - Replace {absolute_path_to_RESULT_FILE} with actual path (e.g., /var/folders/.../expert-result-20251011-094021-48499.json)
 - --json outputs structured JSON to stdout (NOT to --output file!)
 - Redirect stdout to capture JSON: > "{absolute_path_to_RESULT_FILE}"
-- 15-minute timeout prevents runaway processes
 - Capture exit code in $EXIT variable
 
 **Step 2: Check exit code and classify status**
 Use Bash tool:
 if [ $EXIT -eq 0 ]; then
   STATUS="SUCCESS"
-elif [ $EXIT -eq 124 ]; then
-  STATUS="TIMEOUT"
 else
   STATUS="FAILED"
 fi
-
-Exit codes:
-- 0 = Success
-- 124 = Timeout (from timeout command)
-- Other = Failed
 
 **Step 3: Read and parse JSON result (only if SUCCESS)**
 If STATUS is SUCCESS:
@@ -179,6 +172,7 @@ Return a structured report:
 **On TIMEOUT or FAILED:**
 - Report the status and exit code
 - If result file exists, include any partial output
+- Surface key stderr lines from the CLI (timeouts show "TimeoutError")
 - No need for full error details - just status
 
 Return all information to the main conversation so the user can see the results.

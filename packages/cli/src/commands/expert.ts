@@ -25,7 +25,6 @@ interface ExpertOptions {
   promptFile?: string;
   model?: string;
   output?: string;
-  stream?: boolean;
   models?: boolean;
   savePreset?: string;
   yes?: boolean;
@@ -38,6 +37,7 @@ interface ExpertOptions {
   json?: boolean;
   estimateCost?: boolean;
   costThreshold?: number;
+  background?: boolean;
 }
 
 const SYSTEM_PROMPT = `You are an expert software engineer helping analyze and improve code. Provide constructive, actionable feedback.
@@ -321,12 +321,6 @@ function listAvailableModels(jsonOutput: boolean = false) {
 }
 
 export async function expertCommand(question: string | undefined, options: ExpertOptions): Promise<void> {
-  // Validate conflicting options
-  if (options.json && options.stream) {
-    console.error(chalk.red('❌ Cannot use --json and --stream together. Choose one output format.'));
-    exitWithCode(EXIT_CODES.INVALID_INPUT);
-  }
-  
   // Handle --models flag
   if (options.models) {
     listAvailableModels(options.json || false);
@@ -402,7 +396,7 @@ export async function expertCommand(question: string | undefined, options: Exper
     }
   }
   
-  const spin = (!options.stream && !options.json && shouldShowSpinner({ json: options.json })) ? spinner() : null;
+  const spin = (!options.json && shouldShowSpinner({ json: options.json })) ? spinner() : null;
   if (spin) {spin.start('Preparing context...');}
   
   try {
@@ -529,11 +523,49 @@ export async function expertCommand(question: string | undefined, options: Exper
 
     // Determine web search setting
     // Default: enabled if model supports and user didn't disable it.
-    const webSearchEnabled =
+    let webSearchEnabled =
       options.webSearch !== undefined
         ? Boolean(options.webSearch)
         : Boolean(modelConfig.supportsWebSearch);
-    
+
+    const backgroundPreference = options.background;
+    const forceBackgroundMode = backgroundPreference === true;
+    const disableBackgroundMode = backgroundPreference === false;
+
+    const canUseBackground = modelConfig.provider === 'openai';
+    const envForceBackground = process.env.PROMPTCODE_FORCE_BACKGROUND === '1';
+    const envDisableBackground = process.env.PROMPTCODE_DISABLE_BACKGROUND === '1';
+
+    let willUseBackground = false;
+    if (canUseBackground) {
+      if (forceBackgroundMode) {
+        willUseBackground = true;
+      } else if (disableBackgroundMode) {
+        willUseBackground = false;
+      } else if (envForceBackground) {
+        willUseBackground = true;
+      } else if (envDisableBackground) {
+        willUseBackground = false;
+      } else if (modelKey === 'gpt-5-pro') {
+        willUseBackground = true;
+      }
+    }
+
+    if (willUseBackground && webSearchEnabled) {
+      if (!options.json) {
+        console.log(chalk.yellow('⚠️  Web search is not supported during background runs. Disabling web search to keep the job alive.'));
+      }
+      webSearchEnabled = false;
+    }
+
+    if (forceBackgroundMode && !willUseBackground && !options.json) {
+      console.log(chalk.yellow('⚠️  Background mode is only available for OpenAI models. Ignoring --background for this run.'));
+    }
+
+    const consultationLabel = willUseBackground
+      ? `Consulting ${modelConfig.name} (background mode)...`
+      : `Consulting ${modelConfig.name}...`;
+
     // Parse cost threshold once and reuse
     const envThreshold = process.env.PROMPTCODE_COST_THRESHOLD;
     const resolvedCostThreshold = (() => {
@@ -667,9 +699,9 @@ export async function expertCommand(question: string | undefined, options: Exper
       : question || '';
     
     if (spin) {
-      spin.text = `Consulting ${modelConfig.name}...`;
-    } else if (options.stream) {
-      console.log(chalk.blue(`\n🤖 Consulting ${modelConfig.name}...`));
+      spin.text = consultationLabel;
+    } else if (!options.json) {
+      console.log(chalk.blue(`\n🤖 ${consultationLabel}`));
       console.log(chalk.gray(`📊 ${modelConfig.description}`));
       console.log(chalk.gray('⏳ This may take a moment...\n'));
     }
@@ -690,29 +722,17 @@ export async function expertCommand(question: string | undefined, options: Exper
     
     // Call AI
     const startTime = Date.now();
-    let response: { text: string; usage?: any };
-    
-    if (options.stream) {
-      response = await aiProvider.streamText(modelKey, fullPrompt, {
-        systemPrompt: SYSTEM_PROMPT,
-        maxTokens: availableTokens,
-        onChunk: (chunk) => process.stdout.write(chunk),
-        webSearch: webSearchEnabled && modelConfig.supportsWebSearch,
-        textVerbosity: options.verbosity,
-        reasoningEffort: options.reasoningEffort,
-        serviceTier: options.serviceTier,
-      });
-      console.log(); // Add newline after streaming
-    } else {
-      response = await aiProvider.generateText(modelKey, fullPrompt, {
-        systemPrompt: SYSTEM_PROMPT,
-        maxTokens: availableTokens,
-        webSearch: webSearchEnabled && modelConfig.supportsWebSearch,
-        textVerbosity: options.verbosity,
-        reasoningEffort: options.reasoningEffort,
-        serviceTier: options.serviceTier,
-      });
-    }
+    const response = await aiProvider.generateText(modelKey, fullPrompt, {
+      systemPrompt: SYSTEM_PROMPT,
+      maxTokens: availableTokens,
+      webSearch: webSearchEnabled && modelConfig.supportsWebSearch,
+      textVerbosity: options.verbosity,
+      reasoningEffort: options.reasoningEffort,
+      serviceTier: options.serviceTier,
+      disableProgress: options.json === true,
+      ...(forceBackgroundMode ? { forceBackgroundMode: true } : {}),
+      ...(disableBackgroundMode ? { disableBackgroundMode: true } : {}),
+    });
     
     const responseTime = (Date.now() - startTime) / 1000;
     
@@ -748,13 +768,11 @@ export async function expertCommand(question: string | undefined, options: Exper
       console.log(JSON.stringify(jsonResult, null, 2));
     } else {
       // Regular output
-      if (!options.stream) {
-        if (spin) {
-          spin.succeed('Expert consultation complete');
-          spin.stop(); // Ensure cleanup
-        }
-        console.log('\n' + response.text);
+      if (spin) {
+        spin.succeed('Expert consultation complete');
+        spin.stop(); // Ensure cleanup
       }
+      console.log('\n' + response.text);
       
       // Save output if requested
       if (options.output) {

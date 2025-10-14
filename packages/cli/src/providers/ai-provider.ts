@@ -2,15 +2,19 @@
  * AI Provider using Vercel AI SDK
  *
  * Now powered by ConfigService (no process.env mutation side-effects).
+ * Includes background mode support for long-running requests (GPT-5 Pro, O3 Pro).
  */
 
 import { createOpenAI, openai } from '@ai-sdk/openai';
 import { createAnthropic, anthropic } from '@ai-sdk/anthropic';
 import { createGoogleGenerativeAI, google } from '@ai-sdk/google';
 import { createXai } from '@ai-sdk/xai';
-import { generateText, streamText, LanguageModel } from 'ai';
+import { generateText, LanguageModel } from 'ai';
 import { MODELS, ModelConfig } from './models';
 import { ConfigService, Provider } from '../services/config-service';
+import { Agent } from 'undici';
+import { BackgroundTaskHandler } from './background-task-handler.js';
+import type { BackgroundTaskOptions } from '../types/background-task.js';
 
 export interface AIResponse {
   text: string;
@@ -86,6 +90,7 @@ export class AIProvider {
   };
 
   private readonly config: ConfigService;
+  private backgroundHandler: BackgroundTaskHandler | null = null;
 
   constructor(configService?: ConfigService) {
     // Allow dependency-injection for testing
@@ -97,12 +102,78 @@ export class AIProvider {
    * Initialisation
    * ──────────────────────────── */
 
+  /**
+   * Custom fetch wrapper that supports extended timeouts for long-running requests
+   *
+   * CRITICAL ISSUE DISCOVERED:
+   * - Bun has a hard-coded 5-minute network timeout for fetch (source: https://bun.com/blog/bun-v1.0.4)
+   * - This timeout OVERRIDES AbortSignal, undici Agent settings, and everything else
+   * - Solution: Use Bun's `timeout: false` extension to disable the 5-minute cap
+   *
+   * For Node.js:
+   * - Use undici Agent with extended timeouts (headersTimeout, bodyTimeout, keepAliveMaxTimeout)
+   * - Our AbortController provides the actual per-request timeout
+   *
+   * This allows GPT-5 Pro and O3 Pro requests to run for up to 120 minutes in both runtimes.
+   */
+  private createFetchWithExtendedTimeout() {
+    const MAX_TIMEOUT_MS = Number(process.env.PROMPTCODE_TIMEOUT_CAP_MS) || 7200000; // 120 minutes
+    const isBun = typeof process !== 'undefined' && 'versions' in process && 'bun' in process.versions;
+
+    if (isBun) {
+      // BUN: Disable Bun's built-in 5-minute fetch timeout
+      // Bun-specific extension: timeout: false (see https://bun.com/blog/bun-v1.0.4)
+      return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+        if (process.env.DEBUG) {
+          console.error(`[DEBUG CUSTOM FETCH] Runtime: Bun`);
+          console.error(`[DEBUG CUSTOM FETCH] URL: ${input}`);
+          console.error(`[DEBUG CUSTOM FETCH] Using timeout: false to disable Bun's 5-minute fetch timeout`);
+        }
+
+        return fetch(input, {
+          ...init,
+          // @ts-expect-error - Bun-specific extension: timeout: false disables the 5-minute network timeout
+          timeout: false,
+        });
+      };
+    } else {
+      // NODE: Use undici Agent with extended timeouts
+      const agent = new Agent({
+        connectTimeout: 30000, // 30s to establish connection (reasonable)
+        headersTimeout: MAX_TIMEOUT_MS, // 120min to receive headers (GPT-5 Pro can think for a long time)
+        bodyTimeout: MAX_TIMEOUT_MS, // 120min between body chunks
+        keepAliveMaxTimeout: MAX_TIMEOUT_MS, // 120min max keepalive (default: 10min)
+        keepAliveTimeout: 300000, // 5min idle keepalive (reasonable for most requests)
+      });
+
+      return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+        if (process.env.DEBUG) {
+          console.error(`[DEBUG CUSTOM FETCH] Runtime: Node.js`);
+          console.error(`[DEBUG CUSTOM FETCH] URL: ${input}`);
+          console.error(`[DEBUG CUSTOM FETCH] Using undici Agent with extended timeouts (headers=${MAX_TIMEOUT_MS}ms, body=${MAX_TIMEOUT_MS}ms, keepAliveMax=${MAX_TIMEOUT_MS}ms)`);
+        }
+
+        return fetch(input, {
+          ...init,
+          // @ts-expect-error - undici Agent is valid for Node.js fetch but TypeScript doesn't know
+          dispatcher: agent,
+        });
+      };
+    }
+  }
+
   private initializeProviders() {
     const keys = this.config.getAllKeys();
 
     if (keys.openai) {
+      // CRITICAL: Custom fetch implementation to support extended timeouts
+      // - Node.js fetch (undici) has hardcoded 300s (5 min) timeouts
+      // - We use undici Agent with 120min timeouts for headers and body
+      // - This allows GPT-5 Pro/O3 Pro requests to run for up to 120 minutes
+      // - Our AbortController in generateText provides the actual per-request timeout
       this.providers.openai = createOpenAI({
         apiKey: keys.openai,
+        fetch: this.createFetchWithExtendedTimeout() as typeof fetch,
       });
     }
     if (keys.anthropic) {
@@ -208,6 +279,120 @@ export class AIProvider {
     return calculatedTimeout;
   }
 
+  /**
+   * Initialize background handler lazily (only when needed)
+   */
+  private getBackgroundHandler(): BackgroundTaskHandler {
+    if (!this.backgroundHandler) {
+      const apiKey = this.config.getAllKeys().openai;
+      if (!apiKey) {
+        throw new Error('OpenAI API key required for background tasks');
+      }
+      this.backgroundHandler = new BackgroundTaskHandler(apiKey);
+    }
+    return this.backgroundHandler;
+  }
+
+  /**
+   * Determine if request should use background mode.
+   *
+   * Rules:
+   * - Only supported for OpenAI-backed models.
+   * - Explicit CLI/env disable wins.
+   * - Explicit CLI/env force enables it.
+   * - Otherwise defaults on for GPT-5 Pro.
+   */
+  private shouldUseBackgroundMode(
+    modelKey: string,
+    options: {
+      forceBackgroundMode?: boolean;
+      disableBackgroundMode?: boolean;
+      disableProgress?: boolean;
+    } = {}
+  ): boolean {
+    const config = MODELS[modelKey];
+    if (!config || config.provider !== 'openai') {
+      return false;
+    }
+
+    if (options.disableBackgroundMode) {
+      return false;
+    }
+
+    if (process.env.PROMPTCODE_DISABLE_BACKGROUND === '1') {
+      return false;
+    }
+
+    if (options.forceBackgroundMode) {
+      return true;
+    }
+
+    if (process.env.PROMPTCODE_FORCE_BACKGROUND === '1') {
+      if (process.env.DEBUG && !options.disableProgress) {
+        console.error(`\n🔄 Background mode forced via PROMPTCODE_FORCE_BACKGROUND for model ${modelKey}\n`);
+      }
+      return true;
+    }
+
+    if (modelKey === 'gpt-5-pro') {
+      if (process.env.DEBUG && !options.disableProgress) {
+        console.error(`\n🔄 Defaulting to background mode for ${modelKey}\n`);
+      }
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Generate text using OpenAI's background mode API
+   *
+   * This method is used for long-running requests that would timeout
+   * with the standard synchronous API (>5 minutes).
+   */
+  private async generateTextBackground(
+    modelKey: string,
+    prompt: string,
+    options: {
+      maxTokens?: number;
+      temperature?: number;
+      systemPrompt?: string;
+      textVerbosity?: 'low' | 'medium' | 'high';
+      reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
+      serviceTier?: 'auto' | 'flex' | 'priority';
+      disableProgress?: boolean;
+    } = {}
+  ): Promise<AIResponse> {
+    const handler = this.getBackgroundHandler();
+
+    const messages = [{ role: 'user' as const, content: prompt }];
+
+    const backgroundOptions: BackgroundTaskOptions = {
+      modelKey,
+      messages,
+      systemPrompt: options.systemPrompt,
+      maxTokens: options.maxTokens || 4096,
+      temperature: options.temperature,
+      reasoningEffort: options.reasoningEffort || 'high',
+      textVerbosity: options.textVerbosity ?? 'low',
+      webSearch: false, // Background mode doesn't support web search
+      serviceTier: options.serviceTier,
+      disableProgress: options.disableProgress,
+    };
+
+    const result = await handler.execute(backgroundOptions);
+
+    // Convert background result to our AIResponse format
+    return {
+      text: result.text,
+      usage: {
+        promptTokens: result.usage.inputTokens,
+        completionTokens: result.usage.outputTokens,
+        totalTokens: result.usage.totalTokens,
+      },
+    };
+  }
+
   private getWebSearchTools(modelKey: string): Record<string, any> | undefined {
     const config = MODELS[modelKey];
     if (!config || !config.supportsWebSearch) {return undefined;}
@@ -259,7 +444,7 @@ export class AIProvider {
     if (!config) {throw new Error(`Unknown model: ${modelKey}`);}
 
     // Web search is handled via tools in getWebSearchTools(), not via a separate API
-    // Just return the standard model - web search tools will be added in generateText/streamText
+    // Just return the standard model - web search tools will be added in generateText
     const providerInstance = this.providers[config.provider];
     if (!providerInstance) {
       const envName = config.provider.toUpperCase() + '_API_KEY';
@@ -287,6 +472,9 @@ export class AIProvider {
       textVerbosity?: 'low' | 'medium' | 'high';
       reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
       serviceTier?: 'auto' | 'flex' | 'priority';
+      forceBackgroundMode?: boolean;
+      disableBackgroundMode?: boolean;
+      disableProgress?: boolean;
     } = {}
   ): Promise<AIResponse> {
     // Mock mode for testing
@@ -301,7 +489,12 @@ export class AIProvider {
         }
       };
     }
-    
+
+    // Check if we should use background mode for this request
+    if (this.shouldUseBackgroundMode(modelKey, options)) {
+      return this.generateTextBackground(modelKey, prompt, options);
+    }
+
     const modelConfig = MODELS[modelKey];
     const enableWebSearch = options.webSearch !== false && modelConfig?.supportsWebSearch;
     const model = this.getModel(modelKey, enableWebSearch);
@@ -318,16 +511,29 @@ export class AIProvider {
     const reasoningEffort = options.reasoningEffort || 'high';
     const timeoutMs = this.getModelTimeout(modelKey, reasoningEffort);
 
-    // Debug: Log the timeout value being used for AbortSignal
+    // Create AbortController for proper long-timeout support
+    // Note: AbortSignal.timeout() has limitations with timeouts >2-5 minutes in most runtimes
+    const abortController = new AbortController();
+
+    // Debug: Log the timeout value being used
     if (modelKey.includes('gpt-5-pro') || process.env.DEBUG) {
-      console.error(`[DEBUG generateText/streamText] Creating AbortSignal with timeout: ${timeoutMs}ms (${timeoutMs/60000} minutes)`);
+      console.error(`[DEBUG generateText] Creating AbortController with timeout: ${timeoutMs}ms (${timeoutMs/60000} minutes)`);
+      console.error(`[DEBUG generateText setTimeout] About to call setTimeout with ${timeoutMs}ms (type: ${typeof timeoutMs})`);
     }
+
+    // Set up timeout using setTimeout (supports arbitrarily long timeouts)
+    const timeoutId = setTimeout(() => {
+      if (modelKey.includes('gpt-5-pro') || process.env.DEBUG) {
+        console.error(`[DEBUG generateText setTimeout FIRED] Timeout callback fired! Original timeout was: ${timeoutMs}ms`);
+      }
+      abortController.abort(new DOMException('The operation timed out.', 'TimeoutError'));
+    }, timeoutMs);
 
     const requestConfig: any = {
       model,
       messages,
       maxTokens: options.maxTokens || 4096,
-      abortSignal: AbortSignal.timeout(timeoutMs),
+      abortSignal: abortController.signal,
     };
 
     // Only add temperature for non-reasoning models (reasoning models ignore it)
@@ -362,123 +568,31 @@ export class AIProvider {
         usage: normalizeUsage(result.usage)
       };
     } catch (error: any) {
+      const isTimeoutError = error.message?.includes('timeout') || error.message?.includes('timed out');
       // Debug: Log timeout errors with details
-      if (error.message?.includes('timeout') || error.message?.includes('timed out')) {
+      if (isTimeoutError) {
         console.error(`[DEBUG TIMEOUT ERROR] Message: ${error.message}`);
         console.error(`[DEBUG TIMEOUT ERROR] Error type: ${error.constructor.name}`);
         console.error(`[DEBUG TIMEOUT ERROR] Error code: ${error.code}`);
         console.error(`[DEBUG TIMEOUT ERROR] Error cause: ${error.cause}`);
         console.error(`[DEBUG TIMEOUT ERROR] Stack:`, error.stack?.split('\n').slice(0, 5).join('\n'));
+        const supportsBackground = modelConfig?.provider === 'openai';
+        const backgroundDisabledExplicitly =
+          options.disableBackgroundMode === true ||
+          process.env.PROMPTCODE_DISABLE_BACKGROUND === '1';
+        if (
+          supportsBackground &&
+          !options.forceBackgroundMode &&
+          !backgroundDisabledExplicitly
+        ) {
+          console.error('💡 Timeout detected. Re-run this command with --background to let the model finish offline.');
+        }
       }
       throw error;
+    } finally {
+      // Always clear the timeout to prevent memory leaks
+      clearTimeout(timeoutId);
     }
-  }
-  
-  async streamText(
-    modelKey: string,
-    prompt: string,
-    options: {
-      maxTokens?: number;
-      temperature?: number;
-      systemPrompt?: string;
-      onChunk?: (chunk: string) => void;
-      webSearch?: boolean;
-      textVerbosity?: 'low' | 'medium' | 'high';
-      reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
-      serviceTier?: 'auto' | 'flex' | 'priority';
-    } = {}
-  ): Promise<AIResponse> {
-    // Mock mode for testing
-    if (process.env.PROMPTCODE_MOCK_LLM === '1') {
-      const mockResponse = 'Mock LLM response: This is a streaming test response. The code has been analyzed successfully.';
-      
-      // Simulate streaming by chunking the response
-      for (const word of mockResponse.split(' ')) {
-        await new Promise(resolve => setTimeout(resolve, 10));
-        if (options.onChunk) {
-          options.onChunk(word + ' ');
-        }
-      }
-      
-      return {
-        text: mockResponse,
-        usage: {
-          promptTokens: 100,
-          completionTokens: 50,
-          totalTokens: 150
-        }
-      };
-    }
-    
-    const modelConfig = MODELS[modelKey];
-    const enableWebSearch = options.webSearch !== false && modelConfig?.supportsWebSearch;
-    const model = this.getModel(modelKey, enableWebSearch);
-    
-    const messages: any[] = [];
-    
-    if (options.systemPrompt) {
-      messages.push({ role: 'system', content: options.systemPrompt });
-    }
-    
-    messages.push({ role: 'user', content: prompt });
-
-    // Prepare the request configuration with dynamic timeout based on reasoning effort
-    const reasoningEffort = options.reasoningEffort || 'high';
-    const timeoutMs = this.getModelTimeout(modelKey, reasoningEffort);
-
-    // Debug: Log the timeout value being used for AbortSignal
-    if (modelKey.includes('gpt-5-pro') || process.env.DEBUG) {
-      console.error(`[DEBUG generateText/streamText] Creating AbortSignal with timeout: ${timeoutMs}ms (${timeoutMs/60000} minutes)`);
-    }
-
-    const requestConfig: any = {
-      model,
-      messages,
-      maxTokens: options.maxTokens || 4096,
-      abortSignal: AbortSignal.timeout(timeoutMs),
-    };
-
-    // Only add temperature for non-reasoning models (reasoning models ignore it)
-    if (!modelKey.startsWith('gpt-5') && !modelKey.startsWith('o3')) {
-      requestConfig.temperature = options.temperature || 0.7;
-    }
-
-    // Add GPT-5 specific parameters with smart defaults
-    if (modelConfig?.provider === 'openai' && modelKey.startsWith('gpt-5')) {
-      // Default to low verbosity for concise responses
-      requestConfig.textVerbosity = options.textVerbosity || 'low';
-      // Use the reasoning effort passed to the function
-      requestConfig.reasoningEffort = reasoningEffort;
-      if (options.serviceTier) {
-        requestConfig.serviceTier = options.serviceTier;
-      }
-    }
-
-    // Add web search tools if enabled
-    if (enableWebSearch) {
-      const tools = this.getWebSearchTools(modelKey);
-      if (tools) {
-        requestConfig.tools = tools;
-      }
-    }
-
-    const result = await streamText(requestConfig);
-    
-    let fullText = '';
-    for await (const chunk of result.textStream) {
-      fullText += chunk;
-      if (options.onChunk) {
-        options.onChunk(chunk);
-      }
-    }
-    
-    // Get final usage
-    const usage = await result.usage;
-    
-    return {
-      text: fullText,
-      usage: normalizeUsage(usage)
-    };
   }
   
   calculateCost(

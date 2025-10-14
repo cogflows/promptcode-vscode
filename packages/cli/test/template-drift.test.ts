@@ -12,7 +12,7 @@ describe('template drift detection', () => {
   const VALID_FLAGS: Record<string, Set<string>> = {
     'expert': new Set([
       '--path', '--preset', '-f', '--files', '--prompt-file', '--model',
-      '--models', '-o', '--output', '--stream', '--save-preset', '-y', '--yes',
+      '--models', '-o', '--output', '--background', '--no-background', '--save-preset', '-y', '--yes',
       '--force', '--web-search', '--no-web-search', '--verbosity',
       '--reasoning-effort', '--service-tier', '--json', '--estimate-cost',
       '--cost-threshold', '-h', '--help'

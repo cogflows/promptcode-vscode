@@ -24,24 +24,15 @@ Options:
 
 Note: The default model is **gpt-5** unless explicitly specified otherwise.
 
-## Long-Running Models (gpt-5-pro, o3-pro)
+## Long-Running Models (gpt-5-pro only)
 
-These models can take 1-10 minutes due to extended thinking time. Use background execution with proper error handling and cross-platform support:
+GPT-5 Pro can run for 10-120 minutes. The PromptCode CLI automatically switches to
+OpenAI's background API for this model, so the wrapper script just needs to launch the
+CLI in the background and capture its JSON output (no manual timeout).
 
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
-
-# Cross-platform timeout command (macOS needs gtimeout from coreutils)
-if command -v timeout >/dev/null 2>&1; then
-  TIMEOUT_CMD="timeout"
-elif command -v gtimeout >/dev/null 2>&1; then
-  TIMEOUT_CMD="gtimeout"
-else
-  echo "⚠️  Warning: timeout command not found. Install coreutils (brew install coreutils on macOS)"
-  echo "Proceeding without timeout protection..."
-  TIMEOUT_CMD=""
-fi
 
 # Cross-platform mktemp (BSD mktemp on macOS behaves differently)
 TMP="${TMPDIR:-/tmp}"
@@ -51,7 +42,7 @@ STATUS_FILE="${TMP%/}/expert-status-$(date +%Y%m%d-%H%M%S)-$$.json"
 
 # Prepare the consultation
 QUESTION="<your question here>"
-MODEL="gpt-5-pro"  # or o3-pro
+MODEL="gpt-5-pro"  # CLI auto-enables background mode for this model
 
 # Helper function for atomic status writes
 write_status() {
@@ -79,31 +70,22 @@ nohup bash -lc "
 
   # Helper for atomic writes
   write_status() {
-    printf '%s' \"\$1\" > \"${STATUS_FILE}.tmp\" && mv \"${STATUS_FILE}.tmp\" \"$STATUS_FILE\"
+    printf '%s' "$1" > "${STATUS_FILE}.tmp" && mv "${STATUS_FILE}.tmp" "$STATUS_FILE"
   }
 
-  # Run consultation with timeout and capture JSON to stdout
-  if [ -n \"${TIMEOUT_CMD}\" ]; then
-    \${TIMEOUT_CMD} 15m promptcode expert \"$QUESTION\" \\
-      --model \"$MODEL\" \\
-      --yes \\
-      --json > \"$RESULT_FILE\" 2>> \"$LOG_FILE\"
-  else
-    promptcode expert \"$QUESTION\" \\
-      --model \"$MODEL\" \\
-      --yes \\
-      --json > \"$RESULT_FILE\" 2>> \"$LOG_FILE\"
-  fi
+  # Run consultation and capture JSON to stdout (CLI manages background execution)
+  promptcode expert "$QUESTION" \
+    --model "$MODEL" \
+    --yes \
+    --json > "$RESULT_FILE" 2>> "$LOG_FILE"
 
-  EXIT_CODE=\$?
+  EXIT_CODE=$?
 
   # Update status based on exit code (atomic write)
-  if [ \$EXIT_CODE -eq 0 ]; then
-    write_status \"{\\\"status\\\":\\\"success\\\",\\\"exitCode\\\":0,\\\"completed\\\":\\\"\$(date +%s)\\\"}\"
-  elif [ \$EXIT_CODE -eq 124 ]; then
-    write_status \"{\\\"status\\\":\\\"timeout\\\",\\\"exitCode\\\":124,\\\"completed\\\":\\\"\$(date +%s)\\\"}\"
+  if [ $EXIT_CODE -eq 0 ]; then
+    write_status "{\"status\":\"success\",\"exitCode\":0,\"completed\":\"$(date +%s)\"}"
   else
-    write_status \"{\\\"status\\\":\\\"failed\\\",\\\"exitCode\\\":\$EXIT_CODE,\\\"completed\\\":\\\"\$(date +%s)\\\"}\"
+    write_status "{\"status\":\"failed\",\"exitCode\":$EXIT_CODE,\"completed\":\"$(date +%s)\"}"
   fi
 " >> "$LOG_FILE" 2>&1 &
 
@@ -124,29 +106,26 @@ echo ""
 echo "✓ Background consultation launched (PID: $BG_PID)"
 echo ""
 echo "Monitor progress:"
-echo "  tail -f \"$LOG_FILE\""
+echo "  tail -f "$LOG_FILE""
 echo ""
 echo "Check status:"
 echo "  kill -0 $BG_PID 2>/dev/null && echo 'Still running' || echo 'Complete or failed'"
 if command -v jq >/dev/null 2>&1; then
-  echo "  cat \"$STATUS_FILE\" | jq ."
+  echo "  cat "$STATUS_FILE" | jq ."
 else
-  echo "  cat \"$STATUS_FILE\"  # Install jq for pretty output: brew install jq"
+  echo "  cat "$STATUS_FILE"  # Install jq for pretty output: brew install jq"
 fi
 echo ""
 echo "View results when complete:"
 if command -v jq >/dev/null 2>&1; then
-  echo "  cat \"$RESULT_FILE\" | jq ."
-  echo "  cat \"$RESULT_FILE\" | jq -r '.response'  # Just the response text"
+  echo "  cat "$RESULT_FILE" | jq ."
+  echo "  cat "$RESULT_FILE" | jq -r '.response'  # Just the response text"
 else
-  echo "  cat \"$RESULT_FILE\"  # Install jq for pretty output: brew install jq"
+  echo "  cat "$RESULT_FILE"  # Install jq for pretty output: brew install jq"
 fi
 echo ""
-if [ -n "$TIMEOUT_CMD" ]; then
-  echo "Note: 15-minute timeout will auto-kill if needed"
-fi
+echo "Note: PromptCode CLI enforces internal 120-minute safeguards for GPT-5 Pro"
 ```
-
 **Monitoring a running consultation:**
 
 ```bash

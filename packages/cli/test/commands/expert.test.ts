@@ -231,19 +231,6 @@ describe('expert command', () => {
     expect(result.stderr).toContain('Cost approval required');
   });
   
-  it('should reject JSON + stream conflict', async () => {
-    const result = await runCLI(['expert', 'Test', '--json', '--stream'], { 
-      cwd: fixture.dir,
-      env: {
-        ...process.env,
-        OPENAI_API_KEY: 'test-key'
-      }
-    });
-    
-    expect(result.exitCode).toBe(3); // EXIT_CODES.INVALID_INPUT
-    expect(result.stderr).toContain('Cannot use --json and --stream together');
-  });
-  
   it('should emit JSON error for approval required in non-interactive', async () => {
     createTestFiles(fixture.dir, {
       'src/index.ts': 'console.log("Test");'.repeat(5000)  // Large file

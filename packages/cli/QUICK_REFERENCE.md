@@ -44,7 +44,7 @@ promptcode generate --json -o prompt.json
 |---------|---------|-------------|
 | `generate` | Create AI prompts | `-f` patterns, `-t` template, `--json` |
 | `preset` | Manage file presets | `--create`, `--list`, `--info` |
-| `expert` | Ask AI expert | `--model`, `--stream`, `--preset` |
+| `expert` | Ask AI expert | `--model`, `--background`, `--preset` |
 | `cache` | Manage token cache | `clear`, `stats` |
 | `stats` | Project token info | Shows breakdown by file type |
 

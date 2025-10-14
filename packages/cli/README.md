@@ -119,7 +119,7 @@ export OPENAI_API_KEY=sk-...
 # Ask questions
 promptcode expert "Explain the auth flow" --preset auth
 promptcode expert "Find security issues" -f "src/api/**/*.ts"
-promptcode expert "Review this code" --stream  # Real-time response
+promptcode expert "Review this code" --background  # Force OpenAI background mode
 ```
 
 ### AI Agent Integrations
