@@ -21,7 +21,10 @@ export class BackgroundTaskHandler {
   private readonly notReadyAttempts = new Map<string, number>();
 
   constructor(apiKey: string, options?: { pollInterval?: number; maxWaitTime?: number; fetch?: typeof fetch; maxNotReadyRetries?: number; client?: OpenAIBackgroundClient }) {
-    this.client = options?.client ?? new OpenAIBackgroundClient(apiKey, { fetch: options?.fetch });
+    const injectedClient = options?.client;
+    const injectedFetch = options?.fetch;
+    const clientConfig = injectedFetch ? { fetch: injectedFetch } : undefined;
+    this.client = injectedClient ?? new OpenAIBackgroundClient(apiKey, clientConfig);
     this.progressReporter = new ProgressReporter();
 
     // Configure polling behavior
