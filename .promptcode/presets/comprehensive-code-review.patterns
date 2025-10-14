@@ -5,10 +5,10 @@
 # Optimization: balanced
 # Optimized: 3 files → 3 patterns (saved 0)
 
-src/**/*.{ts
-packages/**/*.{ts
+src/**/*.{ts,tsx}
+packages/**/*.{ts,tsx}
 packages/*/package.json
-.github/workflows/*.{yml
+.github/workflows/*.{yml,yaml}
 test/**/*.test.ts
 packages/*/test/**/*.test.ts
 CLAUDE.md

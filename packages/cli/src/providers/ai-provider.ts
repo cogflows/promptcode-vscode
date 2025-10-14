@@ -91,6 +91,7 @@ export class AIProvider {
 
   private readonly config: ConfigService;
   private backgroundHandler: BackgroundTaskHandler | null = null;
+  private extendedFetch: typeof fetch | null = null;
 
   constructor(configService?: ConfigService) {
     // Allow dependency-injection for testing
@@ -162,6 +163,13 @@ export class AIProvider {
     }
   }
 
+  private getExtendedFetch(): typeof fetch {
+    if (!this.extendedFetch) {
+      this.extendedFetch = this.createFetchWithExtendedTimeout() as typeof fetch;
+    }
+    return this.extendedFetch;
+  }
+
   private initializeProviders() {
     const keys = this.config.getAllKeys();
 
@@ -173,7 +181,7 @@ export class AIProvider {
       // - Our AbortController in generateText provides the actual per-request timeout
       this.providers.openai = createOpenAI({
         apiKey: keys.openai,
-        fetch: this.createFetchWithExtendedTimeout() as typeof fetch,
+        fetch: this.getExtendedFetch(),
       });
     }
     if (keys.anthropic) {
@@ -288,7 +296,9 @@ export class AIProvider {
       if (!apiKey) {
         throw new Error('OpenAI API key required for background tasks');
       }
-      this.backgroundHandler = new BackgroundTaskHandler(apiKey);
+      this.backgroundHandler = new BackgroundTaskHandler(apiKey, {
+        fetch: this.getExtendedFetch(),
+      });
     }
     return this.backgroundHandler;
   }

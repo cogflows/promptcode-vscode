@@ -6,7 +6,7 @@
  * periods (>5 minutes) by submitting a task and polling for completion.
  */
 
-import OpenAI from 'openai';
+import OpenAI, { type ClientOptions as OpenAIClientOptions } from 'openai';
 import type {
   BackgroundTaskOptions,
   BackgroundTaskStatus,
@@ -18,8 +18,12 @@ type ReasoningEffort = BackgroundTaskOptions['reasoningEffort'];
 export class OpenAIBackgroundClient {
   private client: OpenAI;
 
-  constructor(apiKey: string) {
-    this.client = new OpenAI({ apiKey });
+  constructor(apiKey: string, fetchImpl?: typeof fetch) {
+    const options: OpenAIClientOptions = { apiKey };
+    if (fetchImpl) {
+      options.fetch = fetchImpl as any;
+    }
+    this.client = new OpenAI(options);
   }
 
   /**

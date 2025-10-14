@@ -30,7 +30,7 @@
     "minimatch": "^10.0.3",
     "openai": "^4.78.0",
     "ora": "^9.0.0",
-    "undici": "^5.28.4",
+    "undici": "^6.19.8",
     "zod": "^4.1.11"
   },
   "devDependencies": {

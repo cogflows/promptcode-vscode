@@ -18,8 +18,8 @@ export class BackgroundTaskHandler {
   private pollInterval: number;
   private maxWaitTime: number;
 
-  constructor(apiKey: string, options?: { pollInterval?: number; maxWaitTime?: number }) {
-    this.client = new OpenAIBackgroundClient(apiKey);
+  constructor(apiKey: string, options?: { pollInterval?: number; maxWaitTime?: number; fetch?: typeof fetch }) {
+    this.client = new OpenAIBackgroundClient(apiKey, options?.fetch);
     this.progressReporter = new ProgressReporter();
 
     // Configure polling behavior
@@ -146,7 +146,8 @@ export class BackgroundTaskHandler {
    */
   private isTransientError(error: any): boolean {
     // Network errors
-    if (error.code === 'ETIMEDOUT' || error.code === 'ECONNRESET') {
+    const code = error?.code || error?.cause?.code;
+    if (code === 'ETIMEDOUT' || code === 'ECONNRESET' || code === 'UND_ERR_SOCKET') {
       return true;
     }
 
@@ -157,6 +158,11 @@ export class BackgroundTaskHandler {
 
     // Rate limiting
     if (error.status === 429) {
+      return true;
+    }
+
+    const message = (error?.message || error?.cause?.message || '').toString().toLowerCase();
+    if (message.includes('socket') && message.includes('closed')) {
       return true;
     }
 
