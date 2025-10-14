@@ -38,8 +38,10 @@ const TOKEN_FIELD_MAP = {
   total: ['totalTokens']
 } as const;
 
-type GenerateTextConfig = Parameters<typeof generateText>[0];
-type ChatMessage = GenerateTextConfig['messages'][number];
+type ChatMessage = {
+  role: 'system' | 'user' | 'assistant' | 'developer';
+  content: string;
+};
 
 // Export for testing
 export function normalizeUsage(usage?: ProviderUsage | any): AIResponse['usage'] | undefined {
@@ -552,7 +554,7 @@ export class AIProvider {
       abortController.abort(new DOMException('The operation timed out.', 'TimeoutError'));
     }, timeoutMs);
 
-    const requestConfig: GenerateTextConfig = {
+    const requestConfig: Record<string, unknown> = {
       model,
       messages,
       maxTokens: options.maxTokens || 4096,
@@ -584,7 +586,7 @@ export class AIProvider {
     }
 
     try {
-      const result = await generateText(requestConfig);
+      const result = await generateText(requestConfig as Parameters<typeof generateText>[0]);
       isSettled = true;
 
       return {

@@ -34,7 +34,10 @@ export class BackgroundTaskHandler {
   }
 
   /**
-   * Execute a background task with polling and progress updates
+   * Execute a background task with polling and progress updates.
+   *
+   * @param options - Task configuration passed through to the OpenAI background client.
+   * @param runOptions - Execution controls (e.g. override for maximum wait time in milliseconds).
    */
   async execute(
     options: BackgroundTaskOptions,
@@ -95,6 +98,7 @@ export class BackgroundTaskHandler {
 
         if (status.status === 'failed') {
           this.progressReporter.error('Task failed');
+          this.notReadyAttempts.delete(taskId);
           throw new Error(`Background task failed: ${status.error || 'Unknown error'}`);
         }
 
@@ -120,12 +124,14 @@ export class BackgroundTaskHandler {
 
         // Fatal error
         this.progressReporter.error('Failed to poll task status');
+        this.notReadyAttempts.delete(taskId);
         throw error;
       }
     }
 
     // Timeout
     this.progressReporter.error('Task timed out');
+    this.notReadyAttempts.delete(taskId);
     throw new Error(
       `Background task timed out after ${maxWaitTime / 1000}s. ` +
       `Task ID: ${taskId} - You can check the status manually later.`
@@ -168,7 +174,7 @@ export class BackgroundTaskHandler {
   }
 
   /**
-   * Check if an error is transient (should retry)
+   * Determine whether an error is transient and can be retried safely.
    */
   private isTransientError(error: unknown): boolean {
     // Network errors
@@ -207,6 +213,9 @@ export class BackgroundTaskHandler {
     return false;
   }
 
+  /**
+   * Identify if an error indicates the background task is not yet ready.
+   */
   private isTaskNotReadyError(error: unknown, taskId?: string): boolean {
     if (!taskId) {return false;}
     const code = this.getErrorCode(error);
@@ -218,6 +227,9 @@ export class BackgroundTaskHandler {
     return false;
   }
 
+  /**
+   * Increment retry counter for "not ready" responses and return the new value.
+   */
   private incrementNotReadyAttempts(taskId: string): number {
     const current = this.notReadyAttempts.get(taskId) ?? 0;
     const next = current + 1;
@@ -225,11 +237,17 @@ export class BackgroundTaskHandler {
     return next;
   }
 
+  /**
+   * Exponential backoff for background task readiness polling with jitter.
+   */
   private getNotReadyRetryDelay(attempt: number): number {
     const base = 500;
     return this.addJitter(base * Math.pow(2, Math.max(0, attempt - 1)));
   }
 
+  /**
+   * Compute next poll interval based on elapsed time and configured backoff.
+   */
   private getNextPollInterval(elapsedMs: number): number {
     const base = this.pollInterval;
     const step = Math.floor(elapsedMs / 60000);
@@ -237,6 +255,9 @@ export class BackgroundTaskHandler {
     return this.addJitter(target);
   }
 
+  /**
+   * Add bounded random jitter to a delay to avoid thundering herd behaviour.
+   */
   private addJitter(delay: number): number {
     const jitterRange = Math.max(250, Math.floor(delay * 0.1));
     const halfRange = Math.floor(jitterRange / 2);
@@ -244,6 +265,9 @@ export class BackgroundTaskHandler {
     return Math.max(500, delay + jitter);
   }
 
+  /**
+   * Emit detailed debug logs for polling failures when background debugging is enabled.
+   */
   private logPollingError(taskId: string, error: unknown): void {
     if (!process.env.DEBUG && process.env.PROMPTCODE_DEBUG_BACKGROUND !== '1') {
       return;
@@ -260,6 +284,9 @@ export class BackgroundTaskHandler {
     }
   }
 
+  /**
+   * Normalize unknown error shapes into a safe log-friendly message string.
+   */
   private toErrorMessage(error: unknown): string {
     if (error instanceof Error) {
       return error.message || error.name;
@@ -274,6 +301,9 @@ export class BackgroundTaskHandler {
     }
   }
 
+  /**
+   * Extract a string error code from an unknown error payload.
+   */
   private getErrorCode(error: unknown): string | undefined {
     const record = this.asRecord(error);
     const code = record?.code;
@@ -287,6 +317,9 @@ export class BackgroundTaskHandler {
     return undefined;
   }
 
+  /**
+   * Extract an HTTP status (if present) from an unknown error payload.
+   */
   private getErrorStatus(error: unknown): number | undefined {
     const record = this.asRecord(error);
     const status = record?.status;
@@ -301,6 +334,9 @@ export class BackgroundTaskHandler {
     return undefined;
   }
 
+  /**
+   * Safely coerce values into a generic record for property inspection.
+   */
   private asRecord(value: unknown): Record<string, unknown> | undefined {
     if (value && typeof value === 'object') {
       return value as Record<string, unknown>;
