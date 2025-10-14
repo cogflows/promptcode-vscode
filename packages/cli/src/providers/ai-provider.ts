@@ -38,6 +38,9 @@ const TOKEN_FIELD_MAP = {
   total: ['totalTokens']
 } as const;
 
+type GenerateTextConfig = Parameters<typeof generateText>[0];
+type ChatMessage = GenerateTextConfig['messages'][number];
+
 // Export for testing
 export function normalizeUsage(usage?: ProviderUsage | any): AIResponse['usage'] | undefined {
   if (!usage) {return undefined;}
@@ -371,6 +374,7 @@ export class AIProvider {
       reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
       serviceTier?: 'auto' | 'flex' | 'priority';
       disableProgress?: boolean;
+      fallbackAttempted?: boolean;
     } = {}
   ): Promise<AIResponse> {
     const handler = this.getBackgroundHandler();
@@ -390,7 +394,10 @@ export class AIProvider {
       disableProgress: options.disableProgress,
     };
 
-    const result = await handler.execute(backgroundOptions);
+    const maxWaitTimeMs = this.getModelTimeout(modelKey, backgroundOptions.reasoningEffort);
+    const result = await handler.execute(backgroundOptions, {
+      maxWaitTimeMs,
+    });
 
     // Convert background result to our AIResponse format
     return {
@@ -485,6 +492,8 @@ export class AIProvider {
       forceBackgroundMode?: boolean;
       disableBackgroundMode?: boolean;
       disableProgress?: boolean;
+      autoBackgroundFallback?: boolean;
+      fallbackAttempted?: boolean;
     } = {}
   ): Promise<AIResponse> {
     // Mock mode for testing
@@ -508,13 +517,13 @@ export class AIProvider {
     const modelConfig = MODELS[modelKey];
     const enableWebSearch = options.webSearch !== false && modelConfig?.supportsWebSearch;
     const model = this.getModel(modelKey, enableWebSearch);
-    
-    const messages: any[] = [];
-    
+
+    const messages: ChatMessage[] = [];
+
     if (options.systemPrompt) {
       messages.push({ role: 'system', content: options.systemPrompt });
     }
-    
+
     messages.push({ role: 'user', content: prompt });
 
     // Prepare the request configuration with dynamic timeout based on reasoning effort
@@ -524,6 +533,7 @@ export class AIProvider {
     // Create AbortController for proper long-timeout support
     // Note: AbortSignal.timeout() has limitations with timeouts >2-5 minutes in most runtimes
     const abortController = new AbortController();
+    let isSettled = false;
 
     // Debug: Log the timeout value being used
     if (modelKey.includes('gpt-5-pro') || process.env.DEBUG) {
@@ -533,13 +543,16 @@ export class AIProvider {
 
     // Set up timeout using setTimeout (supports arbitrarily long timeouts)
     const timeoutId = setTimeout(() => {
+      if (isSettled) {
+        return;
+      }
       if (modelKey.includes('gpt-5-pro') || process.env.DEBUG) {
         console.error(`[DEBUG generateText setTimeout FIRED] Timeout callback fired! Original timeout was: ${timeoutMs}ms`);
       }
       abortController.abort(new DOMException('The operation timed out.', 'TimeoutError'));
     }, timeoutMs);
 
-    const requestConfig: any = {
+    const requestConfig: GenerateTextConfig = {
       model,
       messages,
       maxTokens: options.maxTokens || 4096,
@@ -572,34 +585,80 @@ export class AIProvider {
 
     try {
       const result = await generateText(requestConfig);
+      isSettled = true;
 
       return {
         text: result.text,
         usage: normalizeUsage(result.usage)
       };
-    } catch (error: any) {
-      const isTimeoutError = error.message?.includes('timeout') || error.message?.includes('timed out');
+    } catch (error: unknown) {
+      isSettled = true;
+      const errorRecord = (typeof error === 'object' && error !== null) ? (error as Record<string, unknown>) : undefined;
+      const errorMessage = error instanceof Error
+        ? error.message
+        : typeof errorRecord?.message === 'string'
+          ? errorRecord.message
+          : String(error);
+      const normalizedMessage = errorMessage.toLowerCase();
+      const isTimeoutError = normalizedMessage.includes('timeout') || normalizedMessage.includes('timed out');
       // Debug: Log timeout errors with details
       if (isTimeoutError) {
-        console.error(`[DEBUG TIMEOUT ERROR] Message: ${error.message}`);
-        console.error(`[DEBUG TIMEOUT ERROR] Error type: ${error.constructor.name}`);
-        console.error(`[DEBUG TIMEOUT ERROR] Error code: ${error.code}`);
-        console.error(`[DEBUG TIMEOUT ERROR] Error cause: ${error.cause}`);
-        console.error(`[DEBUG TIMEOUT ERROR] Stack:`, error.stack?.split('\n').slice(0, 5).join('\n'));
+        const errorName = error instanceof Error ? error.constructor.name : typeof error;
+        const errorCode = typeof errorRecord?.code === 'string' ? errorRecord.code : undefined;
+        const errorCause = errorRecord?.cause;
+        console.error(`[DEBUG TIMEOUT ERROR] Message: ${errorMessage}`);
+        console.error(`[DEBUG TIMEOUT ERROR] Error type: ${errorName}`);
+        if (errorCode) {
+          console.error(`[DEBUG TIMEOUT ERROR] Error code: ${errorCode}`);
+        }
+        if (errorCause) {
+          console.error(`[DEBUG TIMEOUT ERROR] Error cause: ${errorCause}`);
+        }
+        if (error instanceof Error && error.stack) {
+          console.error(`[DEBUG TIMEOUT ERROR] Stack:`, error.stack.split('\n').slice(0, 5).join('\n'));
+        }
         const supportsBackground = modelConfig?.provider === 'openai';
         const backgroundDisabledExplicitly =
           options.disableBackgroundMode === true ||
           process.env.PROMPTCODE_DISABLE_BACKGROUND === '1';
+        const autoFallbackRequested =
+          options.autoBackgroundFallback === true ||
+          process.env.PROMPTCODE_FALLBACK_BACKGROUND === '1';
+
         if (
           supportsBackground &&
           !options.forceBackgroundMode &&
-          !backgroundDisabledExplicitly
+          !backgroundDisabledExplicitly &&
+          autoFallbackRequested &&
+          !options.fallbackAttempted
         ) {
-          console.error('💡 Timeout detected. Re-run this command with --background to let the model finish offline.');
+          if (!options.disableProgress && process.env.PROMPTCODE_TEST !== '1') {
+            console.error('💡 Timeout detected. Falling back to OpenAI background mode automatically (set PROMPTCODE_FALLBACK_BACKGROUND=0 to opt out).');
+          }
+          return this.generateTextBackground(modelKey, prompt, {
+            maxTokens: options.maxTokens,
+            temperature: options.temperature,
+            systemPrompt: options.systemPrompt,
+            textVerbosity: options.textVerbosity,
+            reasoningEffort,
+            serviceTier: options.serviceTier,
+            disableProgress: options.disableProgress,
+            fallbackAttempted: true,
+          });
+        }
+
+        if (
+          supportsBackground &&
+          !options.forceBackgroundMode &&
+          !backgroundDisabledExplicitly &&
+          process.env.PROMPTCODE_FALLBACK_BACKGROUND !== '1'
+        ) {
+          console.error('💡 Timeout detected. Re-run with --background (or set PROMPTCODE_FALLBACK_BACKGROUND=1 for automatic fallback) to let the model finish offline.');
         }
       }
       throw error;
     } finally {
+      isSettled = true;
       // Always clear the timeout to prevent memory leaks
       clearTimeout(timeoutId);
     }
