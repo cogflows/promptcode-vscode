@@ -730,12 +730,24 @@ export async function expertCommand(question: string | undefined, options: Exper
       reasoningEffort: options.reasoningEffort,
       serviceTier: options.serviceTier,
       disableProgress: options.json === true,
+      autoBackgroundFallback: process.env.PROMPTCODE_FALLBACK_BACKGROUND === '1',
       ...(forceBackgroundMode ? { forceBackgroundMode: true } : {}),
       ...(disableBackgroundMode ? { disableBackgroundMode: true } : {}),
     });
-    
+
     const responseTime = (Date.now() - startTime) / 1000;
-    
+
+    const previouslyAdvertisedWebSearch = webSearchEnabled && modelConfig.supportsWebSearch;
+    const resolvedWebSearchEnabled = (
+      response.webSearchUsed !== undefined
+        ? response.webSearchUsed
+        : previouslyAdvertisedWebSearch
+    ) && modelConfig.supportsWebSearch;
+
+    if (!options.json && previouslyAdvertisedWebSearch && !resolvedWebSearchEnabled) {
+      console.log(chalk.gray('ℹ️  Web search was disabled during the background retry.'));
+    }
+
     // Calculate cost for JSON output
     const cost = response.usage && response.usage.promptTokens !== undefined
       ? aiProvider.calculateCost(modelKey, response.usage)
@@ -763,7 +775,7 @@ export async function expertCommand(question: string | undefined, options: Exper
         responseTime: responseTime,
         fileCount: files.length,
         contextTokens: totalInputTokens,
-        webSearchEnabled: webSearchEnabled && modelConfig.supportsWebSearch
+        webSearchEnabled: resolvedWebSearchEnabled
       };
       console.log(JSON.stringify(jsonResult, null, 2));
     } else {

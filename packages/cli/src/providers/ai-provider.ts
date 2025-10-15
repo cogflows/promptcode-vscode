@@ -23,6 +23,8 @@ export interface AIResponse {
     completionTokens: number;
     totalTokens: number;
   };
+  ranInBackground?: boolean;
+  webSearchUsed?: boolean;
 }
 
 // Type-safe usage formats from different providers
@@ -409,6 +411,8 @@ export class AIProvider {
         completionTokens: result.usage.outputTokens,
         totalTokens: result.usage.totalTokens,
       },
+      ranInBackground: true,
+      webSearchUsed: false,
     };
   }
 
@@ -532,33 +536,18 @@ export class AIProvider {
     const reasoningEffort = options.reasoningEffort || 'high';
     const timeoutMs = this.getModelTimeout(modelKey, reasoningEffort);
 
-    // Create AbortController for proper long-timeout support
-    // Note: AbortSignal.timeout() has limitations with timeouts >2-5 minutes in most runtimes
-    const abortController = new AbortController();
-    let isSettled = false;
+    // Use AbortSignal.timeout for reliable long-duration support across Node.js and Bun
+    const timeoutSignal = AbortSignal.timeout(timeoutMs);
 
-    // Debug: Log the timeout value being used
     if (modelKey.includes('gpt-5-pro') || process.env.DEBUG) {
-      console.error(`[DEBUG generateText] Creating AbortController with timeout: ${timeoutMs}ms (${timeoutMs/60000} minutes)`);
-      console.error(`[DEBUG generateText setTimeout] About to call setTimeout with ${timeoutMs}ms (type: ${typeof timeoutMs})`);
+      console.error(`[DEBUG generateText] Using AbortSignal.timeout with ${timeoutMs}ms (${timeoutMs / 60000} minutes)`);
     }
-
-    // Set up timeout using setTimeout (supports arbitrarily long timeouts)
-    const timeoutId = setTimeout(() => {
-      if (isSettled) {
-        return;
-      }
-      if (modelKey.includes('gpt-5-pro') || process.env.DEBUG) {
-        console.error(`[DEBUG generateText setTimeout FIRED] Timeout callback fired! Original timeout was: ${timeoutMs}ms`);
-      }
-      abortController.abort(new DOMException('The operation timed out.', 'TimeoutError'));
-    }, timeoutMs);
 
     const requestConfig: Record<string, unknown> = {
       model,
       messages,
       maxTokens: options.maxTokens || 4096,
-      abortSignal: abortController.signal,
+      abortSignal: timeoutSignal,
     };
 
     // Only add temperature for non-reasoning models (reasoning models ignore it)
@@ -587,14 +576,14 @@ export class AIProvider {
 
     try {
       const result = await generateText(requestConfig as Parameters<typeof generateText>[0]);
-      isSettled = true;
 
       return {
         text: result.text,
-        usage: normalizeUsage(result.usage)
+        usage: normalizeUsage(result.usage),
+        ranInBackground: false,
+        webSearchUsed: enableWebSearch,
       };
     } catch (error: unknown) {
-      isSettled = true;
       const errorRecord = (typeof error === 'object' && error !== null) ? (error as Record<string, unknown>) : undefined;
       const errorMessage = error instanceof Error
         ? error.message
@@ -659,10 +648,6 @@ export class AIProvider {
         }
       }
       throw error;
-    } finally {
-      isSettled = true;
-      // Always clear the timeout to prevent memory leaks
-      clearTimeout(timeoutId);
     }
   }
   
