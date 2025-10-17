@@ -119,9 +119,14 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         
       - name: Install CLI dependencies
+        shell: bash
         run: |
           cd packages/cli
-          bun install
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            npm install
+          else
+            bun install
+          fi
 
       - name: Inject version and build CLI binary (includes typecheck)
         env:
