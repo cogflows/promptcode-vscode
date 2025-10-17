@@ -6,7 +6,7 @@
     "promptcode": "./dist/promptcode"
   },
   "scripts": {
-    "build": "node scripts/inject-version.js && node scripts/generate-checksums.js && node scripts/embed-templates.js && bun build src/index.ts --compile --target=bun --outfile dist/promptcode && npm run copy-templates",
+    "build": "node scripts/inject-version.js && npm run typecheck && node scripts/generate-checksums.js && node scripts/embed-templates.js && bun build src/index.ts --compile --target=bun --outfile dist/promptcode && npm run copy-templates",
     "build:prod": "PROD_BUILD=1 npm run build",
     "copy-templates": "node -e \"const fs=require('fs'); const path=require('path'); fs.cpSync('src/claude-templates', 'dist/claude-templates', {recursive:true}); fs.cpSync('src/cursor-templates', 'dist/cursor-templates', {recursive:true})\"",
     "dev": "bun run src/index.ts",
@@ -28,7 +28,9 @@
     "diff": "^8.0.2",
     "inquirer": "^12.9.6",
     "minimatch": "^10.0.3",
+    "openai": "^4.78.0",
     "ora": "^9.0.0",
+    "undici": "^6.19.8",
     "zod": "^4.1.11"
   },
   "devDependencies": {

@@ -101,8 +101,8 @@ jobs:
         run: |
           cd packages/cli
           bun install
-          
-      - name: Build CLI
+
+      - name: Build CLI (includes typecheck)
         run: |
           cd packages/cli
           bun run build

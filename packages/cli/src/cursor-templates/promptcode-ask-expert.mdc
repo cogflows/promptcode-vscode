@@ -16,13 +16,144 @@ promptcode expert "<question>" -f "src/**/*.ts"
 ```
 
 Options:
-- `--model <name>`: Choose AI model (default: gpt-5, others: opus-4, sonnet-4, gemini-2.5-pro, grok-4, o3, o3-pro)
+- `--model <name>`: Choose AI model (default: gpt-5, others: opus-4, sonnet-4, gemini-2.5-pro, grok-4, o3, o3-pro, gpt-5-pro)
 - `--web-search`: Enable web search for current information
 - `--yes`: Skip cost confirmation prompts
+- `--output <file>`: Save response to file (required for background execution)
+- `--json`: Return structured JSON output (recommended for parsing)
 
 Note: The default model is **gpt-5** unless explicitly specified otherwise.
 
-Important: This requires API keys to be set:
+## Long-Running Models (gpt-5-pro only)
+
+GPT-5 Pro can run for 10-120 minutes. The PromptCode CLI automatically switches to
+OpenAI's background API for this model, so the wrapper script just needs to launch the
+CLI in the background and capture its JSON output (no manual timeout).
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Cross-platform mktemp (BSD mktemp on macOS behaves differently)
+TMP="${TMPDIR:-/tmp}"
+RESULT_FILE="${TMP%/}/expert-result-$(date +%Y%m%d-%H%M%S)-$$.json"
+LOG_FILE="${TMP%/}/expert-log-$(date +%Y%m%d-%H%M%S)-$$.txt"
+STATUS_FILE="${TMP%/}/expert-status-$(date +%Y%m%d-%H%M%S)-$$.json"
+
+# Prepare the consultation
+QUESTION="<your question here>"
+MODEL="gpt-5-pro"  # CLI auto-enables background mode for this model
+
+# Helper function for atomic status writes
+write_status() {
+  printf '%s' "$1" > "${STATUS_FILE}.tmp" && mv "${STATUS_FILE}.tmp" "$STATUS_FILE"
+}
+
+# Save initial status
+write_status "{
+  \"status\": \"starting\",
+  \"model\": \"$MODEL\",
+  \"started\": \"$(date +%s)\",
+  \"result\": \"$RESULT_FILE\",
+  \"log\": \"$LOG_FILE\"
+}"
+
+echo "⏳ Starting background consultation with $MODEL..."
+echo "   Results: $RESULT_FILE"
+echo "   Log: $LOG_FILE"
+echo "   Status: $STATUS_FILE"
+
+# Run in background with nohup and proper quoting
+# Note: Use bash -lc to ensure login shell environment (API keys loaded)
+nohup bash -lc "
+  set -euo pipefail
+
+  # Helper for atomic writes
+  write_status() {
+    printf '%s' "$1" > "${STATUS_FILE}.tmp" && mv "${STATUS_FILE}.tmp" "$STATUS_FILE"
+  }
+
+  # Run consultation and capture JSON to stdout (CLI manages background execution)
+  promptcode expert "$QUESTION" \
+    --model "$MODEL" \
+    --yes \
+    --json > "$RESULT_FILE" 2>> "$LOG_FILE"
+
+  EXIT_CODE=$?
+
+  # Update status based on exit code (atomic write)
+  if [ $EXIT_CODE -eq 0 ]; then
+    write_status "{\"status\":\"success\",\"exitCode\":0,\"completed\":\"$(date +%s)\"}"
+  else
+    write_status "{\"status\":\"failed\",\"exitCode\":$EXIT_CODE,\"completed\":\"$(date +%s)\"}"
+  fi
+" >> "$LOG_FILE" 2>&1 &
+
+BG_PID=$!
+disown "$BG_PID" 2>/dev/null || true
+
+# Update status with PID (atomic write)
+write_status "{
+  \"status\": \"running\",
+  \"pid\": $BG_PID,
+  \"model\": \"$MODEL\",
+  \"started\": \"$(date +%s)\",
+  \"result\": \"$RESULT_FILE\",
+  \"log\": \"$LOG_FILE\"
+}"
+
+echo ""
+echo "✓ Background consultation launched (PID: $BG_PID)"
+echo ""
+echo "Monitor progress:"
+echo "  tail -f "$LOG_FILE""
+echo ""
+echo "Check status:"
+echo "  kill -0 $BG_PID 2>/dev/null && echo 'Still running' || echo 'Complete or failed'"
+if command -v jq >/dev/null 2>&1; then
+  echo "  cat "$STATUS_FILE" | jq ."
+else
+  echo "  cat "$STATUS_FILE"  # Install jq for pretty output: brew install jq"
+fi
+echo ""
+echo "View results when complete:"
+if command -v jq >/dev/null 2>&1; then
+  echo "  cat "$RESULT_FILE" | jq ."
+  echo "  cat "$RESULT_FILE" | jq -r '.response'  # Just the response text"
+else
+  echo "  cat "$RESULT_FILE"  # Install jq for pretty output: brew install jq"
+fi
+echo ""
+echo "Note: PromptCode CLI enforces internal 120-minute safeguards for GPT-5 Pro"
+```
+**Monitoring a running consultation:**
+
+```bash
+# Check if still running (replace PID)
+kill -0 <PID> 2>/dev/null && echo "Running" || echo "Stopped"
+
+# View live progress
+tail -f /var/folders/.../expert-log-*.txt
+
+# Check final status
+if command -v jq >/dev/null 2>&1; then
+  cat /var/folders/.../expert-status-*.json | jq .
+else
+  cat /var/folders/.../expert-status-*.json
+fi
+
+# Read result when complete (actual response in .response field)
+if command -v jq >/dev/null 2>&1; then
+  cat /var/folders/.../expert-result-*.json | jq -r '.response'
+  cat /var/folders/.../expert-result-*.json | jq '.costBreakdown.actualTotal'  # Actual cost
+else
+  cat /var/folders/.../expert-result-*.json
+fi
+```
+
+## API Keys
+
+This requires API keys to be set:
 - `OPENAI_API_KEY` for O3/GPT models
 - `ANTHROPIC_API_KEY` for Claude models
 - `GOOGLE_API_KEY` for Gemini models

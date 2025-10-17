@@ -119,7 +119,7 @@ export OPENAI_API_KEY=sk-...
 # Ask questions
 promptcode expert "Explain the auth flow" --preset auth
 promptcode expert "Find security issues" -f "src/api/**/*.ts"
-promptcode expert "Review this code" --stream  # Real-time response
+promptcode expert "Review this code" --background  # Force OpenAI background mode
 ```
 
 ### AI Agent Integrations
@@ -218,6 +218,10 @@ API keys must be set via environment variables (first match wins):
 - `XDG_CACHE_HOME` - Cache directory (defaults to ~/.cache)
 - `DEBUG='promptcode:*'` - Enable debug logging
 - `PROMPTCODE_TOKEN_WARNING` - Token threshold for warnings (default: 50000)
+- `PROMPTCODE_FORCE_BACKGROUND=1` - Always route OpenAI models through background mode
+- `PROMPTCODE_DISABLE_BACKGROUND=1` - Disable background mode even for GPT-5 Pro
+- `PROMPTCODE_FALLBACK_BACKGROUND=1` - Automatically retry foreground timeouts using OpenAI background mode
+- `PROMPTCODE_TIMEOUT_MS`, `PROMPTCODE_TIMEOUT_<MODEL>_MS`, `PROMPTCODE_TIMEOUT_CAP_MS` - Override foreground timeout behaviour (milliseconds)
 
 ## Examples
 

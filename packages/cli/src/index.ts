@@ -222,7 +222,7 @@ Examples:
   $ promptcode expert "Why is this slow?" -f "src/api/**/*.ts"  # With code context
   $ promptcode expert "Explain the authentication flow" --preset auth
   $ promptcode expert "Find potential security issues" -f "src/api/**/*.ts"
-  $ promptcode expert "Review this code" --model opus-4 --stream
+  $ promptcode expert "Review this code" --background
   $ promptcode expert --prompt-file analysis.md  # Use prompt from file
   $ promptcode expert --models  # See all available models
   $ promptcode expert "Analyze security" --preset api --json  # JSON output
@@ -235,7 +235,6 @@ Note: If both --preset and -f are specified, -f takes precedence (preset is igno
   .option('--model <model>', 'AI model to use (use --models to see available options)')
   .option('--models', 'List available AI models')
   .option('-o, --output <file>', 'save response to file')
-  .option('--stream', 'stream response in real-time')
   .option('--save-preset <name>', 'save file patterns as a preset')
   .option('-y, --yes', 'automatically confirm prompts')
   .option('--force', 'alias for --yes (skip cost confirmation)')
@@ -248,6 +247,8 @@ Note: If both --preset and -f are specified, -f takes precedence (preset is igno
   .option('--json', 'output response in JSON format with usage stats')
   .option('--estimate-cost', 'estimate cost without running the query (dry-run)')
   .option('--cost-threshold <usd>', 'cost threshold for requiring approval (default: 0.50)', parseFloat)
+  .option('--background', 'run supported models using provider background mode')
+  .option('--no-background', 'disable background mode even for GPT-5 Pro')
   .allowExcessArguments(false)
   .action(async (question, options) => {
     await expertCommand(question, options);

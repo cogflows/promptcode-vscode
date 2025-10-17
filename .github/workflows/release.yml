@@ -34,15 +34,19 @@ jobs:
         
       - name: Setup Bun for CLI tests
         uses: oven-sh/setup-bun@v2
-          
-      - name: CLI tests
+
+      - name: Install CLI dependencies
+        run: |
+          cd packages/cli
+          bun install --frozen-lockfile
+
+      - name: CLI tests (includes typecheck in build)
         timeout-minutes: 5  # Add step-level timeout
         env:
           CI: true
           PROMPTCODE_TEST: 1
         run: |
           cd packages/cli
-          bun install --frozen-lockfile
           bun run build
           PROMPTCODE_TEST=1 CI=true bun test --bail=1 --timeout 5000
 
@@ -118,8 +122,8 @@ jobs:
         run: |
           cd packages/cli
           bun install
-          
-      - name: Inject version and build CLI binary
+
+      - name: Inject version and build CLI binary (includes typecheck)
         env:
           CI: true
           GITHUB_REF_TYPE: ${{ github.ref_type }}
