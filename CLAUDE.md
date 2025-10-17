@@ -104,6 +104,10 @@ Per the Cursor rules in `.cursor/rules/css-rules.md`:
 - `DEBUG='promptcode:*'` - Enable debug logging
 - `PROMPTCODE_TEST=1` - Test mode (disables interactive features)
 - `PROMPTCODE_TOKEN_WARNING` - Token threshold (default: 50000)
+- `PROMPTCODE_FORCE_BACKGROUND=1` - Always route OpenAI models through background mode
+- `PROMPTCODE_DISABLE_BACKGROUND=1` - Opt-out of background mode (even for GPT-5 Pro)
+- `PROMPTCODE_FALLBACK_BACKGROUND=1` - Automatically retry foreground timeouts in OpenAI background mode
+- `PROMPTCODE_TIMEOUT_MS` / `PROMPTCODE_TIMEOUT_<MODEL>_MS` / `PROMPTCODE_TIMEOUT_CAP_MS` - Override foreground timeout behaviour (milliseconds)
 
 ## Release Process
 

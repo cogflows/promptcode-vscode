@@ -97,6 +97,7 @@ export class BackgroundTaskHandler {
 
         // Check completion states
         if (status.status === 'completed') {
+          this.notReadyAttempts.delete(taskId);
           this.progressReporter.complete('Task completed! Retrieving results...');
           const result = await this.client.getTaskResult(taskId);
           result.duration = Date.now() - startTime;

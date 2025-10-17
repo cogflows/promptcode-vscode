@@ -205,4 +205,37 @@ describe('AIProvider', () => {
       expect(cost).toBe(0);
     });
   });
+
+  describe('getModelTimeout (private)', () => {
+    const getTimeout = (model: string, effort?: any) => {
+      return (provider as any).getModelTimeout(model, effort);
+    };
+
+    test('applies tier multipliers and caps at 120 minutes', () => {
+      const timeout = getTimeout('gpt-5-pro', 'high');
+      expect(timeout).toBe(7200000);
+
+      const minimalTimeout = getTimeout('gpt-5-pro', 'minimal');
+      expect(minimalTimeout).toBe(900000);
+    });
+
+    test('uses standard tier for unknown models', () => {
+      const timeout = getTimeout('unknown-model', 'low');
+      expect(timeout).toBe(300000);
+    });
+
+    test('respects global environment overrides', () => {
+      process.env.PROMPTCODE_TIMEOUT_MS = '600000';
+      const timeout = getTimeout('gpt-5-pro', 'high');
+      expect(timeout).toBe(600000);
+      delete process.env.PROMPTCODE_TIMEOUT_MS;
+    });
+
+    test('respects model-specific overrides', () => {
+      process.env.PROMPTCODE_TIMEOUT_GPT_5_PRO_MS = '450000';
+      const timeout = getTimeout('gpt-5-pro', 'high');
+      expect(timeout).toBe(450000);
+      delete process.env.PROMPTCODE_TIMEOUT_GPT_5_PRO_MS;
+    });
+  });
 });
