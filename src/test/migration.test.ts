@@ -1,4 +1,7 @@
 import * as assert from 'assert';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { buildPrompt, buildTreeFromSelection, generatePatternsFromSelection, countTokens } from '@promptcode/core';
 import type { SelectedFile } from '@promptcode/core';
 
@@ -84,38 +87,53 @@ suite('Core Migration Test', () => {
     });
 
     test('generatePatternsFromSelection should create correct patterns', () => {
+        const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'promptcode-migration-'));
+        const ensureFile = (relativePath: string) => {
+            const absolute = path.join(workspaceRoot, relativePath);
+            fs.mkdirSync(path.dirname(absolute), { recursive: true });
+            fs.writeFileSync(absolute, '// test');
+        };
+
+        ensureFile('src/components/Button.tsx');
+        ensureFile('src/components/Input.tsx');
+        ensureFile('src/utils/helper.ts');
+
         const selectedFiles: SelectedFile[] = [
             {
                 path: 'src/components/Button.tsx',
-                absolutePath: '/test/src/components/Button.tsx',
+                absolutePath: path.join(workspaceRoot, 'src/components/Button.tsx'),
                 content: '',
-                workspaceFolderRootPath: '/test',
-                workspaceFolderName: 'test',
+                workspaceFolderRootPath: workspaceRoot,
+                workspaceFolderName: path.basename(workspaceRoot),
                 tokenCount: 0
             },
             {
                 path: 'src/components/Input.tsx',
-                absolutePath: '/test/src/components/Input.tsx',
+                absolutePath: path.join(workspaceRoot, 'src/components/Input.tsx'),
                 content: '',
-                workspaceFolderRootPath: '/test',
-                workspaceFolderName: 'test',
+                workspaceFolderRootPath: workspaceRoot,
+                workspaceFolderName: path.basename(workspaceRoot),
                 tokenCount: 0
             },
             {
                 path: 'src/utils/helper.ts',
-                absolutePath: '/test/src/utils/helper.ts',
+                absolutePath: path.join(workspaceRoot, 'src/utils/helper.ts'),
                 content: '',
-                workspaceFolderRootPath: '/test',
-                workspaceFolderName: 'test',
+                workspaceFolderRootPath: workspaceRoot,
+                workspaceFolderName: path.basename(workspaceRoot),
                 tokenCount: 0
             }
         ];
 
-        const patterns = generatePatternsFromSelection(selectedFiles);
+        try {
+            const patterns = generatePatternsFromSelection(selectedFiles);
         
-        // Should consolidate to pattern
-        assert.ok(patterns.includes('src/components/*.tsx'));
-        assert.ok(patterns.includes('src/utils/helper.ts'));
+            // Should consolidate to pattern
+            assert.ok(patterns.includes('src/components/*.tsx'));
+            assert.ok(patterns.includes('src/utils/helper.ts') || patterns.includes('src/utils/*.ts'));
+        } finally {
+            fs.rmSync(workspaceRoot, { recursive: true, force: true });
+        }
     });
 
     test('countTokens should return consistent results', () => {

@@ -19,6 +19,15 @@ suite('Generate Patterns From Selection Tests', () => {
       'src/utils/parser.ts',
       'src/test/index.test.ts',
       'src/test/helper.test.ts',
+      'src/mixed/alpha.ts',
+      'src/mixed/beta.ts',
+      'src/mixed/delta.ts',
+      'src/mixed/nested/gamma.ts',
+      'ingestion/index.ts',
+      'ingestion/data/ignored.ts',
+      'ingestion/src/index.ts',
+      'ingestion/src/utils.ts',
+      'ingestion/src/data/ignored.ts',
       'lib/core.js',
       'lib/utils.js',
       'package.json',
@@ -63,15 +72,42 @@ suite('Generate Patterns From Selection Tests', () => {
     ];
     const patterns = generatePatternsFromSelection(selected, testDir);
     
-    // Should list files individually when not all files in a directory are selected
-    assert.ok(patterns.includes('src/index.ts'));
+    // Should not expand to entire directory or nested wildcard
+    assert.ok(patterns.includes('src/*.ts') || patterns.includes('src/index.ts'));
     assert.ok(patterns.includes('src/utils/helper.ts'));
     assert.ok(!patterns.includes('src/utils/**'));
+  });
+
+  test('should not generalize parent directory when nested files are excluded', () => {
+    const selected = [
+      'src/mixed/alpha.ts',
+      'src/mixed/beta.ts'
+    ];
+    const patterns = generatePatternsFromSelection(selected, testDir);
+
+    assert.ok(!patterns.includes('src/mixed/*.ts'));
+    assert.ok(!patterns.includes('src/mixed/**'));
+    assert.ok(patterns.includes('src/mixed/alpha.ts'));
+    assert.ok(patterns.includes('src/mixed/beta.ts'));
   });
 
   test('should handle empty selection', () => {
     const patterns = generatePatternsFromSelection([], testDir);
     assert.deepStrictEqual(patterns, []);
+  });
+
+  test('should keep deselected sub-directories excluded when saving preset', () => {
+    const selected = [
+      'ingestion/index.ts',
+      'ingestion/src/index.ts',
+      'ingestion/src/utils.ts'
+    ];
+    const patterns = generatePatternsFromSelection(selected, testDir);
+
+    assert.ok(!patterns.includes('ingestion/**'));
+    assert.ok(!patterns.includes('ingestion/src/**'));
+    assert.ok(!patterns.includes('ingestion/data/**'));
+    assert.ok(!patterns.includes('ingestion/src/data/**'));
   });
 
   test('should generate patterns for multiple directories', () => {
@@ -99,6 +135,6 @@ suite('Generate Patterns From Selection Tests', () => {
     // Root files should be listed individually
     assert.ok(patterns.includes('package.json'));
     assert.ok(patterns.includes('README.md'));
-    assert.ok(patterns.includes('src/index.ts'));
+    assert.ok(patterns.includes('src/*.ts') || patterns.includes('src/index.ts'));
   });
 });

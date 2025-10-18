@@ -162,7 +162,7 @@ export async function listFilesByPatternsFile(
   }
 
   // Use fast-glob with all patterns
-  // Security: Don't follow symlinks to prevent directory traversal
+  // Symlinks are followed to match VS Code's selection behaviour
   const files = await fg(includePatterns, {
     cwd,
     onlyFiles: true,

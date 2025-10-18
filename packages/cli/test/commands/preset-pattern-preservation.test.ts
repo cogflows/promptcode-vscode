@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll } from 'bun:test';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -7,6 +7,19 @@ import { presetCommand } from '../../src/commands/preset';
 describe('Preset Pattern Preservation', () => {
   let testDir: string;
   let presetsDir: string;
+  const originalTestFlag = process.env.PROMPTCODE_TEST;
+
+  beforeAll(() => {
+    process.env.PROMPTCODE_TEST = '1';
+  });
+
+  afterAll(() => {
+    if (originalTestFlag === undefined) {
+      delete process.env.PROMPTCODE_TEST;
+    } else {
+      process.env.PROMPTCODE_TEST = originalTestFlag;
+    }
+  });
 
   beforeEach(async () => {
     // Create a temp directory for testing
@@ -167,11 +180,11 @@ describe('Preset Pattern Preservation', () => {
     });
 
     it('should reject unsafe patterns with directory traversal', async () => {
-      await expect(presetCommand({
+      expect(() => presetCommand({
         create: 'test-unsafe',
         fromFiles: ['../outside/**/*.ts'],
         path: testDir
-      })).rejects.toThrow('directory traversal');
+      })).toThrow('directory traversal');
     });
 
     it('should handle empty input gracefully', async () => {
