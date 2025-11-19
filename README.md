@@ -63,9 +63,9 @@ No more fumbling with scattered tools or manual context copying—PromptCode kee
 - **Workspace Templates**: Create your own project-specific templates in `.promptcode/prompts`
 
 ### 💬 Universal AI Compatibility
-- **Copy & Paste**: Works with ANY AI model or assistant - including Anthropic Claude, OpenAI GPT-4, Google Gemini, and others
-- **No API Required**: Use with desktop models (Claude 3 Opus Local, GPT-5, Grok, etc.) or private instances
-- **Supplement Your Workflow**: Perfect companion to Cursor, Windsurfninja, GitHub Copilot, and other AI coding tools
+- **Copy & Paste**: Works with ANY AI model or assistant - including OpenAI, Anthropic Claude, Google Gemini, and others
+- **No API Required**: Use with web interfaces, desktop apps, or private instances
+- **Supplement Your Workflow**: Perfect companion to Cursor, Windsurf, GitHub Copilot, and other AI coding tools
 
 ### 🔄 Structured Output Processing
 - **Code Change Extraction**: Automatically parse code changes from AI responses
@@ -82,14 +82,11 @@ No more fumbling with scattered tools or manual context copying—PromptCode kee
 
 ## Supported AI Models
 
-PromptCode works with the latest AI models from major providers:
+PromptCode supports the latest models from OpenAI (GPT-5.1, O3), Anthropic (Claude 4), Google (Gemini 3), and xAI (Grok 4).
 
-- **OpenAI**: GPT-5 family (standard, mini, nano), GPT-4o series
-- **Anthropic**: Claude Opus-4, Sonnet-4, Haiku-4
-- **Google**: Gemini 2.5 Pro/Flash, Gemini 2.0 Flash
-- **xAI**: Grok-4, Grok-Beta
-
-Run `promptcode models` to see all available models and their capabilities.
+```bash
+promptcode expert --models  # View all models with pricing
+```
 
 ## Usage
 
