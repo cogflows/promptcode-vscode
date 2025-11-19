@@ -260,6 +260,9 @@ export class AIProvider {
       tier = 'fast';
     } else if (modelKey.startsWith('o3') || modelKey.startsWith('gpt-5')) {
       tier = 'standard';
+    } else if (modelKey.includes('gemini-3')) {
+      // Gemini 3 with high thinking level can take extended time
+      tier = 'standard';
     } else {
       tier = 'fast';
     }
@@ -580,6 +583,35 @@ export class AIProvider {
       if (modelKey.startsWith('gpt-5.1')) {
         requestConfig.promptCacheRetention = '24h';
       }
+    }
+
+    // Add Gemini 3 specific parameters
+    // Gemini 3 uses thinking_level instead of thinking_budget
+    // Temperature must be 1.0 (Google strongly recommends this to avoid looping)
+    if (modelConfig?.provider === 'google' && modelKey.includes('gemini-3')) {
+      // Map our reasoningEffort to Gemini 3's thinkingLevel
+      // Our: none/minimal/low/medium/high → Gemini 3: low/medium/high
+      const thinkingLevelMap: Record<string, 'low' | 'medium' | 'high'> = {
+        'none': 'low',
+        'minimal': 'low',
+        'low': 'low',
+        'medium': 'medium',
+        'high': 'high',
+      };
+      const thinkingLevel = thinkingLevelMap[reasoningEffort] || 'high';
+
+      requestConfig.providerOptions = {
+        google: {
+          thinkingConfig: {
+            thinkingLevel,
+            includeThoughts: false, // Don't include raw thoughts in response
+          },
+        },
+      };
+
+      // Override temperature to 1.0 for Gemini 3 (Google's strong recommendation)
+      // Lower values can cause looping or degraded reasoning performance
+      requestConfig.temperature = 1.0;
     }
 
     // Add web search tools if enabled

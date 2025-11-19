@@ -125,14 +125,27 @@ process.exit(0);
       const testHome = path.join(testDir, 'home');
       fs.mkdirSync(testHome, { recursive: true });
 
+      // Use a minimal PATH that excludes any existing promptcode installation
+      // This ensures we test fresh installation behavior, not upgrade behavior
+      const minimalPath = [
+        '/usr/local/bin',
+        '/usr/bin',
+        '/bin',
+        `${testHome}/.local/bin`
+      ].join(':');
+
       const result = spawnSync('bash', [scriptPath], {
         env: {
-          ...process.env, // Include all parent env vars
+          // Only include essential env vars, not the full process.env
+          // This prevents inheriting a PATH with existing promptcode installation
           HOME: testHome,
+          USER: process.env.USER || 'testuser',
+          SHELL: process.env.SHELL || '/bin/bash',
+          TERM: process.env.TERM || 'xterm',
           CI: 'true',
           PROMPTCODE_DRY_RUN: '1', // Dry run mode
           PROMPTCODE_BASE_URL: `http://localhost:${serverPort}`, // Used by install.sh
-          PATH: `${testHome}/.local/bin:${process.env.PATH}`
+          PATH: minimalPath
         },
         encoding: 'utf8',
         input: '', // No stdin input
@@ -140,10 +153,11 @@ process.exit(0);
       });
 
       // Should complete without hanging
-      if (result.error) {
+      if (result.error || result.status !== 0) {
         console.error('Install script error:', result.error);
         console.error('stdout:', result.stdout);
         console.error('stderr:', result.stderr);
+        console.error('status:', result.status);
       }
       expect(result.error).toBeUndefined();
       expect(result.status).toBe(0);

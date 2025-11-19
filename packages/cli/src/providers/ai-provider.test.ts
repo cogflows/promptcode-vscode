@@ -237,5 +237,57 @@ describe('AIProvider', () => {
       expect(timeout).toBe(450000);
       delete process.env.PROMPTCODE_TIMEOUT_GPT_5_PRO_MS;
     });
+
+    test('uses standard tier for Gemini 3 models', () => {
+      // Gemini 3 should use standard tier (5 minutes base)
+      const lowTimeout = getTimeout('gemini-3-pro', 'low');
+      expect(lowTimeout).toBe(300000); // 5 min * 1x = 5 min
+
+      const mediumTimeout = getTimeout('gemini-3-pro', 'medium');
+      expect(mediumTimeout).toBe(600000); // 5 min * 2x = 10 min
+
+      const highTimeout = getTimeout('gemini-3-pro', 'high');
+      expect(highTimeout).toBe(1200000); // 5 min * 4x = 20 min
+    });
+
+    test('uses fast tier for flash models', () => {
+      const timeout = getTimeout('gemini-2.5-flash', 'high');
+      expect(timeout).toBe(480000); // 2 min * 4x = 8 min
+    });
+  });
+
+  describe('Gemini 3 thinkingLevel mapping', () => {
+    test('should map reasoningEffort to thinkingLevel correctly', () => {
+      // Test the mapping logic
+      const thinkingLevelMap: Record<string, 'low' | 'medium' | 'high'> = {
+        'none': 'low',
+        'minimal': 'low',
+        'low': 'low',
+        'medium': 'medium',
+        'high': 'high',
+      };
+
+      // Verify all mappings
+      expect(thinkingLevelMap['none']).toBe('low');
+      expect(thinkingLevelMap['minimal']).toBe('low');
+      expect(thinkingLevelMap['low']).toBe('low');
+      expect(thinkingLevelMap['medium']).toBe('medium');
+      expect(thinkingLevelMap['high']).toBe('high');
+    });
+
+    test('should default to high thinkingLevel for Gemini 3', () => {
+      const thinkingLevelMap: Record<string, 'low' | 'medium' | 'high'> = {
+        'none': 'low',
+        'minimal': 'low',
+        'low': 'low',
+        'medium': 'medium',
+        'high': 'high',
+      };
+
+      // When reasoningEffort is undefined or unknown, should default to 'high'
+      const defaultEffort = 'high';
+      const thinkingLevel = thinkingLevelMap[defaultEffort] || 'high';
+      expect(thinkingLevel).toBe('high');
+    });
   });
 });

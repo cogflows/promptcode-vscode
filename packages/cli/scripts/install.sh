@@ -619,6 +619,11 @@ main() {
   local HELP=false
   local LOCAL_BINARY=""
 
+  # Check environment variable for dry run (useful for testing)
+  if [[ "${PROMPTCODE_DRY_RUN:-}" == "1" ]]; then
+    DRY_RUN=true
+  fi
+
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --dry-run)
