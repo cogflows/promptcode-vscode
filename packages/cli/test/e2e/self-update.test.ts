@@ -50,11 +50,11 @@ process.exit(0);
             assets: [
               {
                 name: getAssetName(process.platform as any, process.arch),
-                browser_download_url: `http://localhost:${serverPort}/download/binary`
+                browser_download_url: `http://127.0.0.1:${serverPort}/download/binary`
               },
               {
                 name: `${getAssetName(process.platform as any, process.arch)}.sha256`,
-                browser_download_url: `http://localhost:${serverPort}/download/checksum`
+                browser_download_url: `http://127.0.0.1:${serverPort}/download/checksum`
               }
             ]
           }));
@@ -87,7 +87,7 @@ process.exit(0);
   test('should check for updates and show available version', () => {
     const result = runCLIIsolated(['update', '--force'], {
       env: {
-        PROMPTCODE_BASE_URL: `http://localhost:${serverPort}`,
+        PROMPTCODE_BASE_URL: `http://127.0.0.1:${serverPort}`,
         PROMPTCODE_TEST_MODE: '1', // Allow test mode but not full PROMPTCODE_TEST
         CI: 'true' // Non-interactive mode
       },
@@ -119,7 +119,7 @@ process.exit(0);
     // Run update command
     const result = runCLIIsolated(['update', '--force'], {
       env: {
-        PROMPTCODE_BASE_URL: `http://localhost:${serverPort}`,
+        PROMPTCODE_BASE_URL: `http://127.0.0.1:${serverPort}`,
         PROMPTCODE_INSTALL_DIR: installDir,
         PROMPTCODE_TEST_MODE: '1',
         CI: 'true' // Non-interactive
@@ -183,11 +183,11 @@ process.exit(0);
           assets: [
             {
               name: getAssetName(process.platform as any, process.arch),
-              browser_download_url: `http://localhost:${tamperedPort}/download/binary`
+              browser_download_url: `http://127.0.0.1:${tamperedPort}/download/binary`
             },
             {
               name: `${getAssetName(process.platform as any, process.arch)}.sha256`,
-              browser_download_url: `http://localhost:${tamperedPort}/download/checksum`
+              browser_download_url: `http://127.0.0.1:${tamperedPort}/download/checksum`
             }
           ]
         }));
@@ -213,7 +213,7 @@ process.exit(0);
     
     const result = runCLIIsolated(['update', '--force'], {
       env: {
-        PROMPTCODE_BASE_URL: `http://localhost:${tamperedPort}`,
+        PROMPTCODE_BASE_URL: `http://127.0.0.1:${tamperedPort}`,
         PROMPTCODE_TEST_MODE: '1',
         CI: 'true'
       },
