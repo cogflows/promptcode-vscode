@@ -60,8 +60,10 @@ export async function safePrompt<T = any>(
       }
       return answers as unknown as T;
     } catch (error) {
-      // Fall through to inquirer
-      console.log(chalk.yellow('⚠️  Bun prompt failed, trying inquirer...'));
+      // Fall through to inquirer silently (internal fallback)
+      if (process.env.PROMPTCODE_DEBUG_PROMPTS === '1') {
+        console.log(chalk.gray('[prompts] Bun prompt failed, falling back to inquirer'));
+      }
     }
   }
 
@@ -121,8 +123,10 @@ export async function safeConfirm(
     try {
       return await bunConfirmPrompt(message, defaultValue);
     } catch (error) {
-      // Fall through to inquirer
-      console.log(chalk.yellow('⚠️  Bun prompt failed, trying inquirer...'));
+      // Fall through to inquirer silently (internal fallback)
+      if (process.env.PROMPTCODE_DEBUG_PROMPTS === '1') {
+        console.log(chalk.gray('[prompts] Bun confirm failed, falling back to inquirer'));
+      }
     }
   }
 
