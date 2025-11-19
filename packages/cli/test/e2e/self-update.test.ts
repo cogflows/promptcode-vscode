@@ -43,6 +43,9 @@ process.exit(0);
     // Start local HTTP server for mock downloads
     await new Promise<void>((resolve) => {
       server = createServer((req, res) => {
+        // Debug: log incoming requests
+        console.log(`[Mock Server] ${req.method} ${req.url}`);
+
         if (req.url === '/repos/cogflows/promptcode-vscode/releases/latest') {
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({
@@ -70,9 +73,10 @@ process.exit(0);
         }
       });
       
-      // Bind to all interfaces to avoid IPv4/IPv6 resolution issues with Bun's fetch
-      server.listen(0, () => {
-        serverPort = server.address().port;
+      // Explicitly bind to IPv4 loopback and get the actual address
+      server.listen(0, '127.0.0.1', () => {
+        const addr = server.address();
+        serverPort = typeof addr === 'string' ? 0 : addr!.port;
         resolve();
       });
     });
@@ -86,9 +90,12 @@ process.exit(0);
   });
 
   test('should check for updates and show available version', () => {
+    const baseUrl = `http://127.0.0.1:${serverPort}`;
+    console.log(`[Test] Using PROMPTCODE_BASE_URL: ${baseUrl}`);
+
     const result = runCLIIsolated(['update', '--force'], {
       env: {
-        PROMPTCODE_BASE_URL: `http://127.0.0.1:${serverPort}`,
+        PROMPTCODE_BASE_URL: baseUrl,
         PROMPTCODE_TEST_MODE: '1', // Allow test mode but not full PROMPTCODE_TEST
         CI: 'true' // Non-interactive mode
       },
@@ -205,8 +212,7 @@ process.exit(0);
     });
     
     tamperedPort = await new Promise<number>((resolve) => {
-      // Bind to all interfaces to avoid IPv4/IPv6 resolution issues
-      tamperedServer.listen(0, () => {
+      tamperedServer.listen(0, '127.0.0.1', () => {
         const address = tamperedServer.address();
         tamperedPort = typeof address === 'string' ? 0 : address!.port;
         resolve(tamperedPort);
