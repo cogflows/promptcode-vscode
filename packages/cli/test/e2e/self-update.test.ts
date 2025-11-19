@@ -70,7 +70,8 @@ process.exit(0);
         }
       });
       
-      server.listen(0, '127.0.0.1', () => {
+      // Bind to all interfaces to avoid IPv4/IPv6 resolution issues with Bun's fetch
+      server.listen(0, () => {
         serverPort = server.address().port;
         resolve();
       });
@@ -204,7 +205,8 @@ process.exit(0);
     });
     
     tamperedPort = await new Promise<number>((resolve) => {
-      tamperedServer.listen(0, '127.0.0.1', () => {
+      // Bind to all interfaces to avoid IPv4/IPv6 resolution issues
+      tamperedServer.listen(0, () => {
         const address = tamperedServer.address();
         tamperedPort = typeof address === 'string' ? 0 : address!.port;
         resolve(tamperedPort);
