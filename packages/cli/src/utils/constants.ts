@@ -7,7 +7,7 @@ export const CACHE_VERSION = '0.1.0';
 
 // Token counting constants
 export const DEFAULT_SAFETY_MARGIN = 256;
-export const DEFAULT_EXPECTED_COMPLETION = 4000;
+export const DEFAULT_EXPECTED_COMPLETION = 16000;
 
 // File system constants
 export const PRESET_FILE_EXTENSION = '.patterns';
