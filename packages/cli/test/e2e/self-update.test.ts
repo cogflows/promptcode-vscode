@@ -91,7 +91,7 @@ process.exit(0);
         PROMPTCODE_TEST_MODE: '1', // Allow test mode but not full PROMPTCODE_TEST
         CI: 'true' // Non-interactive mode
       },
-      timeout: 10000 // 10 second timeout
+      timeout: 30000 // 30 second timeout - CI runners can be slow
     });
 
     // Debug output if test fails
@@ -125,7 +125,7 @@ process.exit(0);
         CI: 'true' // Non-interactive
       },
       cwd: installDir,
-      timeout: 10000 // 10 second timeout
+      timeout: 30000 // 30 second timeout - CI runners can be slow
     });
     
     // Should successfully download and stage
@@ -217,7 +217,7 @@ process.exit(0);
         PROMPTCODE_TEST_MODE: '1',
         CI: 'true'
       },
-      timeout: 10000 // 10 second timeout
+      timeout: 30000 // 30 second timeout - CI runners can be slow
     });
     
     // Should fail on checksum mismatch

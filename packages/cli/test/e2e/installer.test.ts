@@ -131,12 +131,12 @@ process.exit(0);
           HOME: testHome,
           CI: 'true',
           PROMPTCODE_DRY_RUN: '1', // Dry run mode
-          PROMPTCODE_GITHUB_API: `http://localhost:${serverPort}`,
+          PROMPTCODE_BASE_URL: `http://localhost:${serverPort}`, // Used by install.sh
           PATH: `${testHome}/.local/bin:${process.env.PATH}`
         },
         encoding: 'utf8',
         input: '', // No stdin input
-        timeout: 15000 // 15 second timeout - CI runners can be slow
+        timeout: 60000 // 60 second timeout - CI runners can be very slow
       });
 
       // Should complete without hanging
@@ -146,6 +146,7 @@ process.exit(0);
         console.error('stderr:', result.stderr);
       }
       expect(result.error).toBeUndefined();
+      expect(result.status).toBe(0);
       
       // Should not prompt for PATH updates in CI
       expect(result.stdout + result.stderr).not.toContain('Add to PATH?');

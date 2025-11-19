@@ -12,6 +12,8 @@ IFS=$'\n\t'       # Set secure Internal Field Separator
 # Configuration
 REPO="cogflows/promptcode-vscode"
 CLI_NAME="promptcode"
+# Allow overriding the API base URL for testing
+GITHUB_API_URL="${PROMPTCODE_BASE_URL:-https://api.github.com}"
 INSTALL_DIR="${PROMPTCODE_INSTALL_DIR:-$HOME/.local/bin}"
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/promptcode"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/promptcode"
@@ -178,11 +180,12 @@ fetch_latest_version() {
     return
   fi
   
-  local url="https://api.github.com/repos/${REPO}/releases/latest"
+  local url="${GITHUB_API_URL}/repos/${REPO}/releases/latest"
   local version
-  
+
   # Try GitHub API first (with timeout to prevent hanging in CI)
-  version=$(curl -fsSL --connect-timeout 5 --max-time 10 "$url" 2>/dev/null | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/') || true
+  # Increased connect-timeout to 10s for slow CI runners
+  version=$(curl -fsSL --connect-timeout 10 --max-time 15 "$url" 2>/dev/null | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/') || true
   
   # Fallback to parsing releases page if API fails (rate limit)
   if [ -z "$version" ]; then
