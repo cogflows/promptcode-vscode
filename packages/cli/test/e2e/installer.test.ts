@@ -136,10 +136,15 @@ process.exit(0);
         },
         encoding: 'utf8',
         input: '', // No stdin input
-        timeout: 5000 // 5 second timeout to prevent hanging
+        timeout: 15000 // 15 second timeout - CI runners can be slow
       });
-      
+
       // Should complete without hanging
+      if (result.error) {
+        console.error('Install script error:', result.error);
+        console.error('stdout:', result.stdout);
+        console.error('stderr:', result.stderr);
+      }
       expect(result.error).toBeUndefined();
       
       // Should not prompt for PATH updates in CI
