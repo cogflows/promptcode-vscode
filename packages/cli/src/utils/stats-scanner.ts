@@ -326,7 +326,8 @@ export async function processFiles(
   processingTime: number;
 }> {
   const startTime = performance.now();
-  const { ioConcurrency = 128, signal, progress } = options;
+  // Lower default concurrency to reduce event loop blocking from CPU-bound token counting
+  const { ioConcurrency = 32, signal, progress } = options;
   const limiter = createLimiter(ioConcurrency);
   
   const files: Array<{ path: string; tokens: number; ext: string }> = [];
