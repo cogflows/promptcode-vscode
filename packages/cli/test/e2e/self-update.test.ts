@@ -90,9 +90,19 @@ process.exit(0);
         PROMPTCODE_BASE_URL: `http://localhost:${serverPort}`,
         PROMPTCODE_TEST_MODE: '1', // Allow test mode but not full PROMPTCODE_TEST
         CI: 'true' // Non-interactive mode
-      }
+      },
+      timeout: 10000 // 10 second timeout
     });
-    
+
+    // Debug output if test fails
+    if (result.status !== 0) {
+      console.error('Update command failed:');
+      console.error('stdout:', result.stdout);
+      console.error('stderr:', result.stderr);
+      console.error('status:', result.status);
+      console.error('signal:', result.signal);
+    }
+
     // Should show current version or update message
     expect(result.status).toBe(0);
   });
@@ -114,7 +124,8 @@ process.exit(0);
         PROMPTCODE_TEST_MODE: '1',
         CI: 'true' // Non-interactive
       },
-      cwd: installDir
+      cwd: installDir,
+      timeout: 10000 // 10 second timeout
     });
     
     // Should successfully download and stage
@@ -205,7 +216,8 @@ process.exit(0);
         PROMPTCODE_BASE_URL: `http://localhost:${tamperedPort}`,
         PROMPTCODE_TEST_MODE: '1',
         CI: 'true'
-      }
+      },
+      timeout: 10000 // 10 second timeout
     });
     
     // Should fail on checksum mismatch
