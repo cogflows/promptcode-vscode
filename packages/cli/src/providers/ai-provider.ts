@@ -392,7 +392,7 @@ export class AIProvider {
       modelKey,
       messages,
       systemPrompt: options.systemPrompt,
-      maxTokens: options.maxTokens || 4096,
+      maxTokens: options.maxTokens, // Let API use its natural maximum if not specified
       temperature: options.temperature,
       reasoningEffort: options.reasoningEffort || 'high',
       textVerbosity: options.textVerbosity ?? 'low',
@@ -549,9 +549,13 @@ export class AIProvider {
     const requestConfig: Record<string, unknown> = {
       model,
       messages,
-      maxTokens: options.maxTokens || 4096,
       abortSignal: timeoutSignal,
     };
+
+    // Only set maxTokens if explicitly provided - let API use its natural maximum
+    if (options.maxTokens) {
+      requestConfig.maxTokens = options.maxTokens;
+    }
 
     // Only add temperature for non-reasoning models (reasoning models ignore it)
     if (!modelKey.startsWith('gpt-5') && !modelKey.startsWith('o3')) {

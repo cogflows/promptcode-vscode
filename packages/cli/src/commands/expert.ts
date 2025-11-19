@@ -7,8 +7,8 @@ import { MODELS, DEFAULT_MODEL, getAvailableModels, ModelConfig } from '../provi
 import { logRun } from '../services/history';
 import { spinner } from '../utils/spinner';
 import { estimateCost, formatCost } from '../utils/cost';
-import { DEFAULT_EXPECTED_COMPLETION } from '../utils/constants';
-import { 
+import { DEFAULT_EXPECTED_COMPLETION, DEFAULT_SAFETY_MARGIN, CACHE_VERSION } from '../utils/constants';
+import {
   shouldSkipConfirmation,
   isInteractive,
   shouldShowSpinner
@@ -16,7 +16,6 @@ import {
 import { EXIT_CODES, exitWithCode } from '../utils/exit-codes';
 import { findPromptcodeFolder, getProjectRoot, getPresetPath, getCacheDir, resolveProjectPath } from '../utils/paths';
 import { validatePatterns, validatePresetName } from '../utils/validation';
-import { DEFAULT_SAFETY_MARGIN } from '../utils/constants';
 
 interface ExpertOptions {
   path?: string;
@@ -405,7 +404,7 @@ export async function expertCommand(question: string | undefined, options: Exper
     
     // Initialize token counter
     const cacheDir = getCacheDir();
-    initializeTokenCounter(cacheDir, '0.1.0');
+    initializeTokenCounter(cacheDir, CACHE_VERSION);
     
     // This now intelligently finds the project root
     const projectPath = resolveProjectPath(options.path);
@@ -724,7 +723,6 @@ export async function expertCommand(question: string | undefined, options: Exper
     const startTime = Date.now();
     const response = await aiProvider.generateText(modelKey, fullPrompt, {
       systemPrompt: SYSTEM_PROMPT,
-      maxTokens: availableTokens,
       webSearch: webSearchEnabled && modelConfig.supportsWebSearch,
       textVerbosity: options.verbosity,
       reasoningEffort: options.reasoningEffort,

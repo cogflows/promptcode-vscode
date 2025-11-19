@@ -408,10 +408,11 @@ program
     const path = await import('path');
     const { runStats } = await import('./utils/stats-scanner');
     const { exitInTestMode } = await import('./utils/environment');
-    
+    const { CACHE_VERSION } = await import('./utils/constants');
+
     // Initialize token counter for caching
     const cacheDir = process.env.XDG_CACHE_HOME || path.join(process.env.HOME || '', '.cache', 'promptcode');
-    initializeTokenCounter(cacheDir, '0.1.0');
+    initializeTokenCounter(cacheDir, CACHE_VERSION);
     
     const projectPath = path.resolve(options.path);
     
@@ -457,7 +458,7 @@ Examples:
   $ promptcode history --limit 20           # Show more entries
   $ promptcode history --show 5             # Show full details of entry #5
   $ promptcode history --preset 5 my-preset # Convert entry #5 to preset`)
-  .option('--limit <n>', 'number of entries to show', '10')
+  .option('--limit <n>', 'number of entries to show', (v) => parseInt(v, 10), 10)
   .option('--show <index>', 'show full details of specific entry')
   .option('--preset <index>', 'convert entry to preset (requires --name)')
   .option('--name <name>', 'preset name when converting from history')

@@ -2,6 +2,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { clearTokenCache, getCacheStats, initializeTokenCounter } from '@promptcode/core';
 import chalk from 'chalk';
+import { CACHE_VERSION } from '../utils/constants';
 
 export interface CacheOptions {
   stats?: boolean;
@@ -15,7 +16,7 @@ export interface CacheOptions {
 export async function cacheCommand(action: string, options: CacheOptions): Promise<void> {
   // Initialize token counter
   const cacheDir = process.env.XDG_CACHE_HOME || path.join(process.env.HOME || '', '.cache', 'promptcode');
-  initializeTokenCounter(cacheDir, '0.1.0');
+  initializeTokenCounter(cacheDir, CACHE_VERSION);
   
   switch (action) {
     case 'clear':
