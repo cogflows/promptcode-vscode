@@ -426,8 +426,12 @@ export class AIProvider {
     // Check if the provider is initialized before trying to use its tools
     const providerInstance = this.providers[config.provider];
     if (!providerInstance) {
-      // Provider not initialized (no API key), can't use web search tools
-      return undefined;
+      // Provider not initialized (no API key), throw error instead of silent failure
+      const envName = config.provider.toUpperCase() + '_API_KEY';
+      throw new Error(
+        `Web search requires ${config.provider} API key. ` +
+        `Set via environment variable: export ${envName}=...`
+      );
     }
 
     switch (config.provider) {

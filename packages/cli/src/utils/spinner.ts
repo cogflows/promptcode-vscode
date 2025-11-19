@@ -25,13 +25,20 @@ process.on('uncaughtException', () => {
   cleanupSpinners();
 });
 
-// Handle signals properly - avoid infinite recursion
+// Handle signals properly - cleanup and exit cleanly
 const signalHandler = (sig: NodeJS.Signals) => {
-  // Remove this handler to avoid recursion when we re-emit
+  // Remove this handler to avoid re-entry
   process.removeListener(sig, signalHandler as any);
   cleanupSpinners();
-  // Re-emit signal to preserve default behavior
-  process.kill(process.pid, sig);
+  // Exit with appropriate code for the signal
+  // SIGINT = 130, SIGTERM = 143, SIGHUP = 129, SIGQUIT = 131
+  const signalCodes: Record<string, number> = {
+    'SIGINT': 130,
+    'SIGTERM': 143,
+    'SIGHUP': 129,
+    'SIGQUIT': 131,
+  };
+  process.exit(signalCodes[sig] || 128);
 };
 
 ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGQUIT'].forEach(sig => {

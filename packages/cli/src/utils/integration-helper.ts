@@ -1,37 +1,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
-import * as os from 'os';
 import chalk from 'chalk';
-import { ensureDirWithApproval } from './paths';
-
-/**
- * Check if a directory is too high up in the file system
- * (e.g., user home, root, or their immediate children)
- */
-function isTooHighUp(dirPath: string): boolean {
-  const homeDir = os.homedir();
-  const normalizedPath = path.normalize(dirPath);
-  const normalizedHome = path.normalize(homeDir);
-  
-  // Don't allow in home directory or its immediate children
-  if (normalizedPath === normalizedHome) {
-    return true;
-  }
-  
-  // Don't allow in immediate children of home (like ~/.cursor)
-  const parentOfDir = path.dirname(normalizedPath);
-  if (parentOfDir === normalizedHome) {
-    return true;
-  }
-  
-  // Don't allow at root or its immediate children
-  const root = path.parse(normalizedPath).root;
-  if (normalizedPath === root || path.dirname(normalizedPath) === root) {
-    return true;
-  }
-  
-  return false;
-}
+import { ensureDirWithApproval, isTooHighUp } from './paths';
 
 /**
  * Find or create an integration directory (.claude or .cursor)

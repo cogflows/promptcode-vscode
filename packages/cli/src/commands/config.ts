@@ -1,8 +1,11 @@
 import chalk from 'chalk';
+import * as fs from 'fs';
 import { ConfigService } from '../services/config-service';
+import { getCacheDir, getConfigDir, getHistoryPath } from '../utils/paths';
 
 interface ConfigOptions {
   show?: boolean;
+  reset?: boolean;
 }
 
 /**
@@ -10,6 +13,31 @@ interface ConfigOptions {
  */
 export async function configCommand(options: ConfigOptions): Promise<void> {
   try {
+    // Handle --reset option
+    if (options.reset) {
+      const cacheDir = getCacheDir();
+      const configDir = getConfigDir();
+      const historyPath = getHistoryPath();
+
+      console.log(chalk.yellow('Resetting PromptCode configuration...'));
+
+      // Clear cache directory
+      if (fs.existsSync(cacheDir)) {
+        fs.rmSync(cacheDir, { recursive: true, force: true });
+        console.log(chalk.gray(`  ✓ Cleared cache: ${cacheDir}`));
+      }
+
+      // Clear history file
+      if (fs.existsSync(historyPath)) {
+        fs.unlinkSync(historyPath);
+        console.log(chalk.gray(`  ✓ Cleared history: ${historyPath}`));
+      }
+
+      console.log(chalk.green('\n✓ Configuration reset successfully'));
+      console.log(chalk.gray('\nNote: API keys are set via environment variables and were not modified.'));
+      return;
+    }
+
     // Get effective configuration (from env vars only)
     const configService = new ConfigService();
     const effectiveKeys = configService.getAllKeys();

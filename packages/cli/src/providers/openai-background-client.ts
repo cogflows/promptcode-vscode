@@ -36,7 +36,9 @@ export class OpenAIBackgroundClient {
 
     const options: OpenAIClientOptions = {
       apiKey,
-      timeout: config?.timeout ?? 0,
+      // Use generous but finite timeout (60s) to avoid infinite hangs on network stalls
+      // The polling mechanism handles the actual long-running nature of background tasks
+      timeout: config?.timeout ?? 60000,
       maxRetries: config?.maxRetries ?? 2,
     };
 

@@ -29,7 +29,8 @@ export class BackgroundTaskHandler {
       ? { fetch: injectedFetch }
       : undefined;
     this.client = injectedClient ?? new OpenAIBackgroundClient(apiKey, clientConfig);
-    this.progressReporter = new ProgressReporter();
+    // ProgressReporter will be initialized in execute() with proper options
+    this.progressReporter = null as any;
 
     // Configure polling behavior
     this.pollInterval = options?.pollInterval ||
@@ -110,8 +111,12 @@ export class BackgroundTaskHandler {
           throw new Error(`Background task failed: ${status.error || 'Unknown error'}`);
         }
 
-        // Wait before next poll
-        await this.sleep(this.getNextPollInterval(Date.now() - startTime));
+        // Wait before next poll, but respect remaining time
+        const elapsed = Date.now() - startTime;
+        const remaining = maxWaitTime - elapsed;
+        if (remaining <= 0) {break;}
+        const nextInterval = this.getNextPollInterval(elapsed);
+        await this.sleep(Math.min(nextInterval, remaining));
       } catch (error: unknown) {
         this.logPollingError(taskId, error);
         // If we can't get status, check if it's a transient error
