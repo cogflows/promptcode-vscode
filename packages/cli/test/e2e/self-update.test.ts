@@ -61,7 +61,7 @@ process.exit(0);
         } else if (req.url === '/download/binary') {
           res.writeHead(200, { 'Content-Type': 'application/octet-stream' });
           res.end(fs.readFileSync(mockBinaryV2Path));
-        } else if (req.url === '/download/binary.sha256') {
+        } else if (req.url === '/download/checksum') {
           res.writeHead(200, { 'Content-Type': 'text/plain' });
           res.end(fs.readFileSync(`${mockBinaryV2Path}.sha256`));
         } else {
