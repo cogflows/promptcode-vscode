@@ -105,7 +105,7 @@ process.exit(0);
 
     // Should show current version or update message
     expect(result.status).toBe(0);
-  });
+  }, { timeout: 30000 }); // Bun test timeout for CI
 
   test('should download and stage update with checksum verification', () => {
     const installDir = path.join(testDir, 'install');
@@ -143,7 +143,7 @@ process.exit(0);
     
     // Clean up staged file to avoid pollution
     try { fs.unlinkSync(stagedPath); } catch {}
-  });
+  }, { timeout: 30000 }); // Bun test timeout for CI
 
   test('should show correct version immediately after update', () => {
     // This test verifies the critical re-exec behavior
@@ -223,7 +223,7 @@ process.exit(0);
     // Should fail on checksum mismatch
     expect((result.stdout as string) + (result.stderr as string)).toContain('Checksum');
     expect(result.status).not.toBe(0);
-    
+
     tamperedServer.close();
-  });
+  }, { timeout: 30000 }); // Bun test timeout for CI
 });

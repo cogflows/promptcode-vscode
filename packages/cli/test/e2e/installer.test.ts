@@ -120,11 +120,11 @@ process.exit(0);
       if (process.platform === 'win32') {
         return; // Skip on Windows
       }
-      
+
       const scriptPath = path.join(__dirname, '..', '..', 'scripts', 'install.sh');
       const testHome = path.join(testDir, 'home');
       fs.mkdirSync(testHome, { recursive: true });
-      
+
       const result = spawnSync('bash', [scriptPath], {
         env: {
           ...process.env, // Include all parent env vars
@@ -147,10 +147,10 @@ process.exit(0);
       }
       expect(result.error).toBeUndefined();
       expect(result.status).toBe(0);
-      
+
       // Should not prompt for PATH updates in CI
       expect(result.stdout + result.stderr).not.toContain('Add to PATH?');
-    });
+    }, { timeout: 60000 }); // Bun test timeout for CI
   });
 
   describe('install.ps1 (Windows)', () => {
