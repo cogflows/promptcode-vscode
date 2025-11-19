@@ -8,7 +8,7 @@
  * Example: If a provider charges $0.001 per 1K tokens, 
  * the value here should be 1.0 (1000x conversion)
  * 
- * Pricing last updated: October 2025
+ * Pricing last updated: November 2025
  */
 
 import { z } from 'zod';
@@ -75,6 +75,35 @@ export const MODELS: Record<string, ModelConfig> = {
     supportsWebSearch: true
   },
 
+  // OpenAI GPT-5.1 models (November 2025 release - improved GPT-5)
+  'gpt-5.1': {
+    provider: 'openai',
+    modelId: 'gpt-5.1',
+    name: 'GPT-5.1',
+    description: 'Improved GPT-5 with adaptive reasoning and better performance',
+    contextWindow: 400000,
+    pricing: { input: 1.25, output: 10 },
+    supportsWebSearch: true
+  },
+  'gpt-5.1-codex': {
+    provider: 'openai',
+    modelId: 'gpt-5.1-codex',
+    name: 'GPT-5.1 Codex',
+    description: 'Optimized for long-running agentic coding tasks',
+    contextWindow: 400000,
+    pricing: { input: 1.25, output: 10 },
+    supportsWebSearch: true
+  },
+  'gpt-5.1-codex-mini': {
+    provider: 'openai',
+    modelId: 'gpt-5.1-codex-mini',
+    name: 'GPT-5.1 Codex Mini',
+    description: 'Efficient model for simpler coding tasks',
+    contextWindow: 400000,
+    pricing: { input: 0.25, output: 2 },
+    supportsWebSearch: true
+  },
+
   // OpenAI O3 models (reasoning specialists)
   'o3': {
     provider: 'openai',
@@ -109,7 +138,16 @@ export const MODELS: Record<string, ModelConfig> = {
     provider: 'anthropic',
     modelId: 'claude-opus-4-20250514',
     name: 'Claude Opus 4',
-    description: 'Most advanced Claude model with breakthrough capabilities',
+    description: 'Advanced Claude model with breakthrough capabilities',
+    contextWindow: 500000,
+    pricing: { input: 15, output: 75 },
+    supportsWebSearch: true
+  },
+  'opus-4.1': {
+    provider: 'anthropic',
+    modelId: 'claude-opus-4-1-20250805',
+    name: 'Claude Opus 4.1',
+    description: 'Enhanced Opus with improved agentic tasks and coding',
     contextWindow: 500000,
     pricing: { input: 15, output: 75 },
     supportsWebSearch: true
@@ -123,13 +161,40 @@ export const MODELS: Record<string, ModelConfig> = {
     pricing: { input: 3, output: 15 },
     supportsWebSearch: true
   },
+  'sonnet-4.5': {
+    provider: 'anthropic',
+    modelId: 'claude-sonnet-4-5-20250929',
+    name: 'Claude Sonnet 4.5',
+    description: 'Most intelligent model with leading coding capabilities',
+    contextWindow: 200000,
+    pricing: { input: 3, output: 15 },
+    supportsWebSearch: true
+  },
+  'haiku-4.5': {
+    provider: 'anthropic',
+    modelId: 'claude-haiku-4-5-20251015',
+    name: 'Claude Haiku 4.5',
+    description: 'Fast and efficient model for real-time applications',
+    contextWindow: 200000,
+    pricing: { input: 1, output: 5 },
+    supportsWebSearch: true
+  },
   
   // Google models (2025 SOTA)
+  'gemini-3-pro': {
+    provider: 'google',
+    modelId: 'gemini-3-pro-preview',
+    name: 'Gemini 3 Pro',
+    description: 'Latest flagship with 1501 Elo score, top of LMArena',
+    contextWindow: 1000000,
+    pricing: { input: 2, output: 12 },
+    supportsWebSearch: true
+  },
   'gemini-2.5-pro': {
     provider: 'google',
     modelId: 'gemini-2.5-pro',
     name: 'Gemini 2.5 Pro',
-    description: 'Latest Gemini with enhanced multimodal understanding',
+    description: 'Powerful Gemini with enhanced multimodal understanding',
     contextWindow: 3000000,
     pricing: { input: 1.25, output: 10 },
     supportsWebSearch: true
@@ -145,11 +210,12 @@ export const MODELS: Record<string, ModelConfig> = {
   },
   
   // xAI models (2025 SOTA)
+  // Note: Grok 4.1 not yet available via API (Nov 2025)
   'grok-4': {
     provider: 'xai',
     modelId: 'grok-4',
     name: 'Grok 4',
-    description: 'xAI\'s most advanced model with real-time web access',
+    description: 'xAI\'s powerful model with real-time web access',
     contextWindow: 200000,
     pricing: { input: 3, output: 15 },
     supportsWebSearch: true
@@ -170,8 +236,8 @@ for (const [key, cfg] of Object.entries(MODELS)) {
   }
 }
 
-// Default model - GPT-5 offers best performance with 50-80% fewer tokens than O3
-export const DEFAULT_MODEL = 'gpt-5';
+// Default model - GPT-5.1 offers best performance with adaptive reasoning and reduced token usage
+export const DEFAULT_MODEL = 'gpt-5.1';
 
 // Get available models for a provider
 export function getProviderModels(provider: string): string[] {

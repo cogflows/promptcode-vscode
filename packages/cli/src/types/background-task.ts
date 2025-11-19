@@ -13,7 +13,7 @@ export interface BackgroundTaskOptions {
   maxTokens?: number;
   temperature?: number;
   textVerbosity?: 'low' | 'medium' | 'high';
-  reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
+  reasoningEffort?: 'none' | 'minimal' | 'low' | 'medium' | 'high';
   webSearch?: boolean;
   serviceTier?: string;
   disableProgress?: boolean;

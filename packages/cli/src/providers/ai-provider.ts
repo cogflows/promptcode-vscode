@@ -228,7 +228,7 @@ export class AIProvider {
    * - PROMPTCODE_TIMEOUT_<MODEL>_MS: Model-specific override (e.g., PROMPTCODE_TIMEOUT_GPT_5_PRO_MS)
    * - PROMPTCODE_TIMEOUT_CAP_MS: Maximum timeout cap (default: 7200000ms = 120 minutes)
    */
-  private getModelTimeout(modelKey: string, reasoningEffort: 'minimal' | 'low' | 'medium' | 'high' = 'high'): number {
+  private getModelTimeout(modelKey: string, reasoningEffort: 'none' | 'minimal' | 'low' | 'medium' | 'high' = 'high'): number {
     // Base timeouts by model tier
     const BASE_TIMEOUTS = {
       fast: 120000,      // 2 minutes
@@ -238,6 +238,7 @@ export class AIProvider {
 
     // Reasoning effort multipliers (validated through real-world testing)
     const EFFORT_MULTIPLIERS: Record<string, number> = {
+      none: 0.25,  // GPT-5.1 default - no reasoning tokens, fast responses
       minimal: 0.5,
       low: 1,
       medium: 2,
@@ -255,6 +256,8 @@ export class AIProvider {
       tier = 'standard'; // Unknown model, use safe default
     } else if (modelKey === 'gpt-5-pro' || modelKey === 'o3-pro') {
       tier = 'pro';
+    } else if (modelKey.includes('codex-mini') || modelKey.includes('nano') || modelKey.includes('haiku') || modelKey.includes('flash')) {
+      tier = 'fast';
     } else if (modelKey.startsWith('o3') || modelKey.startsWith('gpt-5')) {
       tier = 'standard';
     } else {
@@ -375,7 +378,7 @@ export class AIProvider {
       temperature?: number;
       systemPrompt?: string;
       textVerbosity?: 'low' | 'medium' | 'high';
-      reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
+      reasoningEffort?: 'none' | 'minimal' | 'low' | 'medium' | 'high';
       serviceTier?: 'auto' | 'flex' | 'priority';
       disableProgress?: boolean;
       fallbackAttempted?: boolean;
@@ -493,7 +496,7 @@ export class AIProvider {
       systemPrompt?: string;
       webSearch?: boolean;
       textVerbosity?: 'low' | 'medium' | 'high';
-      reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
+      reasoningEffort?: 'none' | 'minimal' | 'low' | 'medium' | 'high';
       serviceTier?: 'auto' | 'flex' | 'priority';
       forceBackgroundMode?: boolean;
       disableBackgroundMode?: boolean;
@@ -555,14 +558,19 @@ export class AIProvider {
       requestConfig.temperature = options.temperature || 0.7;
     }
 
-    // Add GPT-5 specific parameters with smart defaults
+    // Add GPT-5/GPT-5.1 specific parameters with smart defaults
     if (modelConfig?.provider === 'openai' && modelKey.startsWith('gpt-5')) {
       // Default to low verbosity for concise responses
       requestConfig.textVerbosity = options.textVerbosity || 'low';
       // Use the reasoning effort passed to the function
+      // GPT-5.1 supports "none" as default for non-reasoning behavior
       requestConfig.reasoningEffort = reasoningEffort;
       if (options.serviceTier) {
         requestConfig.serviceTier = options.serviceTier;
+      }
+      // Enable 24-hour prompt caching for GPT-5.1 models (cost optimization)
+      if (modelKey.startsWith('gpt-5.1')) {
+        requestConfig.promptCacheRetention = '24h';
       }
     }
 
