@@ -685,7 +685,8 @@ async function editPreset(presetName: string, projectPath: string): Promise<void
   }
   
   // Try to open in default editor
-  const editor = process.env.EDITOR || 'nano';
+  const defaultEditor = process.platform === 'win32' ? 'notepad' : 'nano';
+  const editor = process.env.EDITOR || defaultEditor;
   const { spawn } = await import('child_process');
   
   console.log(chalk.gray(`Opening ${presetPath} in ${editor}...`));

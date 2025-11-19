@@ -91,7 +91,17 @@ async function writeUpdateCache(cache: UpdateCache): Promise<void> {
     
     // Atomically rename temp file to final location
     // This prevents partial writes and race conditions
-    await fs.rename(tempPath, cachePath);
+    try {
+      await fs.rename(tempPath, cachePath);
+    } catch (renameErr: any) {
+      // Handle cross-device link error (temp and cache on different partitions)
+      if (renameErr.code === 'EXDEV') {
+        await fs.copyFile(tempPath, cachePath);
+        await fs.unlink(tempPath);
+      } else {
+        throw renameErr;
+      }
+    }
   } catch {
     // Silently fail if we can't write cache
     // Clean up temp file if it exists

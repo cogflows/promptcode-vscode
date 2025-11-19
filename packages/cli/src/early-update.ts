@@ -371,7 +371,17 @@ export function finalizeUpdateIfNeeded(): void {
       }
 
       // Atomic replace: .new -> current
-      fs.renameSync(staged, realBin);
+      try {
+        fs.renameSync(staged, realBin);
+      } catch (renameErr: any) {
+        // Handle cross-device link error (staged and binary on different partitions)
+        if (renameErr.code === 'EXDEV') {
+          fs.copyFileSync(staged, realBin);
+          fs.unlinkSync(staged);
+        } else {
+          throw renameErr;
+        }
+      }
 
       // Extract version from the new binary for logging
       let newVersion = 'latest';
