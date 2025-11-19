@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.0] - 2025-11-19
+
+### Added
+- **Gemini 3 Support**: Full support for Gemini 3 Pro with `thinkingLevel` parameter mapping
+  - Maps reasoning effort (none/minimal/low → 'low', medium → 'medium', high → 'high')
+  - Automatically sets temperature to 1.0 (Google's recommendation for optimal reasoning)
+  - Proper timeout handling for extended thinking operations
+
+### Changed
+- Updated @ai-sdk/google to 3.0.0-beta.50 for thinkingConfig support
+
+### Fixed
+- Flaky E2E installer test now properly isolated from system PATH
+
 ## [0.7.0] - 2025-11-18
 
 ### Added
