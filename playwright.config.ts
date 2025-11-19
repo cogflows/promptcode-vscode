@@ -15,7 +15,17 @@ export default defineConfig({
     trace: 'retain-on-failure',
     video: 'retain-on-failure',
     // Base URL for test harness
-    baseURL: 'http://localhost:8080'
+    baseURL: 'http://localhost:8080',
+    // Chromium launch arguments for CI stability
+    // Prevents "Target crashed" errors in Docker/GitHub Actions
+    launchOptions: {
+      args: [
+        '--disable-gpu',
+        '--disable-dev-shm-usage',
+        '--disable-setuid-sandbox',
+        '--no-sandbox',
+      ]
+    }
   },
 
   projects: [

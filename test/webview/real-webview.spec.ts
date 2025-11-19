@@ -2,31 +2,17 @@
  * REAL webview tests that validate the ACTUAL compiled bundle.
  * No mocks, no shortcuts - tests the real thing users will see.
  */
-import { test, expect, Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 
 test.describe('Real Webview Bundle Tests', () => {
-  let page: Page;
+  // Use Playwright's built-in page fixture for automatic cleanup
 
-  test.beforeAll(async ({ browser }) => {
-    // First, compile the webview to ensure we're testing latest
-    const { exec } = require('child_process');
-    await new Promise((resolve, reject) => {
-      exec('npm run compile', (error: any, stdout: any, stderr: any) => {
-        if (error) reject(error);
-        else resolve(stdout);
-      });
-    });
-  });
-
-  test.beforeEach(async ({ browser }) => {
-    // Create a page with VS Code-like environment
-    page = await browser.newPage();
-    
+  test('webview loads without CSP violations', async ({ page }) => {
     // Mock the VS Code API that the real webview expects
     await page.addInitScript(() => {
       // Track all postMessage calls for validation
       (window as any).__messages = [];
-      
+
       // Provide the VS Code API the real webview needs
       (window as any).acquireVsCodeApi = () => ({
         postMessage: (msg: any) => {
@@ -37,9 +23,6 @@ test.describe('Real Webview Bundle Tests', () => {
         setState: (state: any) => { (window as any).__state = state; }
       });
     });
-  });
-
-  test('webview loads without CSP violations', async () => {
     // Track CSP violations
     const cspViolations: string[] = [];
     page.on('console', msg => {
@@ -83,7 +66,7 @@ test.describe('Real Webview Bundle Tests', () => {
     expect(cspViolations).toHaveLength(0);
   });
 
-  test('detects inline event handlers at runtime', async () => {
+  test('detects inline event handlers at runtime', async ({ page }) => {
     await page.goto('http://localhost:8080/test/webview/real-test.html', { waitUntil: 'networkidle' });
 
     // Runtime DOM audit - this catches what static analysis might miss
@@ -112,7 +95,7 @@ test.describe('Real Webview Bundle Tests', () => {
     expect(inlineHandlers).toHaveLength(0);
   });
 
-  test('webview initializes and creates tab structure', async () => {
+  test('webview initializes and creates tab structure', async ({ page }) => {
     // Load a minimal but REAL webview page
     await page.setContent(`
       <!DOCTYPE html>
@@ -154,7 +137,7 @@ test.describe('Real Webview Bundle Tests', () => {
     expect(consoleErrors).toHaveLength(0);
   });
 
-  test('message passing works with real webview', async () => {
+  test('message passing works with real webview', async ({ page }) => {
     // Load the webview with VS Code API mock inline
     await page.setContent(`
       <!DOCTYPE html>
@@ -241,7 +224,7 @@ test.describe('Real Webview Bundle Tests', () => {
     expect(hasErrors).toBeFalsy();
   });
 
-  test('tab switching works without CSP violations', async () => {
+  test('tab switching works without CSP violations', async ({ page }) => {
     // Set up environment first
     await page.addInitScript(() => {
       (window as any).acquireVsCodeApi = () => ({
@@ -268,16 +251,16 @@ test.describe('Real Webview Bundle Tests', () => {
 
     // Click through tabs
     const tabs = ['instructions', 'prompt', 'merge', 'files'];
-    
+
     for (const tabName of tabs) {
       const tabSelector = `.tab-trigger[data-tab="${tabName}"]`;
-      
+
       // Check if tab button exists
       const tabExists = await page.$(tabSelector);
       if (tabExists) {
         await page.click(tabSelector);
         // Small delay for tab switching animation
-    await new Promise(resolve => setTimeout(resolve, 100));
+        await page.waitForTimeout(100);
       }
     }
 
