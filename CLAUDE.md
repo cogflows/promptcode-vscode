@@ -204,6 +204,7 @@ After recent changes:
 - To release: Create a tag and push to trigger GitHub Actions
 - DO NOT make shortcuts, always use the most idiomatic and generic solution
 - **We are in 2025**, when using web search, you should use the most recent information (don't state 2024)
+- **Code Quality**: Always create pristine code and documentation, as this is an OSS project
 ## CRITICAL: Claude Command Templates
 
 ⚠️ **IMPORTANT**: The `.claude/commands/*.md` files in this project are **OVERWRITTEN** when users run `promptcode cc` (Claude Code integration)!
