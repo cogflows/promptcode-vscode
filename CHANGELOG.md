@@ -1,5 +1,20 @@
 # Changelog
 
+All notable changes to this project will be documented in this file.
+
+## [0.7.0] - 2025-11-18
+
+### Added
+- Background execution for long-running AI models (o3-pro, GPT-5 Pro)
+- User-scope installation for Claude Code and Cursor integrations
+- New environment variables: `PROMPTCODE_FORCE_BACKGROUND`, `PROMPTCODE_DISABLE_BACKGROUND`, `PROMPTCODE_FALLBACK_BACKGROUND`
+
+### Fixed
+- Timeout handling for extended AI model requests
+
+### Changed
+- CLI version bumped to 0.8.8 with CI stability improvements
+
 ## [0.5.2] - 2025-08-13
 
 ### Fixed
