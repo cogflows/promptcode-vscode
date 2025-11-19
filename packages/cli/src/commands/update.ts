@@ -13,6 +13,55 @@ import { isInteractive } from '../utils/environment';
 const execAsync = promisify(exec);
 const REPO = 'cogflows/promptcode-vscode';
 const BASE_URL = process.env.PROMPTCODE_BASE_URL || 'https://api.github.com';
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
+const PROXY_ENV_VARS = ['HTTP_PROXY', 'http_proxy', 'HTTPS_PROXY', 'https_proxy', 'ALL_PROXY', 'all_proxy'] as const;
+type ProxyEnvVar = (typeof PROXY_ENV_VARS)[number];
+type FetchInit = Parameters<typeof fetch>[1];
+
+function getHostnameFromUrl(value: string): string | null {
+  try {
+    return new URL(value).hostname;
+  } catch {
+    return null;
+  }
+}
+
+function isLoopbackHost(host?: string | null): boolean {
+  if (!host) {
+    return false;
+  }
+  return LOOPBACK_HOSTS.has(host) || host.endsWith('.localhost');
+}
+
+async function withProxyBypassIfNeeded<T>(targetUrl: string, fn: () => Promise<T>): Promise<T> {
+  if (!isLoopbackHost(getHostnameFromUrl(targetUrl))) {
+    return fn();
+  }
+
+  const previousValues = new Map<ProxyEnvVar, string | undefined>();
+  for (const key of PROXY_ENV_VARS) {
+    previousValues.set(key, process.env[key]);
+    if (process.env[key] !== undefined) {
+      delete process.env[key];
+    }
+  }
+
+  try {
+    return await fn();
+  } finally {
+    for (const [key, value] of previousValues) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  }
+}
+
+function proxyAwareFetch(url: string, init?: FetchInit) {
+  return withProxyBypassIfNeeded(url, () => fetch(url, init));
+}
 
 interface GitHubRelease {
   tag_name: string;
@@ -26,17 +75,17 @@ async function fetchLatestRelease(): Promise<GitHubRelease | null> {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-    
-    const response = await fetch(`${BASE_URL}/repos/${REPO}/releases/latest`, {
+
+    const response = await proxyAwareFetch(`${BASE_URL}/repos/${REPO}/releases/latest`, {
       signal: controller.signal,
       headers: {
         'User-Agent': `promptcode-cli/${BUILD_VERSION}`,
         'Accept': 'application/vnd.github.v3+json'
       }
     });
-    
+
     clearTimeout(timeout);
-    
+
     if (!response.ok) {
       return null;
     }
@@ -55,7 +104,7 @@ async function downloadFile(url: string, dest: string): Promise<void> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 120000); // 2 minute timeout
   
-  const response = await fetch(url, { 
+  const response = await proxyAwareFetch(url, { 
     signal: controller.signal,
     headers: { 'User-Agent': `promptcode-cli/${BUILD_VERSION}` }
   });
@@ -121,7 +170,7 @@ async function verifyChecksum(filePath: string, checksumUrl: string): Promise<bo
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000); // 10 second timeout
     
-    const response = await fetch(checksumUrl, { 
+    const response = await proxyAwareFetch(checksumUrl, { 
       signal: controller.signal,
       headers: { 'User-Agent': `promptcode-cli/${BUILD_VERSION}` }
     });
