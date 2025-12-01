@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.9.1] - 2025-12-01
 
 ### Fixed
 - **Apply & Review Workspace Resolution**: Generated prompts now include workspace info (name and root path) for each file, enabling LLMs to correctly output `<workspace_name>` and `<workspace_root>` tags. This fixes Apply & Review functionality in multi-root workspace scenarios. ([#58](https://github.com/cogflows/promptcode-vscode/issues/58))
