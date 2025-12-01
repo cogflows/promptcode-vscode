@@ -294,16 +294,23 @@ export async function generatePrompt(
         log(`Adding content for ${selectedFiles.length} selected files...`);
         finalPromptText += '<file_contents>\n';
         for (const file of selectedFiles) {
+            // Defensive fallback for missing workspace info
+            const workspaceName = file.workspaceFolderName || 'workspace';
+            const workspacePath = file.workspaceFolderRootPath || workspaceRoot;
+
             try {
                 const fileContent = file.content ?? await readFileContent(file.absolutePath);
-                const relativePath = path.relative(file.workspaceFolderRootPath, file.absolutePath);
-                finalPromptText += `File: ${relativePath} (${file.tokenCount} tokens)\n`; 
+                const relativePath = path.relative(workspacePath, file.absolutePath);
+                finalPromptText += `File: ${relativePath} (${file.tokenCount} tokens)\n`;
+                finalPromptText += `Workspace: ${workspaceName} (${workspacePath})\n`;
                 finalPromptText += '```\n';
                 finalPromptText += fileContent;
                 finalPromptText += '\n```\n\n';
             } catch (error) {
                 log(`Error adding file content for ${file.absolutePath}:`, error);
-                finalPromptText += `File: ${file.path}\n<!-- Error reading file content: ${(error as Error).message} -->\n\n`;
+                finalPromptText += `File: ${file.path}\n`;
+                finalPromptText += `Workspace: ${workspaceName} (${workspacePath})\n`;
+                finalPromptText += `<!-- Error reading file content: ${(error as Error).message} -->\n\n`;
             }
         }
         finalPromptText += '</file_contents>\n\n'; 
