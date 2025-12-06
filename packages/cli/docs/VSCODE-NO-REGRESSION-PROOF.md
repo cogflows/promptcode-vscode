@@ -7,7 +7,7 @@
 1. VS Code extension has NO preset creation functionality
 2. VS Code extension does NOT use the pattern optimization utilities we modified
 3. All changes are isolated to the CLI package
-4. Core utilities used by VS Code remain completely unchanged
+4. VS Code uses only token utilities from @promptcode/core and its own prompt generator
 
 ## Detailed Analysis
 
@@ -37,7 +37,7 @@ The VS Code extension's `package.json` shows NO preset-related commands:
 
 ### 3. Clean Import Separation
 
-**VS Code Extension imports from @promptcode/core:**
+**VS Code Extension imports token utilities from @promptcode/core and uses its own prompt generator:**
 ```typescript
 // src/extension.ts
 import { 
@@ -47,9 +47,9 @@ import {
   clearTokenCache,
   initializeTokenCounter,
   tokenCache,
-  countTokens,
-  buildPrompt 
+  countTokens
 } from '@promptcode/core';
+import { generatePrompt } from './promptGenerator';
 ```
 
 **VS Code Extension does NOT import:**
@@ -57,6 +57,7 @@ import {
 - ❌ `generatePatternsFromSelection`
 - ❌ `patternOptimizer`
 - ❌ Any pattern-related utilities
+- ❌ `buildPrompt` directly (prompt generation runs through `promptGenerator`)
 
 ### 4. CLI-Only Changes
 

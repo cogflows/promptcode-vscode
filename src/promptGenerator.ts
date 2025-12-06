@@ -217,12 +217,17 @@ export async function generatePrompt(
 ): Promise<string> {
     log('--- Starting generatePrompt ---');
     const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (!workspaceFolders || workspaceFolders.length === 0) {
-        log('No workspace folders found. Aborting prompt generation.');
+    const hasWorkspace = !!workspaceFolders && workspaceFolders.length > 0;
+
+    // If files are requested but no workspace is open, we cannot proceed safely.
+    if (!hasWorkspace && includeOptions.files) {
+        log('No workspace folders found. Aborting prompt generation that requires files.');
         return 'No workspace folders available.';
     }
-    const workspaceRoot = workspaceFolders[0].uri.fsPath;
-    log('Workspace root:', { workspaceRoot });
+
+    // Instructions-only scenarios can proceed without a workspace.
+    const workspaceRoot = hasWorkspace ? workspaceFolders[0].uri.fsPath : '';
+    log('Workspace root:', { workspaceRoot: workspaceRoot || 'N/A (instructions-only mode)' });
 
     let finalPromptText = '';
     let processedInstructions = '';

@@ -13,6 +13,7 @@ const testEntryPoints = [
   'src/test/smoke.test.ts',
   'src/test/migration.test.ts',
   'src/test/promptContract.test.ts',
+  'src/test/promptWorkspaceMetadata.test.ts',
   'src/test/ignorePatterns.test.ts',
   'src/test/extensionActivation.test.ts',
   'src/test/tokenCounter.test.ts',
@@ -24,6 +25,8 @@ const testEntryPoints = [
   // Also compile the utils that tests depend on
   'src/utils/filePattern.ts',
   'src/utils/generatePatternsFromSelection.ts',
+  'src/promptcodeDataFetcher.ts',
+  'src/promptGenerator.ts',
   // Compile modules that tests import directly
   'src/fileExplorer.ts',
   'src/ignoreHelper.ts',

@@ -33,7 +33,13 @@ describe('VS Code Extension Regression Verification', () => {
     // VS Code extension should import these utilities from @promptcode/core
     expect(extensionContent).toContain('countTokensInFile');
     expect(extensionContent).toContain('countTokensWithCache');
-    expect(extensionContent).toContain('buildPrompt');
+    expect(extensionContent).toContain('countTokensWithCacheDetailed');
+    expect(extensionContent).toContain('countTokens');
+    
+    // VS Code extension should not import prompt builder directly anymore
+    expect(extensionContent).not.toContain('buildPrompt');
+    // It should rely on promptGenerator for prompt construction
+    expect(extensionContent).toContain("from './promptGenerator'");
     
     // VS Code extension should NOT import pattern-related utilities
     expect(extensionContent).not.toContain('generatePatternsFromSelection');
