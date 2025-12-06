@@ -26,6 +26,7 @@ const testEntryPoints = [
   'src/utils/filePattern.ts',
   'src/utils/generatePatternsFromSelection.ts',
   'src/promptcodeDataFetcher.ts',
+  'src/promptGenerator.ts',
   // Compile modules that tests import directly
   'src/fileExplorer.ts',
   'src/ignoreHelper.ts',
