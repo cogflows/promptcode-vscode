@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.2] - 2025-12-09
+
+### Fixed
+- **Apply & Review Workspace Resolution (Complete)**: Removed local `generatePrompt` wrapper in extension.ts to use the shared prompt generator with workspace metadata. This completes the fix from v0.9.1 ensuring workspace info is included in all generated prompts. ([#58](https://github.com/cogflows/promptcode-vscode/issues/58))
+
 ## [0.9.1] - 2025-12-01
 
 ### Fixed
