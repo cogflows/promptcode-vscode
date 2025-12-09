@@ -4,9 +4,9 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import { FileExplorerProvider, checkedItems as checkedItemsMap, FileItem } from './fileExplorer';
-import { generatePrompt as generatePromptFromGenerator, copyToClipboard } from './promptGenerator';
+import { generatePrompt, copyToClipboard } from './promptGenerator';
 import { PromptCodeWebViewProvider } from './webviewProvider';
-import { countTokensInFile, countTokensWithCache, countTokensWithCacheDetailed, clearTokenCache, initializeTokenCounter, tokenCache, countTokens, buildPrompt } from '@promptcode/core';
+import { countTokensInFile, countTokensWithCache, countTokensWithCacheDetailed, clearTokenCache, initializeTokenCounter, tokenCache, countTokens } from '@promptcode/core';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -1675,59 +1675,6 @@ function isValidIncludeOptions(options: any): options is { files: boolean; instr
 	       'instructions' in options &&
 	       typeof options.files === 'boolean' &&
 	       typeof options.instructions === 'boolean';
-}
-
-// Helper function to generate prompt using core's buildPrompt
-async function generatePrompt(
-	selectedFiles: {
-		path: string;
-		tokenCount: number;
-		workspaceFolderRootPath?: string;
-		absolutePath?: string;
-		workspaceFolderName?: string;
-	}[],
-	instructions: string,
-	includeOptions: { files: boolean; instructions: boolean }
-): Promise<string> {
-	const startTime = performance.now();
-
-	// Early returns for edge cases (per O3-pro recommendation)
-	if (!includeOptions.files && (!instructions || !includeOptions.instructions)) {
-		const endTime = performance.now();
-		console.log(`Prompt generation took ${endTime - startTime}ms for ${selectedFiles.length} files`);
-		return '';
-	}
-	
-	// Early return if no files selected but files are required
-	if (selectedFiles.length === 0 && includeOptions.files) {
-		const endTime = performance.now();
-		console.log(`Prompt generation took ${endTime - startTime}ms - no files selected`);
-		return includeOptions.instructions ? instructions : '';
-	}
-
-	// Convert to SelectedFile format expected by core
-	const coreSelectedFiles: SelectedFile[] = selectedFiles.map(file => ({
-		path: file.path,
-		absolutePath: file.absolutePath || path.join(file.workspaceFolderRootPath || '', file.path),
-		tokenCount: file.tokenCount,
-		workspaceFolderRootPath: file.workspaceFolderRootPath || '',
-		workspaceFolderName: file.workspaceFolderName || ''
-	}));
-
-	// Use core's buildPrompt
-	const result = await buildPrompt(coreSelectedFiles, instructions, {
-		includeFiles: includeOptions.files,
-		includeInstructions: includeOptions.instructions,
-		includeFileContents: includeOptions.files
-	});
-
-	// No transformation needed - core now uses standard tags
-	const prompt = result.prompt;
-
-	const endTime = performance.now();
-	console.log(`Prompt generation took ${endTime - startTime}ms for ${selectedFiles.length} files`);
-
-	return prompt;
 }
 
 // Helper function to get selected files with content
