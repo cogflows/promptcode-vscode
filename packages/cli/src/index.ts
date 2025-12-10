@@ -64,6 +64,7 @@ Quick Start:
   $ promptcode expert "Why is this slow?" -f src/**/*.ts   # Ask AI about files
   $ promptcode generate -f src/**/*.ts                      # Generate prompt for AI
   $ promptcode preset create backend                        # Create reusable preset
+  $ promptcode expert "Describe this UI" --images "docs/*.png"  # Attach screenshots to vision models
   
 Available Commands:
   $ promptcode generate -f "src/**/*.ts" -o prompt.md   # Generate prompt
@@ -115,7 +116,7 @@ Examples:
   .option('--token-warning <n>', 'token threshold for warning (default: 50000)')
   .option('--estimate-cost', 'estimate cost without generating')
   .option('--cost-threshold <usd>', 'maximum allowed cost before approval', process.env.PROMPTCODE_COST_THRESHOLD || '0.50')
-  .option('--model <name>', 'model to use for cost estimation (default: gpt-5)')
+  .option('--model <name>', 'model to use for cost estimation (default: gpt-5.1)')
   .option('-y, --yes', 'skip confirmation prompts')
   .allowExcessArguments(false)
   .action(async (options) => {
@@ -234,6 +235,10 @@ Note: If both --preset and -f are specified, -f takes precedence (preset is igno
   .option('--prompt-file <file>', 'read prompt/question from a file')
   .option('--model <model>', 'AI model to use (use --models to see available options)')
   .option('--models', 'List available AI models')
+  .option('--images <patterns...>', 'image file patterns to attach (PNG/JPEG/WebP/BMP/TIFF/AVIF/SVG)')
+  .option('--allow-images', 'allow images from --files/--preset patterns to be attached')
+  .option('--image-max-mb <size>', 'max image size in MB (default: 10; capped by model limit)', parseFloat)
+  .option('--image-max-count <count>', 'max number of images to attach (default: 10)', parseInt)
   .option('-o, --output <file>', 'save response to file')
   .option('--save-preset <name>', 'save file patterns as a preset')
   .option('-y, --yes', 'automatically confirm prompts')

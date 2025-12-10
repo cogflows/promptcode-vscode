@@ -31,6 +31,12 @@ const ModelSchema = z.object({
     output: z.number().nonnegative(),
   }),
   supportsWebSearch: z.boolean().optional().default(false),
+  vision: z.boolean().optional().default(false),
+  visionLimits: z.object({
+    maxImages: z.number().int().positive().optional(),
+    maxImageBytes: z.number().int().positive().optional(),
+    backgroundSupported: z.boolean().optional()
+  }).optional(),
 });
 
 // Type derives from schema so TS & runtime always match
@@ -45,7 +51,9 @@ export const MODELS: Record<string, ModelConfig> = {
     description: 'State-of-the-art model with superior coding and reasoning',
     contextWindow: 400000,
     pricing: { input: 1.25, output: 10 },
-    supportsWebSearch: true
+    supportsWebSearch: true,
+    vision: true,
+    visionLimits: { maxImages: 10, maxImageBytes: 10 * 1024 * 1024, backgroundSupported: false }
   },
   'gpt-5-mini': {
     provider: 'openai',
@@ -54,7 +62,9 @@ export const MODELS: Record<string, ModelConfig> = {
     description: 'Balanced GPT-5 model for efficient performance',
     contextWindow: 400000,
     pricing: { input: 0.25, output: 2 },
-    supportsWebSearch: true
+    supportsWebSearch: true,
+    vision: true,
+    visionLimits: { maxImages: 10, maxImageBytes: 10 * 1024 * 1024, backgroundSupported: false }
   },
   'gpt-5-nano': {
     provider: 'openai',
@@ -63,7 +73,9 @@ export const MODELS: Record<string, ModelConfig> = {
     description: 'Ultra-fast GPT-5 model for quick tasks',
     contextWindow: 400000,
     pricing: { input: 0.05, output: 0.4 },
-    supportsWebSearch: true
+    supportsWebSearch: true,
+    vision: true,
+    visionLimits: { maxImages: 10, maxImageBytes: 10 * 1024 * 1024, backgroundSupported: false }
   },
   'gpt-5-pro': {
     provider: 'openai',
@@ -72,7 +84,9 @@ export const MODELS: Record<string, ModelConfig> = {
     description: 'Most advanced reasoning model with extended thinking time',
     contextWindow: 400000,
     pricing: { input: 5, output: 20 },
-    supportsWebSearch: true
+    supportsWebSearch: true,
+    vision: true,
+    visionLimits: { maxImages: 10, maxImageBytes: 10 * 1024 * 1024, backgroundSupported: false }
   },
 
   // OpenAI GPT-5.1 models (November 2025 release - improved GPT-5)
@@ -83,7 +97,9 @@ export const MODELS: Record<string, ModelConfig> = {
     description: 'Improved GPT-5 with adaptive reasoning and better performance',
     contextWindow: 400000,
     pricing: { input: 1.25, output: 10 },
-    supportsWebSearch: true
+    supportsWebSearch: true,
+    vision: true,
+    visionLimits: { maxImages: 10, maxImageBytes: 10 * 1024 * 1024, backgroundSupported: false }
   },
   'gpt-5.1-codex': {
     provider: 'openai',
@@ -92,7 +108,9 @@ export const MODELS: Record<string, ModelConfig> = {
     description: 'Optimized for long-running agentic coding tasks',
     contextWindow: 400000,
     pricing: { input: 1.25, output: 10 },
-    supportsWebSearch: true
+    supportsWebSearch: true,
+    vision: true,
+    visionLimits: { maxImages: 10, maxImageBytes: 10 * 1024 * 1024, backgroundSupported: false }
   },
   'gpt-5.1-codex-mini': {
     provider: 'openai',
@@ -101,7 +119,9 @@ export const MODELS: Record<string, ModelConfig> = {
     description: 'Efficient model for simpler coding tasks',
     contextWindow: 400000,
     pricing: { input: 0.25, output: 2 },
-    supportsWebSearch: true
+    supportsWebSearch: true,
+    vision: true,
+    visionLimits: { maxImages: 10, maxImageBytes: 10 * 1024 * 1024, backgroundSupported: false }
   },
 
   // OpenAI O3 models (reasoning specialists)
@@ -112,7 +132,8 @@ export const MODELS: Record<string, ModelConfig> = {
     description: 'Reasoning-focused model with deep thinking capabilities',
     contextWindow: 200000,
     pricing: { input: 2, output: 8 },
-    supportsWebSearch: true
+    supportsWebSearch: true,
+    vision: false
   },
   'o3-pro': {
     provider: 'openai',
@@ -121,7 +142,8 @@ export const MODELS: Record<string, ModelConfig> = {
     description: 'Premium reasoning model with extended thinking time',
     contextWindow: 200000,
     pricing: { input: 20, output: 80 },
-    supportsWebSearch: true
+    supportsWebSearch: true,
+    vision: false
   },
   'o3-mini': {
     provider: 'openai',
@@ -130,7 +152,8 @@ export const MODELS: Record<string, ModelConfig> = {
     description: 'Fast reasoning model for quick tasks',
     contextWindow: 200000,
     pricing: { input: 0.5, output: 2 },
-    supportsWebSearch: true
+    supportsWebSearch: true,
+    vision: false
   },
   
   // Anthropic models (2025 SOTA)
@@ -141,7 +164,9 @@ export const MODELS: Record<string, ModelConfig> = {
     description: 'Advanced Claude model with breakthrough capabilities',
     contextWindow: 500000,
     pricing: { input: 15, output: 75 },
-    supportsWebSearch: true
+    supportsWebSearch: true,
+    vision: true,
+    visionLimits: { maxImages: 20, maxImageBytes: 32 * 1024 * 1024, backgroundSupported: false }
   },
   'opus-4.1': {
     provider: 'anthropic',
@@ -150,7 +175,9 @@ export const MODELS: Record<string, ModelConfig> = {
     description: 'Enhanced Opus with improved agentic tasks and coding',
     contextWindow: 500000,
     pricing: { input: 15, output: 75 },
-    supportsWebSearch: true
+    supportsWebSearch: true,
+    vision: true,
+    visionLimits: { maxImages: 20, maxImageBytes: 32 * 1024 * 1024, backgroundSupported: false }
   },
   'sonnet-4': {
     provider: 'anthropic',
@@ -159,7 +186,9 @@ export const MODELS: Record<string, ModelConfig> = {
     description: 'Balanced power and efficiency for production use',
     contextWindow: 500000,
     pricing: { input: 3, output: 15 },
-    supportsWebSearch: true
+    supportsWebSearch: true,
+    vision: true,
+    visionLimits: { maxImages: 20, maxImageBytes: 32 * 1024 * 1024, backgroundSupported: false }
   },
   'sonnet-4.5': {
     provider: 'anthropic',
@@ -168,7 +197,9 @@ export const MODELS: Record<string, ModelConfig> = {
     description: 'Most intelligent model with leading coding capabilities',
     contextWindow: 200000,
     pricing: { input: 3, output: 15 },
-    supportsWebSearch: true
+    supportsWebSearch: true,
+    vision: true,
+    visionLimits: { maxImages: 20, maxImageBytes: 32 * 1024 * 1024, backgroundSupported: false }
   },
   'haiku-4.5': {
     provider: 'anthropic',
@@ -177,7 +208,9 @@ export const MODELS: Record<string, ModelConfig> = {
     description: 'Fast and efficient model for real-time applications',
     contextWindow: 200000,
     pricing: { input: 1, output: 5 },
-    supportsWebSearch: true
+    supportsWebSearch: true,
+    vision: true,
+    visionLimits: { maxImages: 20, maxImageBytes: 32 * 1024 * 1024, backgroundSupported: false }
   },
   
   // Google models (2025 SOTA)
@@ -188,7 +221,9 @@ export const MODELS: Record<string, ModelConfig> = {
     description: 'Latest flagship with 1501 Elo score, top of LMArena',
     contextWindow: 1000000,
     pricing: { input: 2, output: 12 },
-    supportsWebSearch: true
+    supportsWebSearch: true,
+    vision: true,
+    visionLimits: { maxImages: 15, maxImageBytes: 15 * 1024 * 1024, backgroundSupported: false }
   },
   'gemini-2.5-pro': {
     provider: 'google',
@@ -197,7 +232,9 @@ export const MODELS: Record<string, ModelConfig> = {
     description: 'Powerful Gemini with enhanced multimodal understanding',
     contextWindow: 3000000,
     pricing: { input: 1.25, output: 10 },
-    supportsWebSearch: true
+    supportsWebSearch: true,
+    vision: true,
+    visionLimits: { maxImages: 15, maxImageBytes: 15 * 1024 * 1024, backgroundSupported: false }
   },
   'gemini-2.5-flash': {
     provider: 'google',
@@ -206,7 +243,9 @@ export const MODELS: Record<string, ModelConfig> = {
     description: 'Ultra-fast model for real-time applications',
     contextWindow: 1000000,
     pricing: { input: 0.15, output: 0.6 },
-    supportsWebSearch: true
+    supportsWebSearch: true,
+    vision: true,
+    visionLimits: { maxImages: 15, maxImageBytes: 15 * 1024 * 1024, backgroundSupported: false }
   },
   
   // xAI models (2025 SOTA)
@@ -218,7 +257,9 @@ export const MODELS: Record<string, ModelConfig> = {
     description: 'xAI\'s powerful model with real-time web access',
     contextWindow: 200000,
     pricing: { input: 3, output: 15 },
-    supportsWebSearch: true
+    supportsWebSearch: true,
+    vision: true,
+    visionLimits: { maxImages: 10, maxImageBytes: 20 * 1024 * 1024, backgroundSupported: false }
   }
 };
 

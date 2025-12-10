@@ -16,6 +16,13 @@ import { Agent } from 'undici';
 import { BackgroundTaskHandler } from './background-task-handler.js';
 import type { BackgroundTaskOptions } from '../types/background-task.js';
 
+export interface ImageAttachment {
+  path: string;
+  data: Buffer;
+  mimeType: string;
+  bytes: number;
+}
+
 export interface AIResponse {
   text: string;
   usage?: {
@@ -40,9 +47,13 @@ const TOKEN_FIELD_MAP = {
   total: ['totalTokens']
 } as const;
 
+type ChatMessageContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image'; image: Buffer | Uint8Array | ArrayBuffer; mimeType?: string };
+
 type ChatMessage = {
   role: 'system' | 'user' | 'assistant' | 'developer';
-  content: string;
+  content: string | ChatMessageContentPart[];
 };
 
 // Export for testing
@@ -510,6 +521,7 @@ export class AIProvider {
       disableProgress?: boolean;
       autoBackgroundFallback?: boolean;
       fallbackAttempted?: boolean;
+      images?: ImageAttachment[];
     } = {}
   ): Promise<AIResponse> {
     // Mock mode for testing
@@ -523,6 +535,12 @@ export class AIProvider {
           totalTokens: 150
         }
       };
+    }
+
+    const hasImages = Array.isArray(options.images) && options.images.length > 0;
+    if (hasImages) {
+      // Ensure background mode is fully disabled when images are present
+      options.disableBackgroundMode = true;
     }
 
     // Check if we should use background mode for this request
@@ -540,7 +558,19 @@ export class AIProvider {
       messages.push({ role: 'system', content: options.systemPrompt });
     }
 
-    messages.push({ role: 'user', content: prompt });
+    if (hasImages) {
+      const userContent: ChatMessageContentPart[] = [{ type: 'text', text: prompt }];
+      for (const img of options.images!) {
+        userContent.push({
+          type: 'image',
+          image: img.data,
+          mimeType: img.mimeType,
+        });
+      }
+      messages.push({ role: 'user', content: userContent });
+    } else {
+      messages.push({ role: 'user', content: prompt });
+    }
 
     // Prepare the request configuration with dynamic timeout based on reasoning effort
     const reasoningEffort = options.reasoningEffort || 'high';
@@ -668,6 +698,7 @@ export class AIProvider {
           supportsBackground &&
           !options.forceBackgroundMode &&
           !backgroundDisabledExplicitly &&
+          !hasImages &&
           autoFallbackRequested &&
           !options.fallbackAttempted
         ) {

@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import fg from 'fast-glob';
 import ignore from 'ignore';
 import { SelectedFile } from './types/index.js';
+import { IMAGE_EXTENSIONS, IMAGE_GLOB_PATTERNS, isImageFile, mimeFromExt } from './utils/images.js';
 import { countTokensWithCacheDetailed } from './tokenCounter.js';
 
 export interface ScanOptions {
@@ -12,6 +13,7 @@ export interface ScanOptions {
   customIgnoreFile?: string;      // .promptcode_ignore
   workspaceName?: string;         // Name of the workspace
   followSymlinks?: boolean;       // Whether to follow symbolic links (default: false)
+  allowImages?: boolean;          // Allow image files (opt-in for multimodal)
 }
 
 /**
@@ -36,7 +38,15 @@ async function loadIgnoreFile(filePath: string): Promise<string[]> {
  * @returns Array of selected files with metadata
  */
 export async function scanFiles(options: ScanOptions): Promise<SelectedFile[]> {
-  const { cwd, patterns, respectGitignore, customIgnoreFile, workspaceName = 'workspace', followSymlinks = false } = options;
+  const {
+    cwd,
+    patterns,
+    respectGitignore,
+    customIgnoreFile,
+    workspaceName = 'workspace',
+    followSymlinks = false,
+    allowImages = false
+  } = options;
   
   // Initialize ignore instance
   const ig = ignore();
@@ -55,6 +65,8 @@ export async function scanFiles(options: ScanOptions): Promise<SelectedFile[]> {
   }
   
   // Always ignore these patterns (comprehensive security-focused excludes)
+  const imageIgnores = IMAGE_GLOB_PATTERNS;
+
   const defaultIgnores = [
     // Dependencies and version control
     'node_modules/**',
@@ -100,13 +112,11 @@ export async function scanFiles(options: ScanOptions): Promise<SelectedFile[]> {
     '**/*.tar',
     '**/*.tar.gz',
     '**/*.7z',
-    '**/*.jpg',
-    '**/*.jpeg',
-    '**/*.png',
-    '**/*.gif',
     '**/*.mp4',
     '**/*.avi',
     '**/*.mov',
+    // Images (conditionally excluded)
+    ...(allowImages ? [] : imageIgnores),
     
     // Logs
     '**/*.log'
@@ -133,14 +143,21 @@ export async function scanFiles(options: ScanOptions): Promise<SelectedFile[]> {
   const selectedFiles: SelectedFile[] = await Promise.all(
     filteredFiles.map(async (absolutePath) => {
       const relativePath = path.relative(cwd, absolutePath);
-      const { count: tokenCount } = await countTokensWithCacheDetailed(absolutePath);
+      const ext = path.extname(absolutePath).toLowerCase();
+      const isImage = isImageFile({ path: relativePath, absolutePath });
+      const stat = await fs.promises.stat(absolutePath);
+      const tokenCount = isImage ? 0 : (await countTokensWithCacheDetailed(absolutePath)).count;
+      const mimeType = mimeFromExt(ext);
       
       return {
         path: relativePath,
         absolutePath,
         tokenCount,
         workspaceFolderRootPath: cwd,
-        workspaceFolderName: workspaceName
+        workspaceFolderName: workspaceName,
+        isImage,
+        mimeType,
+        sizeBytes: stat.size
       };
     })
   );

@@ -1,8 +1,8 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import chalk from 'chalk';
-import { scanFiles, buildPrompt, initializeTokenCounter } from '@promptcode/core';
-import { AIProvider } from '../providers/ai-provider';
+import { scanFiles, buildPrompt, initializeTokenCounter, IMAGE_EXTENSIONS, isImageFile, mimeFromExt, SelectedFile, PromptResult } from '@promptcode/core';
+import { AIProvider, ImageAttachment } from '../providers/ai-provider';
 import { MODELS, DEFAULT_MODEL, getAvailableModels, ModelConfig } from '../providers/models';
 import { logRun } from '../services/history';
 import { spinner } from '../utils/spinner';
@@ -37,6 +37,10 @@ interface ExpertOptions {
   estimateCost?: boolean;
   costThreshold?: number;
   background?: boolean;
+  images?: string[];
+  allowImages?: boolean;
+  imageMaxMb?: number;
+  imageMaxCount?: number;
 }
 
 const SYSTEM_PROMPT = `You are an expert software engineer helping analyze and improve code. Provide constructive, actionable feedback.
@@ -47,6 +51,11 @@ Focus on:
 3. Potential issues or edge cases
 4. Performance and security considerations
 5. Clear, concise explanations`;
+
+// Defaults mirror conservative provider limits (Gemini/GPT-5) to keep UX predictable.
+const DEFAULT_IMAGE_MAX_MB = 10;
+const DEFAULT_IMAGE_MAX_COUNT = 10;
+const MB = 1024 * 1024;
 
 /* ──────────────────────────────────────────────────────────
  *  Helpers (refactor for readability + safety)
@@ -143,7 +152,15 @@ async function savePresetSafely(
   console.log(chalk.green(`✓ Saved file patterns to preset: ${presetName}`));
 }
 
-async function scanProject(projectPath: string, patterns: string[]) {
+type ImageFileCandidate = {
+  path?: string;
+  absolutePath?: string;
+  mimeType?: string;
+  isImage?: boolean;
+  sizeBytes?: number;
+};
+
+async function scanProject(projectPath: string, patterns: string[], allowImages = false): Promise<SelectedFile[]> {
   // projectPath is already the project root thanks to resolveProjectPath
   const projectRoot = projectPath;
   
@@ -158,6 +175,7 @@ async function scanProject(projectPath: string, patterns: string[]) {
     respectGitignore: true,
     workspaceName: path.basename(projectRoot),
     followSymlinks: true,  // Match VS Code extension behavior
+    allowImages,
   }) : [];
   
   // Handle absolute paths directly
@@ -165,19 +183,29 @@ async function scanProject(projectPath: string, patterns: string[]) {
     const { countTokensWithCacheDetailed } = await import('@promptcode/core');
     for (const absPath of absolutePaths) {
       try {
-        // Check if file exists
-        if (fs.existsSync(absPath) && fs.statSync(absPath).isFile()) {
-          const { count: tokenCount } = await countTokensWithCacheDetailed(absPath);
-          // For absolute paths, use just the filename as the "relative" path
-          // This prevents buildPrompt from skipping them
-          files.push({
-            path: path.basename(absPath),
-            absolutePath: absPath,
-            tokenCount,
-            workspaceFolderRootPath: path.dirname(absPath),
-            workspaceFolderName: 'external'
-          });
+        const stat = fs.statSync(absPath);
+        if (!stat.isFile()) {continue;}
+
+        const ext = path.extname(absPath).toLowerCase();
+        const isImageExt = IMAGE_EXTENSIONS.includes(ext);
+        if (!allowImages && isImageExt) {
+          // Skip image files when allowImages is false
+          continue;
         }
+        const isImage = allowImages && isImageExt;
+        const { count: tokenCount } = isImage ? { count: 0 } : await countTokensWithCacheDetailed(absPath);
+        // For absolute paths, use just the filename as the "relative" path
+        // This prevents buildPrompt from skipping them
+        files.push({
+          path: path.basename(absPath),
+          absolutePath: absPath,
+          tokenCount,
+          workspaceFolderRootPath: path.dirname(absPath),
+          workspaceFolderName: 'external',
+          isImage,
+          sizeBytes: stat.size,
+          mimeType: mimeFromExt(ext)
+        });
       } catch (err) {
         // Skip files that can't be read
         console.warn(chalk.gray(`Skipping unreadable file: ${absPath}`));
@@ -188,7 +216,7 @@ async function scanProject(projectPath: string, patterns: string[]) {
   return files;
 }
 
-function warnIfFilesOutsideProject(projectPath: string, files: any[]): number {
+function warnIfFilesOutsideProject(projectPath: string, files: SelectedFile[]): number {
   const projectRoot = fs.realpathSync(projectPath) + path.sep;
   const externalFiles = files.filter((f) => {
     try {
@@ -218,6 +246,66 @@ function warnIfFilesOutsideProject(projectPath: string, files: any[]): number {
   }
   
   return externalFiles.length;
+}
+
+async function toImageAttachments(
+  files: ImageFileCandidate[],
+  maxCount: number,
+  maxBytes: number
+): Promise<ImageAttachment[]> {
+  const uniqueByPath = new Map<string, ImageFileCandidate>();
+  for (const file of files) {
+    const absKey = file.absolutePath || file.path;
+    if (!absKey) {continue;}
+    if (!uniqueByPath.has(absKey)) {
+      uniqueByPath.set(absKey, file);
+    }
+  }
+  const selected = Array.from(uniqueByPath.values()).slice(0, maxCount);
+  if (selected.length < uniqueByPath.size && process.env.DEBUG) {
+    console.warn(chalk.gray(`Truncated images to ${selected.length}/${uniqueByPath.size} due to max-image-count.`));
+  }
+
+  const attachments: ImageAttachment[] = [];
+  const errors: string[] = [];
+  for (const file of selected) {
+    const basePath = file.absolutePath ?? file.path;
+    if (!basePath) {
+      errors.push('Image missing path; skipping unknown file');
+      continue;
+    }
+    const absolutePath = path.isAbsolute(basePath) ? basePath : path.resolve(basePath);
+    try {
+      const stat = await fs.promises.stat(absolutePath);
+      if (stat.size > maxBytes) {
+        const sizeMB = (stat.size / MB).toFixed(1);
+        const limitMB = (maxBytes / MB).toFixed(1);
+        errors.push(`Image too large: ${file.path || absolutePath} (${sizeMB}MB exceeds ${limitMB}MB limit)`);
+        continue;
+      }
+      const ext = path.extname(absolutePath);
+      const mimeType = file.mimeType || mimeFromExt(ext);
+      if (!mimeType) {
+        errors.push(`Unsupported image format: ${file.path || absolutePath}`);
+        continue;
+      }
+      const buffer = await fs.promises.readFile(absolutePath);
+      attachments.push({
+        path: file.path || path.basename(absolutePath),
+        data: buffer,
+        mimeType,
+        bytes: stat.size
+      });
+    } catch (err) {
+      errors.push(`Failed to read image: ${file.path || absolutePath} (${(err as Error).message})`);
+    }
+  }
+
+  if (errors.length > 0) {
+    throw new Error(`Image validation failed:\n - ${errors.join('\n - ')}`);
+  }
+
+  return attachments;
 }
 
 function listAvailableModels(jsonOutput: boolean = false) {
@@ -411,6 +499,11 @@ export async function expertCommand(question: string | undefined, options: Exper
     
     // Determine patterns - handle files, preset, or both
     let patterns: string[] = [];
+    const allowImages = Boolean(options.allowImages || (options.images && options.images.length > 0));
+    const imagePatterns = (options.images || []).map((p) => (p.startsWith('@') ? p.slice(1) : p));
+    if (imagePatterns.length) {
+      validatePatternsWithinProject(imagePatterns);
+    }
     
     // Check if both preset and files are specified
     if (options.files && options.files.length > 0 && options.preset) {
@@ -443,11 +536,13 @@ export async function expertCommand(question: string | undefined, options: Exper
     }
     
     // Scan files only if patterns exist
-    let files: any[] = [];
-    let result: any;
+    let files: SelectedFile[] = [];
+    let textFiles: SelectedFile[] = [];
+    let imageFiles: SelectedFile[] = [];
+    let result: PromptResult | undefined;
     
     if (patterns.length > 0) {
-      files = await scanProject(projectPath, patterns);
+      files = await scanProject(projectPath, patterns, allowImages);
       // Warn if files are outside project (informational, not blocking)
       const externalCount = warnIfFilesOutsideProject(projectPath, files);
       
@@ -467,9 +562,71 @@ export async function expertCommand(question: string | undefined, options: Exper
         console.error(chalk.gray('  - Make sure .gitignore is not excluding your files'));
         exitWithCode(EXIT_CODES.FILE_NOT_FOUND);
       }
-      
-      // Build context with files
-      result = await buildPrompt(files, '', {
+      // Separate images and text files
+      if (allowImages) {
+        imageFiles = files.filter(isImageFile);
+        textFiles = files.filter((f) => !isImageFile(f));
+      } else {
+        textFiles = files;
+      }
+    }
+    
+    // Add explicit image patterns (optional)
+    if (imagePatterns.length > 0) {
+      const explicitImages = await scanProject(projectPath, imagePatterns, true);
+      const matchedImages = explicitImages.filter(isImageFile);
+      const nonImageMatches = explicitImages.length - matchedImages.length;
+
+      if (!options.json) {
+        if (explicitImages.length === 0) {
+          console.log(chalk.yellow('⚠️  --images patterns did not match any files.'));
+        } else if (matchedImages.length === 0 && nonImageMatches > 0) {
+          console.log(chalk.yellow('⚠️  --images patterns matched files, but none were valid images.'));
+        } else if (nonImageMatches > 0) {
+          console.log(chalk.yellow(`⚠️  Ignoring ${nonImageMatches} non-image file(s) matched by --images.`));
+        }
+      }
+
+      imageFiles = imageFiles.concat(matchedImages);
+    }
+
+    // Deduplicate image files
+    if (imageFiles.length > 1) {
+      const seen = new Set<string>();
+      imageFiles = imageFiles.filter((f) => {
+        const abs = f.absolutePath || f.path;
+        if (seen.has(abs)) {return false;}
+        seen.add(abs);
+        return true;
+      });
+    }
+
+    // Vision capability checks & limits
+    if (imageFiles.length > 0 && modelConfig.vision !== true) {
+      console.error(chalk.red(`Model ${modelConfig.name} does not support image inputs. Choose a vision-capable model (e.g., gpt-5.1, sonnet-4.5, gemini-3-pro).`));
+      exitWithCode(EXIT_CODES.INVALID_INPUT);
+    }
+
+    const modelImageCountLimit = modelConfig.visionLimits?.maxImages ?? DEFAULT_IMAGE_MAX_COUNT;
+    const modelImageByteLimit = modelConfig.visionLimits?.maxImageBytes ?? DEFAULT_IMAGE_MAX_MB * MB;
+    const resolvedImageMaxCount = Math.min(options.imageMaxCount ?? modelImageCountLimit, modelImageCountLimit);
+
+    const userImageMaxBytes = options.imageMaxMb ? options.imageMaxMb * MB : undefined;
+    const resolvedImageMaxBytes = Math.min(modelImageByteLimit, userImageMaxBytes ?? modelImageByteLimit);
+    if (userImageMaxBytes !== undefined && userImageMaxBytes > modelImageByteLimit && !options.json) {
+      console.log(chalk.yellow(`⚠️  Capping --image-max-mb to ${(modelImageByteLimit / MB).toFixed(1)}MB for ${modelConfig.name}.`));
+    }
+
+    if (imageFiles.length > resolvedImageMaxCount) {
+      if (!options.json) {
+        console.log(chalk.yellow(`⚠️  Limiting images to ${resolvedImageMaxCount}/${imageFiles.length} to satisfy model limits.`));
+      }
+      imageFiles = imageFiles.slice(0, resolvedImageMaxCount);
+    }
+
+    if (textFiles.length > 0) {
+      // Build context with text files only
+      result = await buildPrompt(textFiles, '', {
         includeFiles: true,
         includeInstructions: false,
         includeFileContents: true
@@ -479,23 +636,37 @@ export async function expertCommand(question: string | undefined, options: Exper
       result = {
         prompt: '',
         tokenCount: 0,  // File context tokens only
-        fileCount: 0
+        sections: { instructions: 0, fileMap: 0, fileContents: 0, resources: 0 }
       };
     }
     
     // Model already validated earlier, just use it
+    const contextFileCount = textFiles.length;
+    const imageFileCount = imageFiles.length;
+    const totalFileCount = contextFileCount + imageFileCount;
     
     /* ──────────────────────────────────────────────────────────
      *  Token-limit enforcement
      * ────────────────────────────────────────────────────────── */
-    // Import token counting utility
     const { countTokens } = await import('@promptcode/core');
-    
-    // Calculate all token components
+
+    // Build the user prompt (text portion only)
+    let fullPrompt = result.prompt 
+      ? `Here is the codebase context:\n\n${result.prompt}\n\n${question || ''}`
+      : (question || '');
+
+    if (imageFileCount > 0) {
+      const attachmentLines = imageFiles.map((f) => {
+        const kb = f.sizeBytes ? Math.round(f.sizeBytes / 1024) : null;
+        const sizeText = kb ? ` (~${kb}KB)` : '';
+        return `- ${f.path}${sizeText}`;
+      }).join('\n');
+      fullPrompt += `\n\nAttached images:\n${attachmentLines}`;
+    }
+
     const systemPromptTokens = SYSTEM_PROMPT ? countTokens(SYSTEM_PROMPT) : 0;
-    const questionTokens = question ? countTokens(question) : 0;
-    const fileContextTokens = result.tokenCount || 0;
-    const totalInputTokens = systemPromptTokens + questionTokens + fileContextTokens;
+    const userPromptTokens = fullPrompt ? countTokens(fullPrompt) : 0;
+    const totalInputTokens = systemPromptTokens + userPromptTokens;
     
     const availableTokens =
       modelConfig.contextWindow - totalInputTokens - DEFAULT_SAFETY_MARGIN;
@@ -557,6 +728,13 @@ export async function expertCommand(question: string | undefined, options: Exper
       webSearchEnabled = false;
     }
 
+    if (imageFileCount > 0 && willUseBackground && modelConfig.visionLimits?.backgroundSupported === false) {
+      willUseBackground = false;
+      if (!options.json) {
+        console.log(chalk.yellow('⚠️  Background mode is disabled because image attachments are present.'));
+      }
+    }
+
     if (forceBackgroundMode && !willUseBackground && !options.json) {
       console.log(chalk.yellow('⚠️  Background mode is only available for OpenAI models. Ignoring --background for this run.'));
     }
@@ -610,7 +788,9 @@ export async function expertCommand(question: string | undefined, options: Exper
             output: estimatedOutputCost,
             total: estimatedTotalCost
           },
-          fileCount: files.length,
+          imageCostEstimated: false,
+          fileCount: contextFileCount,
+          imageCount: imageFileCount || undefined,
           patterns: patterns.length > 0 ? patterns : undefined,
           preset: options.preset || undefined,
           webSearchEnabled: webSearchEnabled && modelConfig.supportsWebSearch,
@@ -624,10 +804,13 @@ export async function expertCommand(question: string | undefined, options: Exper
         console.log(chalk.gray(`  Input:  ${totalInputTokens.toLocaleString()} tokens × $${modelConfig.pricing.input}/M = $${estimatedInputCost.toFixed(4)}`));
         console.log(chalk.gray(`  Output: ~${expectedOutput.toLocaleString()} tokens × $${modelConfig.pricing.output}/M = $${estimatedOutputCost.toFixed(4)}`));
         console.log(chalk.bold(`  Total:  ~$${estimatedTotalCost.toFixed(4)}`));
-        console.log(chalk.gray(`\n  Files:  ${files.length} files included`));
+        console.log(chalk.gray(`\n  Files:  ${contextFileCount} text file(s), ${imageFileCount} image(s)`));
         console.log(chalk.gray(`  Context: ${totalInputTokens.toLocaleString()}/${modelConfig.contextWindow.toLocaleString()} tokens used`));
         if (modelConfig.supportsWebSearch && options.webSearch !== false) {
           console.log(chalk.cyan('  Web:    Search enabled'));
+        }
+        if (imageFileCount > 0) {
+          console.log(chalk.yellow('  Note:   Image token costs are not included in this estimate.'));
         }
         console.log(chalk.yellow('\n💡 This is a cost estimate only. No API call was made.'));
         console.log(chalk.gray('Remove --estimate-cost to run the actual query.'));
@@ -643,6 +826,10 @@ export async function expertCommand(question: string | undefined, options: Exper
       console.error(chalk.gray(`  Input:  ${totalInputTokens.toLocaleString()} tokens × $${modelConfig.pricing.input}/M = $${estimatedInputCost.toFixed(4)}`));
       console.error(chalk.gray(`  Output: ~${expectedOutput.toLocaleString()} tokens × $${modelConfig.pricing.output}/M = $${estimatedOutputCost.toFixed(4)}`));
       console.error(chalk.bold(`  Total:  ~$${estimatedTotalCost.toFixed(4)}`));
+      console.error(chalk.gray(`  Files:  ${contextFileCount} text file(s), ${imageFileCount} image(s)`));
+      if (imageFileCount > 0) {
+        console.error(chalk.yellow('  Note:  Image token costs are not included in this estimate (imageCostEstimated=false).'));
+      }
     }
 
     // Check if approval is needed
@@ -692,11 +879,12 @@ export async function expertCommand(question: string | undefined, options: Exper
       }
     }
 
-    // Prepare the prompt
-    const fullPrompt = result.prompt 
-      ? `Here is the codebase context:\n\n${result.prompt}\n\n${question}`
-      : question || '';
-    
+    // Prepare image attachments (after approval to avoid unnecessary I/O)
+    let imageAttachments: ImageAttachment[] = [];
+    if (imageFileCount > 0) {
+      imageAttachments = await toImageAttachments(imageFiles, resolvedImageMaxCount, resolvedImageMaxBytes);
+    }
+
     if (spin) {
       spin.text = consultationLabel;
     } else if (!options.json) {
@@ -714,8 +902,8 @@ export async function expertCommand(question: string | undefined, options: Exper
         console.log(chalk.yellow(`⚠️  ${modelConfig.name} does not support web search. Proceeding without web search.\n`));
       }
       // Warn if we auto-included a very large set
-      if (!options.files?.length && !options.preset && files.length > 200) {
-        console.log(chalk.yellow(`⚠️  Including ${files.length} files by default. Consider --preset or -f to narrow scope.`));
+      if (!options.files?.length && !options.preset && totalFileCount > 200) {
+        console.log(chalk.yellow(`⚠️  Including ${totalFileCount} files by default. Consider --preset or -f to narrow scope.`));
       }
     }
     
@@ -731,6 +919,7 @@ export async function expertCommand(question: string | undefined, options: Exper
       autoBackgroundFallback: process.env.PROMPTCODE_FALLBACK_BACKGROUND === '1',
       ...(forceBackgroundMode ? { forceBackgroundMode: true } : {}),
       ...(disableBackgroundMode ? { disableBackgroundMode: true } : {}),
+      images: imageAttachments,
     });
 
     const responseTime = (Date.now() - startTime) / 1000;
@@ -770,8 +959,10 @@ export async function expertCommand(question: string | undefined, options: Exper
           estimatedTotal: estimatedTotalCost,
           actualTotal: cost
         },
+        imageCostEstimated: false,
         responseTime: responseTime,
-        fileCount: files.length,
+        fileCount: contextFileCount,
+        imageCount: imageFileCount || undefined,
         contextTokens: totalInputTokens,
         webSearchEnabled: resolvedWebSearchEnabled
       };
@@ -813,7 +1004,7 @@ export async function expertCommand(question: string | undefined, options: Exper
     // Log to history
     await logRun('expert', patterns, projectPath, {
       question,
-      fileCount: files.length,
+      fileCount: totalFileCount,
       tokenCount: totalInputTokens,
       model: modelKey
     });
@@ -891,3 +1082,8 @@ export async function expertCommand(question: string | undefined, options: Exper
     exitWithCode(EXIT_CODES.GENERAL_ERROR);
   }
 }
+
+// Test-only surface for internal helpers
+export const __expertTestHooks = {
+  toImageAttachments,
+};

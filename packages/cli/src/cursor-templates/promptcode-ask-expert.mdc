@@ -16,13 +16,14 @@ promptcode expert "<question>" -f "src/**/*.ts"
 ```
 
 Options:
-- `--model <name>`: Choose AI model (default: gpt-5, others: opus-4, sonnet-4, gemini-2.5-pro, grok-4, o3, o3-pro, gpt-5-pro)
+- `--model <name>`: Choose AI model (default: gpt-5.1; others: gpt-5, opus-4, sonnet-4.5, gemini-3-pro/2.5, grok-4, o3, o3-pro, gpt-5-pro)
 - `--web-search`: Enable web search for current information
+- `--images <globs>` / `--allow-images`: Attach images (vision models only: gpt-5/5.1, sonnet-4.5, opus-4.x, gemini-3-pro/2.5, grok-4)
 - `--yes`: Skip cost confirmation prompts
 - `--output <file>`: Save response to file (required for background execution)
 - `--json`: Return structured JSON output (recommended for parsing)
 
-Note: The default model is **gpt-5** unless explicitly specified otherwise.
+Note: The default model is **gpt-5.1** unless explicitly specified otherwise.
 
 ## Long-Running Models (gpt-5-pro only)
 
