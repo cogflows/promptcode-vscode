@@ -83,9 +83,9 @@ export async function buildPrompt(
     
     for (const file of selectedFiles) {
       // Skip binary image bodies; they are attached separately by the caller
-      const isImage = (file as any).isImage === true;
+      const isImage = file.isImage === true;
       if (isImage) {
-        const sizeBytes = (file as any).sizeBytes;
+        const sizeBytes = file.sizeBytes;
         const sizeKb = sizeBytes ? ` ~${Math.round(sizeBytes / 1024)}KB` : '';
         fileContentsSection += `File: ${file.path} (image${sizeKb})\n`;
         fileContentsSection += '<!-- Image content omitted; sent as binary attachment -->\n\n';

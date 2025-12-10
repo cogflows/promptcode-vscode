@@ -64,6 +64,7 @@ Quick Start:
   $ promptcode expert "Why is this slow?" -f src/**/*.ts   # Ask AI about files
   $ promptcode generate -f src/**/*.ts                      # Generate prompt for AI
   $ promptcode preset create backend                        # Create reusable preset
+  $ promptcode expert "Describe this UI" --images "docs/*.png"  # Attach screenshots to vision models
   
 Available Commands:
   $ promptcode generate -f "src/**/*.ts" -o prompt.md   # Generate prompt

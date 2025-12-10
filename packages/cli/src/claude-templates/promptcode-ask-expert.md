@@ -14,7 +14,7 @@ Consult an expert about: $ARGUMENTS
    - Check for multiple model requests (e.g., "compare using gpt-5 and opus-4", "ask gpt-5, sonnet-4, and gemini")
    - Get available models dynamically: `promptcode expert --models --json` (parse the JSON for model list)
    - If 2+ models detected → use ensemble mode
-   - For single model: Use gpt-5.1 (the default) unless user explicitly specifies another model
+   - For single model: Use gpt-5.1 (default, updated from gpt-5) unless user explicitly specifies another model
    - Vision-capable models: gpt-5/5.1 (+ mini/nano), sonnet/opus 4.x, gemini-3-pro/2.5, grok-4. Background mode is disabled when images are attached.
 
 2. Determine code context needs:

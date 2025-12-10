@@ -545,13 +545,7 @@ export class AIProvider {
 
     // Check if we should use background mode for this request
     if (this.shouldUseBackgroundMode(modelKey, options)) {
-      if (hasImages) {
-        if (!options.disableProgress && process.env.PROMPTCODE_TEST !== '1') {
-          console.error('⚠️  Background mode is not supported with image attachments. Running in foreground instead.');
-        }
-      } else {
-        return this.generateTextBackground(modelKey, prompt, options);
-      }
+      return this.generateTextBackground(modelKey, prompt, options);
     }
 
     const modelConfig = MODELS[modelKey];

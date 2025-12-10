@@ -1,7 +1,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import chalk from 'chalk';
-import { scanFiles, buildPrompt, initializeTokenCounter } from '@promptcode/core';
+import { scanFiles, buildPrompt, initializeTokenCounter, IMAGE_EXTENSIONS, isImageFile, mimeFromExt, SelectedFile, PromptResult } from '@promptcode/core';
 import { AIProvider, ImageAttachment } from '../providers/ai-provider';
 import { MODELS, DEFAULT_MODEL, getAvailableModels, ModelConfig } from '../providers/models';
 import { logRun } from '../services/history';
@@ -52,6 +52,7 @@ Focus on:
 4. Performance and security considerations
 5. Clear, concise explanations`;
 
+// Defaults mirror conservative provider limits (Gemini/GPT-5) to keep UX predictable.
 const DEFAULT_IMAGE_MAX_MB = 10;
 const DEFAULT_IMAGE_MAX_COUNT = 10;
 const MB = 1024 * 1024;
@@ -151,7 +152,15 @@ async function savePresetSafely(
   console.log(chalk.green(`✓ Saved file patterns to preset: ${presetName}`));
 }
 
-async function scanProject(projectPath: string, patterns: string[], allowImages = false) {
+type ImageFileCandidate = {
+  path?: string;
+  absolutePath?: string;
+  mimeType?: string;
+  isImage?: boolean;
+  sizeBytes?: number;
+};
+
+async function scanProject(projectPath: string, patterns: string[], allowImages = false): Promise<SelectedFile[]> {
   // projectPath is already the project root thanks to resolveProjectPath
   const projectRoot = projectPath;
   
@@ -174,29 +183,29 @@ async function scanProject(projectPath: string, patterns: string[], allowImages 
     const { countTokensWithCacheDetailed } = await import('@promptcode/core');
     for (const absPath of absolutePaths) {
       try {
-        // Check if file exists
-        if (fs.existsSync(absPath) && fs.statSync(absPath).isFile()) {
-          const ext = path.extname(absPath).toLowerCase();
-          const isImage = allowImages && IMAGE_EXTENSIONS.includes(ext);
-          if (isImage === false && IMAGE_EXTENSIONS.includes(ext)) {
-            // Skip image files when allowImages is false
-            continue;
-          }
-          const { count: tokenCount } = isImage ? { count: 0 } : await countTokensWithCacheDetailed(absPath);
-          const stat = fs.statSync(absPath);
-          // For absolute paths, use just the filename as the "relative" path
-          // This prevents buildPrompt from skipping them
-          files.push({
-            path: path.basename(absPath),
-            absolutePath: absPath,
-            tokenCount,
-            workspaceFolderRootPath: path.dirname(absPath),
-            workspaceFolderName: 'external',
-            isImage,
-            sizeBytes: stat.size,
-            mimeType: mimeFromExt(ext)
-          });
+        const stat = fs.statSync(absPath);
+        if (!stat.isFile()) {continue;}
+
+        const ext = path.extname(absPath).toLowerCase();
+        const isImageExt = IMAGE_EXTENSIONS.includes(ext);
+        if (!allowImages && isImageExt) {
+          // Skip image files when allowImages is false
+          continue;
         }
+        const isImage = allowImages && isImageExt;
+        const { count: tokenCount } = isImage ? { count: 0 } : await countTokensWithCacheDetailed(absPath);
+        // For absolute paths, use just the filename as the "relative" path
+        // This prevents buildPrompt from skipping them
+        files.push({
+          path: path.basename(absPath),
+          absolutePath: absPath,
+          tokenCount,
+          workspaceFolderRootPath: path.dirname(absPath),
+          workspaceFolderName: 'external',
+          isImage,
+          sizeBytes: stat.size,
+          mimeType: mimeFromExt(ext)
+        });
       } catch (err) {
         // Skip files that can't be read
         console.warn(chalk.gray(`Skipping unreadable file: ${absPath}`));
@@ -207,7 +216,7 @@ async function scanProject(projectPath: string, patterns: string[], allowImages 
   return files;
 }
 
-function warnIfFilesOutsideProject(projectPath: string, files: any[]): number {
+function warnIfFilesOutsideProject(projectPath: string, files: SelectedFile[]): number {
   const projectRoot = fs.realpathSync(projectPath) + path.sep;
   const externalFiles = files.filter((f) => {
     try {
@@ -239,65 +248,61 @@ function warnIfFilesOutsideProject(projectPath: string, files: any[]): number {
   return externalFiles.length;
 }
 
-const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.tiff', '.avif', '.svg'];
-
-function isImageFile(file: any): boolean {
-  if (file?.isImage) {return true;}
-  const ext = typeof file?.path === 'string' ? path.extname(file.path).toLowerCase() : '';
-  return IMAGE_EXTENSIONS.includes(ext);
-}
-
-function mimeFromExt(ext: string): string | undefined {
-  switch (ext.toLowerCase()) {
-    case '.png': return 'image/png';
-    case '.jpg':
-    case '.jpeg': return 'image/jpeg';
-    case '.gif': return 'image/gif';
-    case '.bmp': return 'image/bmp';
-    case '.webp': return 'image/webp';
-    case '.tiff': return 'image/tiff';
-    case '.avif': return 'image/avif';
-    case '.svg': return 'image/svg+xml';
-    default: return undefined;
-  }
-}
-
 async function toImageAttachments(
-  files: any[],
+  files: ImageFileCandidate[],
   maxCount: number,
   maxBytes: number
-) {
-  const uniqueByPath = new Map<string, any>();
+): Promise<ImageAttachment[]> {
+  const uniqueByPath = new Map<string, ImageFileCandidate>();
   for (const file of files) {
-    const abs = file.absolutePath || file.path;
-    if (!uniqueByPath.has(abs)) {
-      uniqueByPath.set(abs, file);
+    const absKey = file.absolutePath || file.path;
+    if (!absKey) {continue;}
+    if (!uniqueByPath.has(absKey)) {
+      uniqueByPath.set(absKey, file);
     }
   }
   const selected = Array.from(uniqueByPath.values()).slice(0, maxCount);
-  if (selected.length < files.length && process.env.DEBUG) {
-    console.warn(chalk.gray(`Truncated images to ${selected.length}/${files.length} due to max-image-count.`));
+  if (selected.length < uniqueByPath.size && process.env.DEBUG) {
+    console.warn(chalk.gray(`Truncated images to ${selected.length}/${uniqueByPath.size} due to max-image-count.`));
   }
 
-  const attachments = [];
+  const attachments: ImageAttachment[] = [];
+  const errors: string[] = [];
   for (const file of selected) {
-    const absolutePath = file.absolutePath || (path.isAbsolute(file.path) ? file.path : path.resolve(file.path));
-    const stat = await fs.promises.stat(absolutePath);
-    if (stat.size > maxBytes) {
-      throw new Error(`Image too large: ${file.path || absolutePath} (${Math.round(stat.size / (1024 * 1024))}MB > ${maxBytes / (1024 * 1024)}MB limit)`);
+    const basePath = file.absolutePath ?? file.path;
+    if (!basePath) {
+      errors.push('Image missing path; skipping unknown file');
+      continue;
     }
-    const ext = path.extname(absolutePath);
-    const mimeType = file.mimeType || mimeFromExt(ext);
-    if (!mimeType) {
-      throw new Error(`Unsupported image format: ${file.path || absolutePath}`);
+    const absolutePath = path.isAbsolute(basePath) ? basePath : path.resolve(basePath);
+    try {
+      const stat = await fs.promises.stat(absolutePath);
+      if (stat.size > maxBytes) {
+        const sizeMB = (stat.size / MB).toFixed(1);
+        const limitMB = (maxBytes / MB).toFixed(1);
+        errors.push(`Image too large: ${file.path || absolutePath} (${sizeMB}MB exceeds ${limitMB}MB limit)`);
+        continue;
+      }
+      const ext = path.extname(absolutePath);
+      const mimeType = file.mimeType || mimeFromExt(ext);
+      if (!mimeType) {
+        errors.push(`Unsupported image format: ${file.path || absolutePath}`);
+        continue;
+      }
+      const buffer = await fs.promises.readFile(absolutePath);
+      attachments.push({
+        path: file.path || path.basename(absolutePath),
+        data: buffer,
+        mimeType,
+        bytes: stat.size
+      });
+    } catch (err) {
+      errors.push(`Failed to read image: ${file.path || absolutePath} (${(err as Error).message})`);
     }
-    const buffer = await fs.promises.readFile(absolutePath);
-    attachments.push({
-      path: file.path || path.basename(absolutePath),
-      data: buffer,
-      mimeType,
-      bytes: stat.size
-    });
+  }
+
+  if (errors.length > 0) {
+    throw new Error(`Image validation failed:\n - ${errors.join('\n - ')}`);
   }
 
   return attachments;
@@ -531,10 +536,10 @@ export async function expertCommand(question: string | undefined, options: Exper
     }
     
     // Scan files only if patterns exist
-    let files: any[] = [];
-    let textFiles: any[] = [];
-    let imageFiles: any[] = [];
-    let result: any;
+    let files: SelectedFile[] = [];
+    let textFiles: SelectedFile[] = [];
+    let imageFiles: SelectedFile[] = [];
+    let result: PromptResult | undefined;
     
     if (patterns.length > 0) {
       files = await scanProject(projectPath, patterns, allowImages);
@@ -560,7 +565,7 @@ export async function expertCommand(question: string | undefined, options: Exper
       // Separate images and text files
       if (allowImages) {
         imageFiles = files.filter(isImageFile);
-        textFiles = files.filter((f: any) => !isImageFile(f));
+        textFiles = files.filter((f) => !isImageFile(f));
       } else {
         textFiles = files;
       }
@@ -569,7 +574,20 @@ export async function expertCommand(question: string | undefined, options: Exper
     // Add explicit image patterns (optional)
     if (imagePatterns.length > 0) {
       const explicitImages = await scanProject(projectPath, imagePatterns, true);
-      imageFiles = imageFiles.concat(explicitImages.filter(isImageFile));
+      const matchedImages = explicitImages.filter(isImageFile);
+      const nonImageMatches = explicitImages.length - matchedImages.length;
+
+      if (!options.json) {
+        if (explicitImages.length === 0) {
+          console.log(chalk.yellow('⚠️  --images patterns did not match any files.'));
+        } else if (matchedImages.length === 0 && nonImageMatches > 0) {
+          console.log(chalk.yellow('⚠️  --images patterns matched files, but none were valid images.'));
+        } else if (nonImageMatches > 0) {
+          console.log(chalk.yellow(`⚠️  Ignoring ${nonImageMatches} non-image file(s) matched by --images.`));
+        }
+      }
+
+      imageFiles = imageFiles.concat(matchedImages);
     }
 
     // Deduplicate image files
@@ -618,7 +636,7 @@ export async function expertCommand(question: string | undefined, options: Exper
       result = {
         prompt: '',
         tokenCount: 0,  // File context tokens only
-        fileCount: 0
+        sections: { instructions: 0, fileMap: 0, fileContents: 0, resources: 0 }
       };
     }
     
@@ -638,7 +656,7 @@ export async function expertCommand(question: string | undefined, options: Exper
       : (question || '');
 
     if (imageFileCount > 0) {
-      const attachmentLines = imageFiles.map((f: any) => {
+      const attachmentLines = imageFiles.map((f) => {
         const kb = f.sizeBytes ? Math.round(f.sizeBytes / 1024) : null;
         const sizeText = kb ? ` (~${kb}KB)` : '';
         return `- ${f.path}${sizeText}`;
@@ -1064,3 +1082,8 @@ export async function expertCommand(question: string | undefined, options: Exper
     exitWithCode(EXIT_CODES.GENERAL_ERROR);
   }
 }
+
+// Test-only surface for internal helpers
+export const __expertTestHooks = {
+  toImageAttachments,
+};

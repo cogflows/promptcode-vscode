@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import fg from 'fast-glob';
 import ignore from 'ignore';
 import { SelectedFile } from './types/index.js';
+import { IMAGE_EXTENSIONS, IMAGE_GLOB_PATTERNS, isImageFile, mimeFromExt } from './utils/images.js';
 import { countTokensWithCacheDetailed } from './tokenCounter.js';
 
 export interface ScanOptions {
@@ -64,17 +65,7 @@ export async function scanFiles(options: ScanOptions): Promise<SelectedFile[]> {
   }
   
   // Always ignore these patterns (comprehensive security-focused excludes)
-  const imageIgnores = [
-    '**/*.jpg',
-    '**/*.jpeg',
-    '**/*.png',
-    '**/*.gif',
-    '**/*.bmp',
-    '**/*.webp',
-    '**/*.tiff',
-    '**/*.avif',
-    '**/*.svg',
-  ];
+  const imageIgnores = IMAGE_GLOB_PATTERNS;
 
   const defaultIgnores = [
     // Dependencies and version control
@@ -153,23 +144,10 @@ export async function scanFiles(options: ScanOptions): Promise<SelectedFile[]> {
     filteredFiles.map(async (absolutePath) => {
       const relativePath = path.relative(cwd, absolutePath);
       const ext = path.extname(absolutePath).toLowerCase();
-      const isImage = imageIgnores.some(pattern => pattern.endsWith(ext) || pattern.includes(ext));
+      const isImage = isImageFile({ path: relativePath, absolutePath });
       const stat = await fs.promises.stat(absolutePath);
       const tokenCount = isImage ? 0 : (await countTokensWithCacheDetailed(absolutePath)).count;
-      const mimeType = (() => {
-        switch (ext) {
-          case '.png': return 'image/png';
-          case '.jpg':
-          case '.jpeg': return 'image/jpeg';
-          case '.gif': return 'image/gif';
-          case '.bmp': return 'image/bmp';
-          case '.webp': return 'image/webp';
-          case '.tiff': return 'image/tiff';
-          case '.avif': return 'image/avif';
-          case '.svg': return 'image/svg+xml';
-          default: return undefined;
-        }
-      })();
+      const mimeType = mimeFromExt(ext);
       
       return {
         path: relativePath,
