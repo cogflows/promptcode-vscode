@@ -77,8 +77,11 @@ export async function modelsCommand(options: ModelsOptions): Promise<void> {
         console.log(chalk.gray(`    Pricing: ${inputCost}/1K input, ${outputCost}/1K output`));
         
         // Show capabilities
-        if (config.supportsWebSearch) {
-          console.log(chalk.gray(`    Features: web search`));
+        const features: string[] = [];
+        if (config.supportsWebSearch) {features.push('web search');}
+        if (config.vision) {features.push('vision');}
+        if (features.length) {
+          console.log(chalk.gray(`    Features: ${features.join(', ')}`));
         }
         
         // Show context window

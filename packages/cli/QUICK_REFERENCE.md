@@ -44,7 +44,7 @@ promptcode generate --json -o prompt.json
 |---------|---------|-------------|
 | `generate` | Create AI prompts | `-f` patterns, `-t` template, `--json` |
 | `preset` | Manage file presets | `--create`, `--list`, `--info` |
-| `expert` | Ask AI expert | `--model`, `--background`, `--preset` |
+| `expert` | Ask AI expert | `--model`, `--background`, `--preset`, `--images`, `--allow-images` |
 | `cache` | Manage token cache | `clear`, `stats` |
 | `stats` | Project token info | Shows breakdown by file type |
 
@@ -95,6 +95,7 @@ promptcode expert "Fix the authentication issues" -f "src/auth/**/*.ts"
 3. Create custom templates in `~/.config/promptcode/prompts/`
 4. Use `stats` to check if context fits in token limits
 5. Clear cache with `cache clear` if token counts seem incorrect
+6. Vision only when needed: attach images with `--images`/`--allow-images` on vision models (gpt-5.1, sonnet-4.5, gemini-3-pro, grok-4); image size is capped by the model limit even if `--image-max-mb` is higher; image costs are not estimated (`imageCostEstimated:false` in JSON)
 
 ## Getting Help
 

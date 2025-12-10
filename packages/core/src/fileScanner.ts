@@ -12,6 +12,7 @@ export interface ScanOptions {
   customIgnoreFile?: string;      // .promptcode_ignore
   workspaceName?: string;         // Name of the workspace
   followSymlinks?: boolean;       // Whether to follow symbolic links (default: false)
+  allowImages?: boolean;          // Allow image files (opt-in for multimodal)
 }
 
 /**
@@ -36,7 +37,15 @@ async function loadIgnoreFile(filePath: string): Promise<string[]> {
  * @returns Array of selected files with metadata
  */
 export async function scanFiles(options: ScanOptions): Promise<SelectedFile[]> {
-  const { cwd, patterns, respectGitignore, customIgnoreFile, workspaceName = 'workspace', followSymlinks = false } = options;
+  const {
+    cwd,
+    patterns,
+    respectGitignore,
+    customIgnoreFile,
+    workspaceName = 'workspace',
+    followSymlinks = false,
+    allowImages = false
+  } = options;
   
   // Initialize ignore instance
   const ig = ignore();
@@ -55,6 +64,18 @@ export async function scanFiles(options: ScanOptions): Promise<SelectedFile[]> {
   }
   
   // Always ignore these patterns (comprehensive security-focused excludes)
+  const imageIgnores = [
+    '**/*.jpg',
+    '**/*.jpeg',
+    '**/*.png',
+    '**/*.gif',
+    '**/*.bmp',
+    '**/*.webp',
+    '**/*.tiff',
+    '**/*.avif',
+    '**/*.svg',
+  ];
+
   const defaultIgnores = [
     // Dependencies and version control
     'node_modules/**',
@@ -100,13 +121,11 @@ export async function scanFiles(options: ScanOptions): Promise<SelectedFile[]> {
     '**/*.tar',
     '**/*.tar.gz',
     '**/*.7z',
-    '**/*.jpg',
-    '**/*.jpeg',
-    '**/*.png',
-    '**/*.gif',
     '**/*.mp4',
     '**/*.avi',
     '**/*.mov',
+    // Images (conditionally excluded)
+    ...(allowImages ? [] : imageIgnores),
     
     // Logs
     '**/*.log'
@@ -133,14 +152,34 @@ export async function scanFiles(options: ScanOptions): Promise<SelectedFile[]> {
   const selectedFiles: SelectedFile[] = await Promise.all(
     filteredFiles.map(async (absolutePath) => {
       const relativePath = path.relative(cwd, absolutePath);
-      const { count: tokenCount } = await countTokensWithCacheDetailed(absolutePath);
+      const ext = path.extname(absolutePath).toLowerCase();
+      const isImage = imageIgnores.some(pattern => pattern.endsWith(ext) || pattern.includes(ext));
+      const stat = await fs.promises.stat(absolutePath);
+      const tokenCount = isImage ? 0 : (await countTokensWithCacheDetailed(absolutePath)).count;
+      const mimeType = (() => {
+        switch (ext) {
+          case '.png': return 'image/png';
+          case '.jpg':
+          case '.jpeg': return 'image/jpeg';
+          case '.gif': return 'image/gif';
+          case '.bmp': return 'image/bmp';
+          case '.webp': return 'image/webp';
+          case '.tiff': return 'image/tiff';
+          case '.avif': return 'image/avif';
+          case '.svg': return 'image/svg+xml';
+          default: return undefined;
+        }
+      })();
       
       return {
         path: relativePath,
         absolutePath,
         tokenCount,
         workspaceFolderRootPath: cwd,
-        workspaceFolderName: workspaceName
+        workspaceFolderName: workspaceName,
+        isImage,
+        mimeType,
+        sizeBytes: stat.size
       };
     })
   );

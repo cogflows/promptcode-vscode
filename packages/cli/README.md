@@ -49,6 +49,10 @@ promptcode expert "How does OAuth2 work?"
 promptcode expert "Why is this API slow?" -f src/**/*.ts
 promptcode expert "Explain the auth flow" -f backend/**/*.ts
 promptcode expert "What are the security risks?" --preset api
+
+# Attach images (vision models only: gpt-5.1, sonnet-4.5, gemini-3-pro, grok-4)
+promptcode expert "Describe this diagram" --images "docs/arch.png" --model gpt-5.1
+promptcode expert "Review UI mock" -f "src/ui/**/*.tsx" --images "design/*.png" --allow-images --model sonnet-4.5
 ```
 
 ### Generate Mode
@@ -120,7 +124,15 @@ export OPENAI_API_KEY=sk-...
 promptcode expert "Explain the auth flow" --preset auth
 promptcode expert "Find security issues" -f "src/api/**/*.ts"
 promptcode expert "Review this code" --background  # Force OpenAI background mode
+promptcode expert "Describe this flowchart" --images "docs/flow/*.png" --model gpt-5.1
 ```
+
+**Images & vision (CLI only):**
+- Vision-capable models: `gpt-5.1`, `gpt-5`, `gpt-5-mini/nano`, `sonnet-4.5`, `opus-4.x`, `gemini-3-pro`, `gemini-2.5-pro/flash`, `grok-4`.
+- Flags: `--images <globs>` to attach specific images; `--allow-images` to include images from `-f/--preset`; `--image-max-mb` (default 10, capped by the model’s per-image limit), `--image-max-count` (default/model-capped 10).
+- Background mode is disabled when images are attached (providers don’t support it).
+- Binary image bytes are sent separately; prompt text lists attached files (sizes only).
+- Cost JSON now includes `imageCostEstimated:false` to signal image tokens are not in the estimate.
 
 ### AI Agent Integrations
 

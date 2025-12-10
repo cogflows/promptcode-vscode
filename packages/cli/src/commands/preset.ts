@@ -743,7 +743,7 @@ export async function presetCommand(options: PresetOptions): Promise<void> {
       console.error(chalk.red(`Error: ${(error as Error).message}`));
     }
     // Don't exit in test mode - let the error propagate
-    if (process.env.PROMPTCODE_TEST !== '1') {
+    if (process.env.PROMPTCODE_TEST !== '1' && process.env.NODE_ENV !== 'test') {
       process.exit(1);
     }
     throw error; // Re-throw for tests to catch

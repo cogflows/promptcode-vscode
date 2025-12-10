@@ -9,4 +9,7 @@ export type SelectedFile = {
 	workspaceFolderRootPath: string; // Absolute path to the root of the workspace folder containing this file
 	workspaceFolderName: string; // Name of the workspace folder containing this file
     content?: string; // Optional: Pre-loaded content for the file
+    isImage?: boolean; // True when the file is an image (used for multimodal prompts)
+    mimeType?: string; // MIME type for image files
+    sizeBytes?: number; // File size used for validation and limits
 };
