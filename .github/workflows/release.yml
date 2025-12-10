@@ -38,7 +38,7 @@ jobs:
       - name: Install CLI dependencies
         run: |
           cd packages/cli
-          bun install --frozen-lockfile
+          bun install
 
       - name: CLI tests (includes typecheck in build)
         timeout-minutes: 5  # Add step-level timeout

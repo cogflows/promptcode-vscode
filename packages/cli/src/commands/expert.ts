@@ -464,7 +464,14 @@ export async function expertCommand(question: string | undefined, options: Exper
     console.error(chalk.red(`Unknown model: ${modelKey}. Known models: ${known.join(', ')}`));
     exitWithCode(EXIT_CODES.INVALID_INPUT);
   }
-  
+
+  // Early vision capability check - fail before API key check if images requested with non-vision model
+  const hasExplicitImages = options.images && options.images.length > 0;
+  if (hasExplicitImages && modelConfig.vision !== true) {
+    console.error(chalk.red(`Model ${modelConfig.name} does not support image inputs. Choose a vision-capable model (e.g., gpt-5.1, sonnet-4.5, gemini-3-pro).`));
+    exitWithCode(EXIT_CODES.INVALID_INPUT);
+  }
+
   // Check if API key is configured for the provider (skip for cost estimation)
   if (!options.estimateCost) {
     const availableModels = getAvailableModels();
