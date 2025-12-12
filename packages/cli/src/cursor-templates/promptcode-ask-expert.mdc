@@ -16,18 +16,18 @@ promptcode expert "<question>" -f "src/**/*.ts"
 ```
 
 Options:
-- `--model <name>`: Choose AI model (default: gpt-5.1; others: gpt-5, opus-4, sonnet-4.5, gemini-3-pro/2.5, grok-4, o3, o3-pro, gpt-5-pro)
+- `--model <name>`: Choose AI model (default: gpt-5.2; others: gpt-5.2-pro, gpt-5.1, gpt-5, opus-4, sonnet-4.5, gemini-3-pro/2.5, grok-4, o3, o3-pro, gpt-5-pro)
 - `--web-search`: Enable web search for current information
-- `--images <globs>` / `--allow-images`: Attach images (vision models only: gpt-5/5.1, sonnet-4.5, opus-4.x, gemini-3-pro/2.5, grok-4)
+- `--images <globs>` / `--allow-images`: Attach images (vision models only: gpt-5.2/5.1/5, sonnet-4.5, opus-4.x, gemini-3-pro/2.5, grok-4)
 - `--yes`: Skip cost confirmation prompts
 - `--output <file>`: Save response to file (required for background execution)
 - `--json`: Return structured JSON output (recommended for parsing)
 
-Note: The default model is **gpt-5.1** unless explicitly specified otherwise.
+Note: The default model is **gpt-5.2** unless explicitly specified otherwise.
 
-## Long-Running Models (gpt-5-pro only)
+## Long-Running Models (gpt-5.2-pro, gpt-5-pro)
 
-GPT-5 Pro can run for 10-120 minutes. The PromptCode CLI automatically switches to
+GPT-5.2 Pro and GPT-5 Pro can run for 10-120 minutes. The PromptCode CLI automatically switches to
 OpenAI's background API for this model, so the wrapper script just needs to launch the
 CLI in the background and capture its JSON output (no manual timeout).
 
@@ -43,7 +43,7 @@ STATUS_FILE="${TMP%/}/expert-status-$(date +%Y%m%d-%H%M%S)-$$.json"
 
 # Prepare the consultation
 QUESTION="<your question here>"
-MODEL="gpt-5-pro"  # CLI auto-enables background mode for this model
+MODEL="gpt-5.2-pro"  # CLI auto-enables background mode for this model
 
 # Helper function for atomic status writes
 write_status() {

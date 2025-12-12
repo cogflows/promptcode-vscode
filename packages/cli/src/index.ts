@@ -116,7 +116,7 @@ Examples:
   .option('--token-warning <n>', 'token threshold for warning (default: 50000)')
   .option('--estimate-cost', 'estimate cost without generating')
   .option('--cost-threshold <usd>', 'maximum allowed cost before approval', process.env.PROMPTCODE_COST_THRESHOLD || '0.50')
-  .option('--model <name>', 'model to use for cost estimation (default: gpt-5.1)')
+  .option('--model <name>', 'model to use for cost estimation (default: gpt-5.2)')
   .option('-y, --yes', 'skip confirmation prompts')
   .allowExcessArguments(false)
   .action(async (options) => {
@@ -247,13 +247,13 @@ Note: If both --preset and -f are specified, -f takes precedence (preset is igno
   .option('--web-search', 'enable web search for current information (enabled by default for supported models)')
   .option('--no-web-search', 'disable web search even for supported models')
   .option('--verbosity <level>', 'response verbosity: low (concise), medium, high (detailed)', 'low')
-  .option('--reasoning-effort <level>', 'reasoning depth: minimal, low, medium, high (default)', 'high')
+  .option('--reasoning-effort <level>', 'reasoning depth: none, minimal, low, medium, high, xhigh (default: xhigh for gpt-5.2; high otherwise)')
   .option('--service-tier <tier>', 'service tier: auto, flex (50% cheaper), priority (enterprise)')
   .option('--json', 'output response in JSON format with usage stats')
   .option('--estimate-cost', 'estimate cost without running the query (dry-run)')
   .option('--cost-threshold <usd>', 'cost threshold for requiring approval (default: 0.50)', parseFloat)
   .option('--background', 'run supported models using provider background mode')
-  .option('--no-background', 'disable background mode even for GPT-5 Pro')
+  .option('--no-background', 'disable background mode even for GPT-5 Pro / GPT-5.2 Pro')
   .allowExcessArguments(false)
   .action(async (question, options) => {
     await expertCommand(question, options);
