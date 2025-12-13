@@ -247,7 +247,7 @@ Note: If both --preset and -f are specified, -f takes precedence (preset is igno
   .option('--web-search', 'enable web search for current information (enabled by default for supported models)')
   .option('--no-web-search', 'disable web search even for supported models')
   .option('--verbosity <level>', 'response verbosity: low (concise), medium, high (detailed)', 'low')
-  .option('--reasoning-effort <level>', 'reasoning depth: none, minimal, low, medium, high, xhigh (default: xhigh for gpt-5.2; high otherwise)')
+  .option('--reasoning-effort <level>', 'reasoning depth: none, minimal, low, medium, high, xhigh (default: xhigh for gpt-5.2; high otherwise; gpt-5.2-pro upgrades none/minimal/low -> medium)')
   .option('--service-tier <tier>', 'service tier: auto, flex (50% cheaper), priority (enterprise)')
   .option('--json', 'output response in JSON format with usage stats')
   .option('--estimate-cost', 'estimate cost without running the query (dry-run)')

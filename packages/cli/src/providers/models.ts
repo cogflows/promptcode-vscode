@@ -301,7 +301,7 @@ for (const [key, cfg] of Object.entries(MODELS)) {
   }
 }
 
-// Default model - GPT-5.1 offers best performance with adaptive reasoning and reduced token usage
+// Default model - GPT-5.2 offers strong reliability and performance for most workflows
 export const DEFAULT_MODEL = 'gpt-5.2';
 
 // Get available models for a provider

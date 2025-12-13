@@ -127,7 +127,7 @@ promptcode expert "Review this code" --background  # Force OpenAI background mod
 promptcode expert "Describe this flowchart" --images "docs/flow/*.png" --model gpt-5.2
 ```
 
-Note: Reasoning depth defaults to `xhigh` for `gpt-5.2`, and `high` for other models. Override with `--reasoning-effort`.
+Note: Reasoning depth defaults to `xhigh` for `gpt-5.2`, and `high` for other models. For `gpt-5.2-pro`, `none|minimal|low` are automatically treated as `medium`. Override with `--reasoning-effort`.
 
 **Images & vision (CLI only):**
 - Vision-capable models: `gpt-5.2`, `gpt-5.2-pro`, `gpt-5.1`, `gpt-5`, `gpt-5-mini/nano`, `sonnet-4.5`, `opus-4.x`, `gemini-3-pro`, `gemini-2.5-pro/flash`, `grok-4`.
