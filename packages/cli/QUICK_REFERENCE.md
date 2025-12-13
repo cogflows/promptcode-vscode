@@ -95,7 +95,7 @@ promptcode expert "Fix the authentication issues" -f "src/auth/**/*.ts"
 3. Create custom templates in `~/.config/promptcode/prompts/`
 4. Use `stats` to check if context fits in token limits
 5. Clear cache with `cache clear` if token counts seem incorrect
-6. Vision only when needed: attach images with `--images`/`--allow-images` on vision models (gpt-5.1, sonnet-4.5, gemini-3-pro, grok-4); image size is capped by the model limit even if `--image-max-mb` is higher; image costs are not estimated (`imageCostEstimated:false` in JSON)
+6. Vision only when needed: attach images with `--images`/`--allow-images` on vision models (gpt-5.2/5.1, sonnet-4.5, gemini-3-pro, grok-4); image size is capped by the model limit even if `--image-max-mb` is higher; image costs are not estimated (`imageCostEstimated:false` in JSON)
 
 ## Getting Help
 
