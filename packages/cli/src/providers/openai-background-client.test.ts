@@ -2,6 +2,32 @@ import { describe, expect, it } from 'bun:test';
 import { OpenAIBackgroundClient } from './openai-background-client.js';
 
 describe('OpenAIBackgroundClient', () => {
+  it('includes truncation disabled and prompt caching for GPT-5.2', async () => {
+    const instance = Object.create(OpenAIBackgroundClient.prototype) as OpenAIBackgroundClient;
+    let capturedRequest: any;
+    (instance as any).client = {
+      responses: {
+        create: async (req: any) => {
+          capturedRequest = req;
+          return { id: 'task-1' };
+        },
+        retrieve: async () => ({ status: 'queued', id: 'task-1', error: null }),
+      },
+    };
+
+    const taskId = await instance.submitTask({
+      modelKey: 'gpt-5.2',
+      messages: [{ role: 'user', content: 'hi' }],
+      systemPrompt: 'sys',
+      reasoningEffort: 'xhigh',
+      textVerbosity: 'low',
+    });
+
+    expect(taskId).toBe('task-1');
+    expect(capturedRequest.truncation).toBe('disabled');
+    expect(capturedRequest.prompt_cache_retention).toBe('24h');
+  });
+
   it('maps statuses correctly', async () => {
     const instance = Object.create(OpenAIBackgroundClient.prototype) as OpenAIBackgroundClient;
     const responses = [

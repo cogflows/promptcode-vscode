@@ -620,20 +620,29 @@ export class AIProvider {
       requestConfig.temperature = options.temperature || 0.7;
     }
 
-    // Add GPT-5.x specific parameters with smart defaults
-    if (modelConfig?.provider === 'openai' && modelKey.startsWith('gpt-5')) {
-      // Default to low verbosity for concise responses
-      requestConfig.textVerbosity = options.textVerbosity || 'low';
-      // Use the reasoning effort passed to the function
-      // GPT-5.1/5.2 support "none" as default for non-reasoning behavior
-      requestConfig.reasoningEffort = reasoningEffort;
-      if (options.serviceTier) {
-        requestConfig.serviceTier = options.serviceTier;
-      }
-      // Enable 24-hour prompt caching for GPT-5.1 and GPT-5.2 models (cost optimization)
-      if (modelKey.startsWith('gpt-5.1') || modelKey.startsWith('gpt-5.2')) {
-        requestConfig.promptCacheRetention = '24h';
-      }
+    // Add OpenAI (responses/chat) provider options
+    if (modelConfig?.provider === 'openai') {
+      const existingProviderOptions =
+        (typeof requestConfig.providerOptions === 'object' && requestConfig.providerOptions !== null)
+          ? (requestConfig.providerOptions as Record<string, unknown>)
+          : {};
+
+      requestConfig.providerOptions = {
+        ...existingProviderOptions,
+        openai: {
+          // Default to low verbosity for concise responses
+          textVerbosity: options.textVerbosity || 'low',
+          // Use the reasoning effort passed to the function
+          reasoningEffort,
+          // Never truncate inputs automatically; prefer explicit CONTEXT_TOO_LARGE errors
+          truncation: 'disabled',
+          ...(options.serviceTier ? { serviceTier: options.serviceTier } : {}),
+          // Enable 24-hour prompt caching for GPT-5.1 and GPT-5.2 models (cost optimization)
+          ...(modelKey.startsWith('gpt-5.1') || modelKey.startsWith('gpt-5.2')
+            ? { promptCacheRetention: '24h' }
+            : {}),
+        },
+      };
     }
 
     // Add Gemini 3 specific parameters
