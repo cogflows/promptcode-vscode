@@ -31,7 +31,7 @@ interface ExpertOptions {
   noConfirm?: boolean;
   webSearch?: boolean;
   verbosity?: 'low' | 'medium' | 'high';
-  reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
+  reasoningEffort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
   serviceTier?: 'auto' | 'flex' | 'priority';
   json?: boolean;
   estimateCost?: boolean;
@@ -468,7 +468,7 @@ export async function expertCommand(question: string | undefined, options: Exper
   // Early vision capability check - fail before API key check if images requested with non-vision model
   const hasExplicitImages = options.images && options.images.length > 0;
   if (hasExplicitImages && modelConfig.vision !== true) {
-    console.error(chalk.red(`Model ${modelConfig.name} does not support image inputs. Choose a vision-capable model (e.g., gpt-5.1, sonnet-4.5, gemini-3-pro).`));
+    console.error(chalk.red(`Model ${modelConfig.name} does not support image inputs. Choose a vision-capable model (e.g., gpt-5.2, sonnet-4.5, gemini-3-pro).`));
     exitWithCode(EXIT_CODES.INVALID_INPUT);
   }
 
@@ -610,7 +610,7 @@ export async function expertCommand(question: string | undefined, options: Exper
 
     // Vision capability checks & limits
     if (imageFiles.length > 0 && modelConfig.vision !== true) {
-      console.error(chalk.red(`Model ${modelConfig.name} does not support image inputs. Choose a vision-capable model (e.g., gpt-5.1, sonnet-4.5, gemini-3-pro).`));
+      console.error(chalk.red(`Model ${modelConfig.name} does not support image inputs. Choose a vision-capable model (e.g., gpt-5.2, sonnet-4.5, gemini-3-pro).`));
       exitWithCode(EXIT_CODES.INVALID_INPUT);
     }
 
@@ -723,7 +723,7 @@ export async function expertCommand(question: string | undefined, options: Exper
         willUseBackground = true;
       } else if (envDisableBackground) {
         willUseBackground = false;
-      } else if (modelKey === 'gpt-5-pro') {
+      } else if (modelKey === 'gpt-5-pro' || modelKey === 'gpt-5.2-pro') {
         willUseBackground = true;
       }
     }

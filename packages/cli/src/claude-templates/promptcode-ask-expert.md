@@ -14,8 +14,8 @@ Consult an expert about: $ARGUMENTS
    - Check for multiple model requests (e.g., "compare using gpt-5 and opus-4", "ask gpt-5, sonnet-4, and gemini")
    - Get available models dynamically: `promptcode expert --models --json` (parse the JSON for model list)
    - If 2+ models detected → use ensemble mode
-   - For single model: Use gpt-5.1 (default, updated from gpt-5) unless user explicitly specifies another model
-   - Vision-capable models: gpt-5/5.1 (+ mini/nano), sonnet/opus 4.x, gemini-3-pro/2.5, grok-4. Background mode is disabled when images are attached.
+   - For single model: Use gpt-5.2 (default) unless user explicitly specifies another model
+   - Vision-capable models: gpt-5.2/5.1/5 (+ mini/nano, pro), sonnet/opus 4.x, gemini-3-pro/2.5, grok-4. Background mode is disabled when images are attached.
 
 2. Determine code context needs:
    ```bash
@@ -105,9 +105,9 @@ Consult an expert about: $ARGUMENTS
    promptcode expert --prompt-file "$PROMPT_FILE" --model {model} --yes --json
    ```
 
-   **For long-running models (gpt-5-pro - can take 10-120 minutes):**
+   **For long-running models (gpt-5.2-pro, gpt-5-pro - can take 10-120 minutes):**
    Use the Task tool for non-blocking execution. The CLI will automatically switch to
-   OpenAI's background API for GPT-5 Pro, so no manual timeout wrapper is needed.
+   OpenAI's background API for GPT-5.2 Pro / GPT-5 Pro, so no manual timeout wrapper is needed.
 
    1. Create result file path using temp directory:
       ```bash
@@ -357,7 +357,7 @@ Return structured report:
 - **Always use presets** - either existing or create new ones for code context
 - **Single approval flow**: Estimate cost → Ask user ONCE → Execute with --yes
 - **Show the preset name** to the user so they know what context is being used
-- **Default model is gpt-5.1** - use this unless user explicitly requests another model
+- **Default model is gpt-5.2** - use this unless user explicitly requests another model
 - For ensemble mode: limit to maximum 4 models
 - NEVER automatically add --yes without user approval
 - **JSON output modes**:
@@ -368,16 +368,16 @@ Return structured report:
   - Estimate mode: Use `.cost.total`, `.tokens.input`
   - Actual result: Use `.response`, `.costBreakdown.actualTotal`, `.usage.promptTokens/.completionTokens`, `.responseTime`
 - **Timeout protection**: All consultations use `timeout 15m` command, exit code 124 = timeout
-- **Task-based execution**: For long-running models (gpt-5-pro, o3-pro), use Task tool for non-blocking execution
+- **Task-based execution**: For long-running models (gpt-5-pro, gpt-5.2-pro, o3-pro), use Task tool for non-blocking execution
   - Pass concrete absolute file paths to Task (not shell variables like $PROMPT_FILE)
   - Explicitly state tool usage (Bash, Read, Write) in Task prompt
   - Capture exit code: `EXIT=$?` after command, then classify: 0=SUCCESS, 124=TIMEOUT, else=FAILED
   - Task provides true non-blocking execution that persists across sessions
   - Task will report back when complete
-- **Fast vs slow models**: Fast models (gpt-5, sonnet-4, opus-4, etc) take <30s and run in foreground. Long-running models (gpt-5-pro, o3-pro) take 1-10 minutes and should use Task tool
+- **Fast vs slow models**: Fast models (gpt-5, sonnet-4, opus-4, etc) take <30s and run in foreground. Long-running models (gpt-5-pro, gpt-5.2-pro, o3-pro) take 1-10 minutes and should use Task tool
 - **Ensemble execution**: Invoke multiple Tasks at top level in same turn for parallel execution (not nested Tasks!)
   - Each Task runs one model consultation
   - After all Tasks complete, synthesize results yourself
   - Declare clear winner with reasoning
 - **File paths**: Always use `${TMPDIR:-/tmp}` pattern for cross-platform temp directories (macOS uses /var/folders, Linux uses /tmp)
-- Reasoning effort defaults to 'high' (set in CLI) - no need to specify
+- Reasoning effort defaults to 'xhigh' for gpt-5.2, and 'high' for other models - override with `--reasoning-effort` if needed

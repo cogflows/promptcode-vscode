@@ -60,6 +60,7 @@ export class OpenAIBackgroundClient {
       store: true,
       input: this.buildInputMessages(options.messages),
       instructions: options.systemPrompt,
+      truncation: 'disabled',
     };
 
     if (typeof options.maxTokens === 'number') {
@@ -80,6 +81,11 @@ export class OpenAIBackgroundClient {
     const textConfig = this.toTextConfig(options.textVerbosity);
     if (textConfig) {
       request.text = textConfig;
+    }
+
+    // Enable 24-hour prompt caching for GPT-5.1 and GPT-5.2 models (cost optimization)
+    if (options.modelKey.startsWith('gpt-5.1') || options.modelKey.startsWith('gpt-5.2')) {
+      request.prompt_cache_retention = '24h';
     }
 
     const response = await this.client.responses.create(request as any);

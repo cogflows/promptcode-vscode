@@ -8,7 +8,7 @@
  * Example: If a provider charges $0.001 per 1K tokens, 
  * the value here should be 1.0 (1000x conversion)
  * 
- * Pricing last updated: November 2025
+ * Pricing last updated: December 2025
  */
 
 import { z } from 'zod';
@@ -43,7 +43,7 @@ const ModelSchema = z.object({
 export type ModelConfig = z.infer<typeof ModelSchema>;
 
 export const MODELS: Record<string, ModelConfig> = {
-  // OpenAI GPT-5 models (Latest August 2025 release)
+  // OpenAI GPT-5 models (August 2025 release)
   'gpt-5': {
     provider: 'openai',
     modelId: 'gpt-5',
@@ -84,6 +84,30 @@ export const MODELS: Record<string, ModelConfig> = {
     description: 'Most advanced reasoning model with extended thinking time',
     contextWindow: 400000,
     pricing: { input: 5, output: 20 },
+    supportsWebSearch: true,
+    vision: true,
+    visionLimits: { maxImages: 10, maxImageBytes: 10 * 1024 * 1024, backgroundSupported: false }
+  },
+
+  // OpenAI GPT-5.2 models (December 2025 release)
+  'gpt-5.2': {
+    provider: 'openai',
+    modelId: 'gpt-5.2',
+    name: 'GPT-5.2',
+    description: 'Latest GPT-5 model with improved reliability and performance',
+    contextWindow: 400000,
+    pricing: { input: 1.75, output: 14 },
+    supportsWebSearch: true,
+    vision: true,
+    visionLimits: { maxImages: 10, maxImageBytes: 10 * 1024 * 1024, backgroundSupported: false }
+  },
+  'gpt-5.2-pro': {
+    provider: 'openai',
+    modelId: 'gpt-5.2-pro',
+    name: 'GPT-5.2 Pro',
+    description: 'Highest-end reasoning model with extended thinking time',
+    contextWindow: 400000,
+    pricing: { input: 21, output: 168 },
     supportsWebSearch: true,
     vision: true,
     visionLimits: { maxImages: 10, maxImageBytes: 10 * 1024 * 1024, backgroundSupported: false }
@@ -277,8 +301,8 @@ for (const [key, cfg] of Object.entries(MODELS)) {
   }
 }
 
-// Default model - GPT-5.1 offers best performance with adaptive reasoning and reduced token usage
-export const DEFAULT_MODEL = 'gpt-5.1';
+// Default model - GPT-5.2 offers strong reliability and performance for most workflows
+export const DEFAULT_MODEL = 'gpt-5.2';
 
 // Get available models for a provider
 export function getProviderModels(provider: string): string[] {

@@ -220,7 +220,7 @@ export class AIProvider {
   /**
    * Get appropriate timeout for a model based on its capabilities and reasoning effort
    *
-   * Extended reasoning models (GPT-5 Pro, O3 Pro) can take 60-120+ minutes per request
+   * Extended reasoning models (GPT-5 Pro, GPT-5.2 Pro, O3 Pro) can take 60-120+ minutes per request
    * with high reasoning effort. Timeout scales dynamically based on effort level.
    *
    * Base timeouts (in milliseconds):
@@ -233,13 +233,14 @@ export class AIProvider {
    * - low: 1x (30 minutes for pro models)
    * - medium: 2x (60 minutes for pro models)
    * - high: 4x (120 minutes for pro models - validated with actual GPT-5 Pro consultations)
+   * - xhigh: 6x (capped by MAX_CAP, intended for GPT-5.2 Pro / Codex-Max deep work)
    *
    * Environment variable overrides:
    * - PROMPTCODE_TIMEOUT_MS: Global timeout override
    * - PROMPTCODE_TIMEOUT_<MODEL>_MS: Model-specific override (e.g., PROMPTCODE_TIMEOUT_GPT_5_PRO_MS)
    * - PROMPTCODE_TIMEOUT_CAP_MS: Maximum timeout cap (default: 7200000ms = 120 minutes)
    */
-  private getModelTimeout(modelKey: string, reasoningEffort: 'none' | 'minimal' | 'low' | 'medium' | 'high' = 'high'): number {
+  private getModelTimeout(modelKey: string, reasoningEffort: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' = 'high'): number {
     // Base timeouts by model tier
     const BASE_TIMEOUTS = {
       fast: 120000,      // 2 minutes
@@ -249,11 +250,12 @@ export class AIProvider {
 
     // Reasoning effort multipliers (validated through real-world testing)
     const EFFORT_MULTIPLIERS: Record<string, number> = {
-      none: 0.25,  // GPT-5.1 default - no reasoning tokens, fast responses
+      none: 0.25,  // OpenAI default for GPT-5.1/5.2 - no reasoning tokens, fast responses
       minimal: 0.5,
       low: 1,
       medium: 2,
       high: 4,  // For 60-120 minute extended reasoning (real GPT-5 Pro consultations)
+      xhigh: 6,
     };
 
     // Maximum timeout cap to prevent runaway (increased from 60min after real-world testing)
@@ -265,7 +267,7 @@ export class AIProvider {
 
     if (!config) {
       tier = 'standard'; // Unknown model, use safe default
-    } else if (modelKey === 'gpt-5-pro' || modelKey === 'o3-pro') {
+    } else if (modelKey === 'gpt-5-pro' || modelKey === 'gpt-5.2-pro' || modelKey === 'o3-pro') {
       tier = 'pro';
     } else if (modelKey.includes('codex-mini') || modelKey.includes('nano') || modelKey.includes('haiku') || modelKey.includes('flash')) {
       tier = 'fast';
@@ -309,6 +311,18 @@ export class AIProvider {
     }
 
     return calculatedTimeout;
+  }
+
+  private normalizeReasoningEffort(
+    modelKey: string,
+    effort: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'
+  ): 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' {
+    if (modelKey === 'gpt-5.2-pro') {
+      if (effort === 'none' || effort === 'minimal' || effort === 'low') {
+        return 'medium';
+      }
+    }
+    return effort;
   }
 
   /**
@@ -368,7 +382,7 @@ export class AIProvider {
       return true;
     }
 
-    if (modelKey === 'gpt-5-pro') {
+    if (modelKey === 'gpt-5-pro' || modelKey === 'gpt-5.2-pro') {
       if (process.env.DEBUG && !options.disableProgress) {
         console.error(`\n🔄 Defaulting to background mode for ${modelKey}\n`);
       }
@@ -392,7 +406,7 @@ export class AIProvider {
       temperature?: number;
       systemPrompt?: string;
       textVerbosity?: 'low' | 'medium' | 'high';
-      reasoningEffort?: 'none' | 'minimal' | 'low' | 'medium' | 'high';
+      reasoningEffort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
       serviceTier?: 'auto' | 'flex' | 'priority';
       disableProgress?: boolean;
       fallbackAttempted?: boolean;
@@ -401,6 +415,10 @@ export class AIProvider {
     const handler = this.getBackgroundHandler();
 
     const messages = [{ role: 'user' as const, content: prompt }];
+    const rawReasoningEffort =
+      options.reasoningEffort ||
+      (modelKey === 'gpt-5.2' ? 'xhigh' : 'high');
+    const reasoningEffort = this.normalizeReasoningEffort(modelKey, rawReasoningEffort);
 
     const backgroundOptions: BackgroundTaskOptions = {
       modelKey,
@@ -408,14 +426,14 @@ export class AIProvider {
       systemPrompt: options.systemPrompt,
       maxTokens: options.maxTokens, // Let API use its natural maximum if not specified
       temperature: options.temperature,
-      reasoningEffort: options.reasoningEffort || 'high',
+      reasoningEffort,
       textVerbosity: options.textVerbosity ?? 'low',
       webSearch: false, // Background mode doesn't support web search
       serviceTier: options.serviceTier,
       disableProgress: options.disableProgress,
     };
 
-    const maxWaitTimeMs = this.getModelTimeout(modelKey, backgroundOptions.reasoningEffort);
+    const maxWaitTimeMs = this.getModelTimeout(modelKey, reasoningEffort);
     const result = await handler.execute(backgroundOptions, {
       maxWaitTimeMs,
     });
@@ -514,7 +532,7 @@ export class AIProvider {
       systemPrompt?: string;
       webSearch?: boolean;
       textVerbosity?: 'low' | 'medium' | 'high';
-      reasoningEffort?: 'none' | 'minimal' | 'low' | 'medium' | 'high';
+      reasoningEffort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
       serviceTier?: 'auto' | 'flex' | 'priority';
       forceBackgroundMode?: boolean;
       disableBackgroundMode?: boolean;
@@ -573,7 +591,10 @@ export class AIProvider {
     }
 
     // Prepare the request configuration with dynamic timeout based on reasoning effort
-    const reasoningEffort = options.reasoningEffort || 'high';
+    const rawReasoningEffort =
+      options.reasoningEffort ||
+      (modelKey === 'gpt-5.2' ? 'xhigh' : 'high');
+    const reasoningEffort = this.normalizeReasoningEffort(modelKey, rawReasoningEffort);
     const timeoutMs = this.getModelTimeout(modelKey, reasoningEffort);
 
     // Use AbortSignal.timeout for reliable long-duration support across Node.js and Bun
@@ -599,20 +620,29 @@ export class AIProvider {
       requestConfig.temperature = options.temperature || 0.7;
     }
 
-    // Add GPT-5/GPT-5.1 specific parameters with smart defaults
-    if (modelConfig?.provider === 'openai' && modelKey.startsWith('gpt-5')) {
-      // Default to low verbosity for concise responses
-      requestConfig.textVerbosity = options.textVerbosity || 'low';
-      // Use the reasoning effort passed to the function
-      // GPT-5.1 supports "none" as default for non-reasoning behavior
-      requestConfig.reasoningEffort = reasoningEffort;
-      if (options.serviceTier) {
-        requestConfig.serviceTier = options.serviceTier;
-      }
-      // Enable 24-hour prompt caching for GPT-5.1 models (cost optimization)
-      if (modelKey.startsWith('gpt-5.1')) {
-        requestConfig.promptCacheRetention = '24h';
-      }
+    // Add OpenAI (responses/chat) provider options
+    if (modelConfig?.provider === 'openai') {
+      const existingProviderOptions =
+        (typeof requestConfig.providerOptions === 'object' && requestConfig.providerOptions !== null)
+          ? (requestConfig.providerOptions as Record<string, unknown>)
+          : {};
+
+      requestConfig.providerOptions = {
+        ...existingProviderOptions,
+        openai: {
+          // Default to low verbosity for concise responses
+          textVerbosity: options.textVerbosity || 'low',
+          // Use the reasoning effort passed to the function
+          reasoningEffort,
+          // Never truncate inputs automatically; prefer explicit CONTEXT_TOO_LARGE errors
+          truncation: 'disabled',
+          ...(options.serviceTier ? { serviceTier: options.serviceTier } : {}),
+          // Enable 24-hour prompt caching for GPT-5.1 and GPT-5.2 models (cost optimization)
+          ...(modelKey.startsWith('gpt-5.1') || modelKey.startsWith('gpt-5.2')
+            ? { promptCacheRetention: '24h' }
+            : {}),
+        },
+      };
     }
 
     // Add Gemini 3 specific parameters
@@ -627,6 +657,7 @@ export class AIProvider {
         'low': 'low',
         'medium': 'medium',
         'high': 'high',
+        'xhigh': 'high',
       };
       const thinkingLevel = thinkingLevelMap[reasoningEffort] || 'high';
 
