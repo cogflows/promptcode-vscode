@@ -127,10 +127,10 @@ promptcode expert "Review this code" --background  # Force OpenAI background mod
 promptcode expert "Describe this flowchart" --images "docs/flow/*.png" --model gpt-5.2
 ```
 
-Note: Reasoning depth defaults to `xhigh` for `gpt-5.2`, and `high` for other models. For `gpt-5.2-pro`, `none|minimal|low` are automatically treated as `medium`. Override with `--reasoning-effort`.
+Note: Reasoning depth defaults to `high`. Use `--reasoning-effort xhigh` for deeper analysis when speed isn't critical. For `gpt-5.2-pro`, `none|minimal|low` are automatically upgraded to `medium`.
 
 **Images & vision (CLI only):**
-- Vision-capable models: `gpt-5.2`, `gpt-5.2-pro`, `gpt-5.1`, `gpt-5`, `gpt-5-mini/nano`, `sonnet-4.5`, `opus-4.x`, `gemini-3-pro`, `gemini-2.5-pro/flash`, `grok-4`.
+- Vision-capable models: `gpt-5.2`, `gpt-5.2-pro`, `gpt-5.1`, `gpt-5`, `gpt-5-mini/nano`, `sonnet-4.5`, `opus-4.x`, `gemini-3-pro/flash`, `gemini-2.5-pro/flash`, `grok-4`.
 - Flags: `--images <globs>` to attach specific images; `--allow-images` to include images from `-f/--preset`; `--image-max-mb` (default 10, capped by the model’s per-image limit), `--image-max-count` (default/model-capped 10).
 - Background mode is disabled when images are attached (providers don’t support it).
 - Binary image bytes are sent separately; prompt text lists attached files (sizes only).

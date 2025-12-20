@@ -1,6 +1,6 @@
 {
   "name": "promptcode-cli",
-  "version": "0.9.4",
+  "version": "0.9.5",
   "description": "CLI tool for PromptCode - Generate AI-ready prompts from codebases",
   "bin": {
     "promptcode": "./dist/promptcode"
@@ -15,10 +15,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^2.0.45",
-    "@ai-sdk/google": "3.0.0-beta.50",
-    "@ai-sdk/openai": "^2.0.85",
-    "@ai-sdk/xai": "^2.0.33",
+    "@ai-sdk/anthropic": "^2.0.56",
+    "@ai-sdk/google": "3.0.0-beta.84",
+    "@ai-sdk/openai": "^2.0.88",
+    "@ai-sdk/xai": "^2.0.42",
     "@promptcode/core": "file:../core",
     "@types/inquirer": "^9.0.9",
     "ai": "6.0.0-beta.99",

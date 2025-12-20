@@ -380,4 +380,4 @@ Return structured report:
   - After all Tasks complete, synthesize results yourself
   - Declare clear winner with reasoning
 - **File paths**: Always use `${TMPDIR:-/tmp}` pattern for cross-platform temp directories (macOS uses /var/folders, Linux uses /tmp)
-- Reasoning effort defaults to 'xhigh' for gpt-5.2, and 'high' for other models - override with `--reasoning-effort` if needed
+- Reasoning effort defaults to 'high' - use `--reasoning-effort xhigh` for deeper analysis when speed isn't critical

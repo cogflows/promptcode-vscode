@@ -415,9 +415,7 @@ export class AIProvider {
     const handler = this.getBackgroundHandler();
 
     const messages = [{ role: 'user' as const, content: prompt }];
-    const rawReasoningEffort =
-      options.reasoningEffort ||
-      (modelKey === 'gpt-5.2' ? 'xhigh' : 'high');
+    const rawReasoningEffort = options.reasoningEffort || 'high';
     const reasoningEffort = this.normalizeReasoningEffort(modelKey, rawReasoningEffort);
 
     const backgroundOptions: BackgroundTaskOptions = {
@@ -427,7 +425,7 @@ export class AIProvider {
       maxTokens: options.maxTokens, // Let API use its natural maximum if not specified
       temperature: options.temperature,
       reasoningEffort,
-      textVerbosity: options.textVerbosity ?? 'low',
+      textVerbosity: options.textVerbosity ?? 'medium',
       webSearch: false, // Background mode doesn't support web search
       serviceTier: options.serviceTier,
       disableProgress: options.disableProgress,
@@ -591,9 +589,7 @@ export class AIProvider {
     }
 
     // Prepare the request configuration with dynamic timeout based on reasoning effort
-    const rawReasoningEffort =
-      options.reasoningEffort ||
-      (modelKey === 'gpt-5.2' ? 'xhigh' : 'high');
+    const rawReasoningEffort = options.reasoningEffort || 'high';
     const reasoningEffort = this.normalizeReasoningEffort(modelKey, rawReasoningEffort);
     const timeoutMs = this.getModelTimeout(modelKey, reasoningEffort);
 
@@ -610,9 +606,10 @@ export class AIProvider {
       abortSignal: timeoutSignal,
     };
 
-    // Only set maxTokens if explicitly provided - let API use its natural maximum
-    if (options.maxTokens) {
-      requestConfig.maxTokens = options.maxTokens;
+    // Only set max output tokens if explicitly provided - let API use its natural maximum
+    if (typeof options.maxTokens === 'number') {
+      // Vercel AI SDK uses maxOutputTokens (AI SDK v6); keep our option name for internal API stability.
+      requestConfig.maxOutputTokens = options.maxTokens;
     }
 
     // Only add temperature for non-reasoning models (reasoning models ignore it)
@@ -630,8 +627,8 @@ export class AIProvider {
       requestConfig.providerOptions = {
         ...existingProviderOptions,
         openai: {
-          // Default to low verbosity for concise responses
-          textVerbosity: options.textVerbosity || 'low',
+          // Default to medium verbosity to avoid "truncated" reviews by default
+          textVerbosity: options.textVerbosity || 'medium',
           // Use the reasoning effort passed to the function
           reasoningEffort,
           // Never truncate inputs automatically; prefer explicit CONTEXT_TOO_LARGE errors

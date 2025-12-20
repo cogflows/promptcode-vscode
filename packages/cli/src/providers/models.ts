@@ -249,6 +249,17 @@ export const MODELS: Record<string, ModelConfig> = {
     vision: true,
     visionLimits: { maxImages: 15, maxImageBytes: 15 * 1024 * 1024, backgroundSupported: false }
   },
+  'gemini-3-flash': {
+    provider: 'google',
+    modelId: 'gemini-3-flash-preview',
+    name: 'Gemini 3 Flash',
+    description: 'Pro-level intelligence at Flash speed, 78% SWE-bench',
+    contextWindow: 1000000,
+    pricing: { input: 0.5, output: 3 },
+    supportsWebSearch: true,
+    vision: true,
+    visionLimits: { maxImages: 15, maxImageBytes: 15 * 1024 * 1024, backgroundSupported: false }
+  },
   'gemini-2.5-pro': {
     provider: 'google',
     modelId: 'gemini-2.5-pro',
