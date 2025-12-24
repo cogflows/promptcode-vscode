@@ -473,9 +473,9 @@ export class AIProvider {
         };
       
       case 'google':
-        return {
-          google_search: google.tools.googleSearch({})
-        };
+        // Google/Gemini uses useSearchGrounding model option, not tools
+        // Grounding is enabled in getModel() when useWebSearch=true
+        return undefined;
       
       case 'anthropic':
         // Anthropic web search tool - using the provider-defined tool
@@ -503,8 +503,6 @@ export class AIProvider {
     const config = MODELS[modelKey];
     if (!config) {throw new Error(`Unknown model: ${modelKey}`);}
 
-    // Web search is handled via tools in getWebSearchTools(), not via a separate API
-    // Just return the standard model - web search tools will be added in generateText
     const providerInstance = this.providers[config.provider];
     if (!providerInstance) {
       const envName = config.provider.toUpperCase() + '_API_KEY';
@@ -512,6 +510,12 @@ export class AIProvider {
         `API key not configured for ${config.provider}. ` +
           `Set via environment variable: export ${envName}=...`
       );
+    }
+
+    // Google/Gemini uses useSearchGrounding model option for web search
+    // (other providers use tools in getWebSearchTools())
+    if (config.provider === 'google' && useWebSearch) {
+      return providerInstance(config.modelId, { useSearchGrounding: true });
     }
 
     return providerInstance(config.modelId);
